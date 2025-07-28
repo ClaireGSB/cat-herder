@@ -16,16 +16,14 @@ export async function init(targetRoot: string) {
     console.log(pc.green("Created claude.config.js"));
   }
   
-  // 2. CRITICAL: Copy the .claude command templates
+  // 2. Copy the .claude command templates
   const dotClaudeTemplatePath = path.resolve(new URL("./dot-claude", import.meta.url).pathname);
   const targetDotClaudePath = path.join(targetRoot, ".claude");
-  // We use fs-extra's copy which works like `cp -r`
   await fs.copy(dotClaudeTemplatePath, targetDotClaudePath, {
-      overwrite: false, // Don't overwrite if the user has customized their commands
+      overwrite: false,
       errorOnExist: false,
   });
   console.log(pc.green("Created .claude/commands directory with default commands."));
-
 
   // 3. Create a sample task and folder
   const taskFolder = "claude-Tasks";
@@ -54,14 +52,21 @@ export async function init(targetRoot: string) {
       "claude:status": "claude-project status",
       "claude:tui": "claude-project tui",
       "claude:web": "claude-project web",
+      // Add standard test scripts
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "coverage": "vitest run --coverage",
     },
     devDependencies: {
       "@your-scope/claude-project": "0.1.0",
+      "vitest": "^1.6.0",
+      "@vitest/coverage-v8": "^1.6.0",
+      "prettier": "^3.6.2",
     },
   };
 
   await fs.writeJson(pkgPath, mergePackageJson(pkg, delta), { spaces: 2 });
-  console.log(pc.green("Updated package.json with claude-project scripts."));
+  console.log(pc.green("Updated package.json with scripts and dev dependencies."));
   console.log(pc.blue("\nInitialization complete!"));
-  console.log(pc.blue("Run `npm install`, then `npm run claude:run claude-Tasks/task-001-sample.md`"));
+  console.log(pc.blue("Run `npm install` to set up your project."));
 }

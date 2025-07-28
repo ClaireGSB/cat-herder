@@ -65,7 +65,7 @@ npm link
 ```
 Your computer now knows that any call to `claude-project` should use your local source code.
 
-**Step 2: Set up a separate test environment**
+**Step 2 a.: Set up a separate test environment**
 
 Create a brand new directory to simulate a user's project. This keeps your development environment clean.
 
@@ -87,6 +87,24 @@ git commit -m "Initial commit"
 # open vscode
 code .
 ```
+
+**Step 2 b.: If you already have a test environment**
+But you have changed the `claude-project` version, you can skip the above steps and just run:
+
+```bash
+
+# 1. Navigate to your test app directory
+cd /path/to/my-test-app
+
+# 2. Run the master clean-up command
+rm -f claude.config.js PLAN.md && rm -rf .claude/ claude-Tasks/ node_modules/ package-lock.json && git clean -fdx
+```
+
+then proceed to Step 3.
+
+
+
+
 
 **Step 3: Link the test environment to your local tool**
 
