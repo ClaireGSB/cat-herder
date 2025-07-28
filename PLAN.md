@@ -20,7 +20,7 @@ We will also introduce a `claude-project validate` command to act as a "linter" 
 -   [x] **Step 1:** Update the Configuration Template (`claude.config.js`)
 -   [x] **Step 2:** Create Context and Check Providers
 -   [x] **Step 3:** Implement the Centralized Pipeline Validator
--   [ ] **Step 4:** Refactor the Orchestrator to be Pipeline-Driven
+-   [x] **Step 4:** Refactor the Orchestrator to be Pipeline-Driven
 -   [ ] **Step 5:** Implement the `claude-project validate` Command
 -   [ ] **Step 6:** Integrate Silent Validation into the `run` Command
 -   [ ] **Step 7:** Update the `README.md` Documentation
