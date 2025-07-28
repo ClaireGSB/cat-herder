@@ -24,7 +24,7 @@ function taskPathToBranchName(taskPath: string): string {
 }
 
 /**
- * Sets up the Git environment for a task run.
+ * Sets up the Git environment for a task run, handling both local and remote repos.
  * @param projectRoot The absolute path to the project root.
  * @param taskPath The path to the task file.
  * @returns The name of the created or checked-out branch.
@@ -38,12 +38,30 @@ function setupGitBranch(projectRoot: string, taskPath: string): string {
     throw new Error("Git working directory is not clean. Please commit or stash your changes before starting a new task.");
   }
 
-  // 2. Sync with the main branch.
-  console.log(pc.gray("  › Syncing with main branch..."));
-  execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
-  execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe' });
+  // 2. Check out the local main branch.
+  console.log(pc.gray("  › Switching to main branch..."));
+  try {
+      execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  } catch (e) {
+      throw new Error("Could not check out 'main' branch. Does it exist? This tool currently requires a 'main' branch as the base for new work.");
+  }
 
-  // 3. Create or check out the dedicated task branch.
+  // 3. Detect remote and attempt to pull.
+  try {
+    // This command will fail if 'origin' does not exist, moving to the catch block.
+    execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.gray("  › Remote 'origin' found. Syncing with remote..."));
+    try {
+      // Add a timeout in case of network issues.
+      execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
+    } catch (pullError) {
+      console.warn(pc.yellow("  ! Warning: Could not pull from 'origin/main'. Proceeding with local version. Please check your network connection and Git credentials."));
+    }
+  } catch (remoteError) {
+    console.log(pc.yellow("  › No remote 'origin' found. Proceeding with local 'main' branch."));
+  }
+
+  // 4. Create or check out the dedicated task branch.
   const branchName = taskPathToBranchName(taskPath);
   const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
 
