@@ -22,7 +22,7 @@ This makes the tool dramatically safer and aligns with professional development 
 
 -   [x] **Step 1:** Add Git helper functions to the orchestrator.
 -   [x] **Step 2:** Integrate the Git setup logic at the beginning of `runTask`.
--   [ ] **Step 3:** Update the `README.md` to explain the new branching behavior.
+-   [x] **Step 3:** Update the `README.md` to explain the new branching behavior.
 
 ---
 
