@@ -120,8 +120,10 @@ export async function runTask(taskPath: string) {
   const reviewPrompt = createPrompt('self-review.md', {});
   await step("review", ["-p", reviewPrompt], "logs/05-review.log", () => {});
 
-  const prPrompt = createPrompt('push-pr.md', {});
-  await step("pr", ["-p", prPrompt], "logs/06-pr.log", () => {});
+  // TODO: Uncomment below when PR creation is implemented
+
+  // const prPrompt = createPrompt('push-pr.md', {});
+  // await step("pr", ["-p", prPrompt], "logs/06-pr.log", () => {});
 }
 
 if (import.meta.url.startsWith('file:') && process.argv[1] === new URL(import.meta.url).pathname) {
