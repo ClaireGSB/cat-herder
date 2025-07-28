@@ -38,6 +38,7 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
       "tsx": "^4.15.7",
       "typescript": "^5.5.4",
       "vitest": "^1.6.0",
+      "@vitest/coverage-v8": "^1.6.0", 
       "@types/node": "^20.12.7",
       "chokidar": "^3.6.0",
       "blessed": "^0.1.81",
