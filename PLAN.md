@@ -1,5 +1,84 @@
 # PLAN.md
 
+## Implementation Checklist
+
+### Phase 1: Bootstrap CLI Repository
+- [x] Create `package.json` with dependencies (commander, fs-extra, picocolors, tsx, typescript)
+- [x] Create `tsconfig.json` for ESM build
+- [x] Implement `src/utils/pkg.ts` with safe JSON merge
+- [ ] Add `bin` entry to `package.json`
+- [ ] Implement `src/index.ts` using Commander with `init` command
+- [ ] Implement `src/init.ts` that copies templates and merges package.json
+- [ ] Test: `npm run build` outputs `dist/` and `npx ./dist/index.js init --help` prints usage
+
+### Phase 2: Provide Templates
+#### Claude Settings & Commands
+- [ ] Create `src/files/dot-claude/settings.json` with PreToolUse and PostToolUse hooks
+- [ ] Create `src/files/dot-claude/commands/plan-task.md`
+- [ ] Create `src/files/dot-claude/commands/write-tests.md`
+- [ ] Create `src/files/dot-claude/commands/implement.md`
+- [ ] Create `src/files/dot-claude/commands/docs-update.md`
+- [ ] Create `src/files/dot-claude/commands/self-review.md`
+- [ ] Create `src/files/dot-claude/commands/push-pr.md`
+
+#### Configuration Files
+- [ ] Create `src/files/configs/.eslintrc.cjs`
+- [ ] Create `src/files/configs/.prettierrc.json`
+- [ ] Create `src/files/configs/tsconfig.json` (for target repos)
+
+#### Sample Task
+- [ ] Create `src/files/tasks/sample.md`
+
+#### Git Hooks
+- [ ] Create `src/files/husky/pre-commit`
+- [ ] Create `src/files/husky/pre-push`
+
+### Phase 3: Implement Orchestrator and Helpers
+- [ ] Create `src/files/tools/proc.ts` for streaming subprocess output
+- [ ] Create `src/files/tools/status.ts` for atomic status and events logging
+- [ ] Create `src/files/tools/validators.ts` for PreToolUse blocking based on state
+- [ ] Create `src/files/tools/orchestrator.ts` for step machine and validations
+- [ ] Create `src/files/tools/status-cli.ts` for quick status visibility
+- [ ] Create `src/files/tools/tui.ts` for terminal UI
+- [ ] Create `src/files/tools/web.ts` for minimal Express web view
+
+### Phase 4: Watcher and Run Commands
+- [ ] Create `src/files/tools/watch-tasks.ts` using chokidar
+- [ ] Ensure all npm scripts are added via init.ts package.json merge
+
+### Phase 5: Husky Hooks Implementation
+- [ ] Verify pre-commit hook runs lint-staged
+- [ ] Verify pre-push hook runs test:ci
+- [ ] Test hooks block commits/pushes on failures
+
+### Phase 6: QA Testing
+- [ ] Test `npx claude-project init` in fresh TS repo
+- [ ] Test `npm run claude:run claude-Tasks/task-001-sample.md`
+- [ ] Verify TUI and web interfaces work
+- [ ] Confirm step checkpoints, commits, logs, status work
+- [ ] Verify PR creation works
+- [ ] Fix any discovered defects
+
+### Phase 7: Documentation and Publish
+- [ ] Write comprehensive README with install, usage, troubleshooting
+- [ ] Add license and version information
+- [ ] Publish to npm registry
+- [ ] Final end-to-end testing
+
+### Definition of Done Checklist
+- [ ] CLI compiles and runs without errors
+- [ ] Templates copy correctly without overwriting existing files
+- [ ] Orchestrator executes all six steps in correct order
+- [ ] Git commits happen at each checkpoint with proper messages
+- [ ] Status tracking works and persists across interruptions
+- [ ] PreToolUse validator blocks out-of-order edits reliably
+- [ ] Git hooks enforce tests and lint on push
+- [ ] TUI and web view show live step and phase information
+- [ ] Sample task completes end-to-end and opens draft PR
+- [ ] Type checking passes: `npx tsc --noEmit`
+
+---
+
 ## Objective
 
 Build a reusable CLI named `claude-project` that you can run inside any TypeScript repository to scaffold a Claude Code based, step-gated automation workflow with:
