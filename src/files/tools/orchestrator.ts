@@ -35,6 +35,7 @@ async function step(name: string, args: string[], log: string, check: () => void
   await check();
 
   console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
+  execSync(`npx prettier --write .`, { stdio: 'inherit' });
   execSync(`git add -A && git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit" });
   updateStatus("state/current.state.json", s => { s.phase = "done"; s.steps[name] = "done"; });
 }
