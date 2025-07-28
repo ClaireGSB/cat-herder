@@ -1,5 +1,14 @@
 import { cosmiconfig } from "cosmiconfig";
 import path from "node:path";
+import { CheckConfig } from "./tools/check-runner.js";
+
+// Define the structure of a pipeline step
+export interface PipelineStep {
+  name: string;
+  command: string;
+  context: string[];
+  check: CheckConfig;
+}
 
 // This is the type definition for the user's claude.config.js file
 export interface ClaudeProjectConfig {
@@ -7,6 +16,7 @@ export interface ClaudeProjectConfig {
   statePath: string;
   logsPath: string;
   structureIgnore: string[];
+  pipeline: PipelineStep[];
 }
 
 // Default configuration if the user's file is missing parts
@@ -17,6 +27,7 @@ const defaultConfig: ClaudeProjectConfig = {
   structureIgnore: [
     "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
   ],
+  pipeline: [],
 };
 
 let loadedConfig: ClaudeProjectConfig | null = null;

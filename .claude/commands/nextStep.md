@@ -1,8 +1,8 @@
 ---
-description: Reads PLAN.md at project root, determines the next incomplete step, and creates a plan to implement it. The last step is to verify (typecheck/tests) and mark the step as done in plan.md.
+description: Reads PLAN.md at project root, determines the next incomplete step, and creates a plan to implement it. The last step is to verify (typecheck/tests) and mark the step as done in PLAN.md.
 ---
 
-Carefully read @claude.md, and @PLAN.md.
+Carefully read @claude.md, @README.md, and @PLAN.md.
 
 At the top of PLAN.md, review the summary of completed and incomplete steps. Identify the next incomplete step.
 

@@ -1,33 +1,55 @@
 // claude.config.js
-
-/**
- * Configuration for the claude-project CLI tool.
- * @type {import('@your-scope/claude-project').ClaudeProjectConfig}
- */
+/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
 module.exports = {
-  /**
-   * The folder where your task markdown files are stored.
-   */
   taskFolder: "claude-Tasks",
-
-  /**
-   * The directory to store state files for running tasks.
-   */
   statePath: ".claude/state",
-
-  /**
-   * The directory to store detailed logs for each step of a task.
-   */
   logsPath: ".claude/logs",
-
-  /**
-   * An array of glob patterns to ignore when gathering project structure.
-   */
   structureIgnore: [
     "node_modules/**",
     ".git/**",
     "dist/**",
     ".claude/**",
     "*.lock",
+  ],
+
+  /**
+   * Defines the sequence of steps in the development workflow.
+   * The orchestrator will execute these steps in order.
+   */
+  pipeline: [
+    {
+      name: "plan",
+      command: "plan-task",
+      context: ["projectStructure", "taskDefinition"],
+      // Check that the PLAN.md file was created.
+      check: { type: "fileExists", path: "PLAN.md" },
+    },
+    {
+      name: "write_tests",
+      command: "write-tests",
+      context: ["planContent", "taskDefinition"],
+      // Check that tests were written AND that they fail as expected.
+      check: { type: "shell", command: "npm test", expect: "fail" },
+    },
+    {
+      name: "implement",
+      command: "implement",
+      context: ["planContent"],
+      // Check that the tests now pass.
+      check: { type: "shell", command: "npm test", expect: "pass" },
+    },
+    {
+      name: "docs",
+      command: "docs-update",
+      context: ["planContent", "projectStructure"],
+      // No automated check for documentation; this is a manual review step.
+      check: { type: "none" },
+    },
+    {
+      name: "review",
+      command: "self-review",
+      context: [],
+      check: { type: "none" },
+    },
   ],
 };

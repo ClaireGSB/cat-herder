@@ -8,6 +8,8 @@ import { startWebServer } from "./tools/web.js";
 import { startTui } from "./tools/tui.js";
 import { showStatus } from "./tools/status-cli.js";
 import { startWatcher } from "./tools/watch-tasks.js";
+import { validatePipeline } from "./tools/validator.js";
+import { getConfig, getProjectRoot } from "./config.js";
 
 const program = new Command();
 program
@@ -37,6 +39,35 @@ program
       await runTask(taskPath);
     } catch (error: any) {
       console.error(pc.red(`\nWorkflow failed: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// `validate` command
+program
+  .command("validate")
+  .description("Validates the claude.config.js pipeline.")
+  .action(async () => {
+    try {
+      const config = await getConfig();
+      if (!config) {
+        console.error(pc.red("✖ Could not load claude.config.js configuration."));
+        process.exit(1);
+      }
+      
+      const projectRoot = getProjectRoot();
+      const { isValid, errors } = validatePipeline(config, projectRoot);
+
+      if (isValid) {
+        console.log(pc.green("✔ Pipeline configuration is valid."));
+        console.log(pc.gray(`  › Found ${config.pipeline.length} steps.`));
+      } else {
+        console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
+        for (const error of errors) console.error(pc.yellow(`  - ${error}`));
+        process.exit(1);
+      }
+    } catch (error: any) {
+      console.error(pc.red(`Validation error: ${error.message}`));
       process.exit(1);
     }
   });
