@@ -60,10 +60,9 @@
 - [x] Fix any discovered defects
 - [x] If test repo has been created, remove it
 
-### Phase 7: Documentation and Publish
+### Phase 7: Documentation and Publish locally
 - [x] Write comprehensive README with install, usage, troubleshooting
-- [ ] Add license and version information
-- [ ] Publish to npm registry
+- [ ] use npm link to "publish" so that user can test the package locally.
 - [ ] Final end-to-end testing
 
 ### Definition of Done Checklist
@@ -682,17 +681,16 @@ npm run test:ci
 
 - All phases complete without manual edits apart from approvals.
 
-### Phase 7. Documentation and publish
+### Phase 7. Documentation and publish locally
 
 **Tasks**
 
 - Write README with install, usage, troubleshooting, and limitations.
-- Add license and version.
-- Publish to npm or private registry.
+- Publish to npm link for local testing by user. 
 
 **Acceptance criteria**
 
-- `npx claude-project init` works on a clean repo and produces a functional workflow.
+- `npx claude-project init` works on a clean repo and produces a functional workflow (will be tested by user)
 
 ## Definition of done
 
@@ -720,4 +718,5 @@ npm run test:ci
 - Concurrent Task Execution: Refactor the orchestrator and state management tools (`status.ts`, `validators.ts`) to robustly support running multiple tasks concurrently within the same repository, moving from a single `current.state.json` to a task-ID-based system.
 - Interactive Initialization: Enhance the `claude-project init` command to detect existing script or dependency conflicts in `package.json` and interactively prompt the user for resolution (e.g., overwrite, skip), making it safer to adopt in established repositories.
 - Centralized Project Configuration: Introduce a `claude.config.ts` file to centralize hard-coded paths (e.g., for state, logs, tasks) and command names, providing an intermediate step towards the fully dynamic `claude-flow.yml`.
+- Add license and version information, then publish to npm publicly
 
