@@ -41,6 +41,14 @@ rm -rf my-test-app
 mkdir my-test-app
 cd my-test-app
 npm init -y
+# initialize git
+git init
+# add readme
+echo "# My Test App" > README.md
+# first commit
+git add .
+git commit -m "Initial commit"
+# Install claude-project
 npm link @your-scope/claude-project
 claude-project init
 npm install

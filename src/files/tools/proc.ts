@@ -3,43 +3,55 @@ import { mkdirSync, createWriteStream } from "node:fs";
 import { dirname } from "node:path";
 
 export function runStreaming(cmd: string, args: string[], logPath: string): Promise<number> {
-  // New: More verbose logging
   console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
 
   mkdirSync(dirname(logPath), { recursive: true });
-  const logStream = createWriteStream(logPath, { flags: "a" });
+  // Use 'w' flag to overwrite the log for a fresh run, 'a' to append. 'w' is better for this workflow.
+  const logStream = createWriteStream(logPath, { flags: "w" }); 
+
+  const startTime = new Date();
+  // --- NEW: Add a detailed header to the log file ---
+  logStream.write(`--- Log started at: ${startTime.toISOString()} ---\n`);
+  logStream.write(`--- Working directory: ${process.cwd()} ---\n`);
+  logStream.write(`--- Command: ${cmd} ${args.join(" ")} ---\n`);
+  logStream.write(`-------------------------------------------------\n\n`);
 
   return new Promise((resolve) => {
-    const p = spawn(cmd, args, { shell: false, stdio: "pipe" }); // Use "pipe" for explicit control
+    const p = spawn(cmd, args, { shell: false, stdio: "pipe" });
 
-    // CRITICAL: Listen for errors that prevent the process from starting.
     p.on('error', (err) => {
-      const errorMsg = `[Proc] ERROR: Failed to start subprocess. Is "${cmd}" installed and in your PATH?`;
+      const errorMsg = `[Proc] ERROR: Failed to start subprocess.`;
       console.error(errorMsg, err);
-      logStream.write(`${errorMsg}\n${err.stack}\n`);
+      logStream.write(`\n--- FATAL ERROR ---\n${errorMsg}\n${err.stack}\n`);
       logStream.end();
-      // Don't resolve here, let the 'close' event handle it to avoid race conditions.
     });
 
-    // Pipe stdout and stderr to both our console and the log file
     p.stdout.on("data", (chunk) => {
       process.stdout.write(chunk);
       logStream.write(chunk);
     });
+
     p.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       logStream.write(chunk);
     });
 
     p.on("close", (code) => {
+      const endTime = new Date();
+      const duration = (endTime.getTime() - startTime.getTime()) / 1000;
+      
+      // --- NEW: Add a detailed footer to the log file ---
+      const footer = `\n\n-------------------------------------------------\n`;
+      const footer2 = `--- Process finished at: ${endTime.toISOString()} ---\n`;
+      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
+      
       console.log(`[Proc] Subprocess exited with code ${code}`);
+      logStream.write(footer + footer2 + footer3);
       logStream.end();
       resolve(code ?? 1);
     });
 
-    // THE FIX: Explicitly end the standard input stream.
-    // This tells the child process "I have no interactive input for you, please proceed."
     p.stdin.end();
   });
 }

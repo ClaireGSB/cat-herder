@@ -9,6 +9,8 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
   await fs.copy(path.join(tpl, "dot-claude"), path.join(targetRoot, ".claude"), { overwrite: false });
   await fs.copy(path.join(tpl, "tools"), path.join(targetRoot, "tools"), { overwrite: false });
   await fs.copy(path.join(tpl, "configs"), targetRoot, { overwrite: false });
+  await fs.copy(path.join(tpl, "configs", ".lintstagedrc.json"), path.join(targetRoot, ".lintstagedrc.json"), { overwrite: false });
+  
 
   await fs.ensureDir(path.join(targetRoot, ".husky"));
   await fs.copy(path.join(tpl, "husky", "pre-commit"), path.join(targetRoot, ".husky", "pre-commit"), { overwrite: false });

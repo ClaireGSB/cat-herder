@@ -720,3 +720,22 @@ npm run test:ci
 - Centralized Project Configuration: Introduce a `claude.config.ts` file to centralize hard-coded paths (e.g., for state, logs, tasks) and command names, providing an intermediate step towards the fully dynamic `claude-flow.yml`.
 - Add license and version information, then publish to npm publicly
 
+## Issues to solve
+
+### error of missing dependency
+
+When running the `implement` step, the orchestrator tries to run tests but fails due to a missing dependency:
+```bash
+[Proc] Subprocess exited with code 0
+[Orchestrator] Step "implement" finished with exit code: 0
+[Orchestrator] Running checks for step: implement
+
+> my-test-app@1.0.0 test:ci
+> vitest run --coverage
+
+ MISSING DEPENDENCY  Cannot find dependency '@vitest/coverage-v8'
+
+? Do you want to install @vitest/coverage-v8? › (y/N)
+ MISSING DEPENDENCY  Cannot find dependency '@vitest/coverage-v8'
+```
+
