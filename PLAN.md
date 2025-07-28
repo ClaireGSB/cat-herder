@@ -62,7 +62,7 @@
 
 ### Phase 7: Documentation and Publish locally
 - [x] Write comprehensive README with install, usage, troubleshooting
-- [ ] use npm link to "publish" so that user can test the package locally.
+- [x] use npm link to "publish" so that user can test the package locally.
 - [ ] Final end-to-end testing
 
 ### Definition of Done Checklist
