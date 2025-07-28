@@ -8,7 +8,11 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
 
   await fs.copy(path.join(tpl, "dot-claude"), path.join(targetRoot, ".claude"), { overwrite: false });
   await fs.copy(path.join(tpl, "tools"), path.join(targetRoot, "tools"), { overwrite: false });
-  await fs.copy(path.join(tpl, "configs"), targetRoot, { overwrite: false });
+  // copying config files individually to control their name (we need to rename tsconfig; had to name it tsconfig.template.json to avoid type errors)
+  await fs.copy(path.join(tpl, "configs", ".eslintrc.cjs"), path.join(targetRoot, ".eslintrc.cjs"), { overwrite: false });
+  await fs.copy(path.join(tpl, "configs", ".prettierrc.json"), path.join(targetRoot, ".prettierrc.json"), { overwrite: false });
+  await fs.copy(path.join(tpl, "configs", "vitest.config.js"), path.join(targetRoot, "vitest.config.js"), { overwrite: false });
+  await fs.copy(path.join(tpl, "configs", "tsconfig.template.json"), path.join(targetRoot, "tsconfig.json"), { overwrite: false });
 
   // --- REMOVED HUSKY FILE COPYING ---
   // No longer creating .husky directory or copying hooks.
