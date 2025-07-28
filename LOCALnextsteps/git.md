@@ -4,6 +4,9 @@ Here is a complete summary of how to implement the robust "Workflow 1" now, foll
 
 ---
 
+### Part 0: check that it only has access to the repo it's in
+important! check that it only has access to the repo it's in
+
 ### Part 1: Implementation Summary for Workflow 1 (Independent Tasks)
 
 The goal is to enforce a safe, repeatable Git workflow where every task starts from an up-to-date `main` branch and operates in isolation.

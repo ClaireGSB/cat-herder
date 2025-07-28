@@ -14,9 +14,6 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
   await fs.copy(path.join(tpl, "configs", "vitest.config.js"), path.join(targetRoot, "vitest.config.js"), { overwrite: false });
   await fs.copy(path.join(tpl, "configs", "tsconfig.template.json"), path.join(targetRoot, "tsconfig.json"), { overwrite: false });
 
-  // --- REMOVED HUSKY FILE COPYING ---
-  // No longer creating .husky directory or copying hooks.
-
   await fs.ensureDir(path.join(targetRoot, opts.taskFolder));
   await fs.copy(path.join(tpl, "tasks", "sample.md"), path.join(targetRoot, opts.taskFolder, "task-001-sample.md"), { overwrite: false });
 
@@ -26,7 +23,6 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
   // --- MODIFIED DELTA OBJECT ---
   const delta = {
     scripts: {
-      // "prepare": "husky install", <-- REMOVED
       "claude:run": "tsx tools/orchestrator.ts",
       "claude:watch": "tsx tools/watch-tasks.ts",
       "claude:status": "tsx tools/status-cli.ts",
@@ -56,7 +52,6 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
       "prettier": "^3.3.3",
       "eslint-config-prettier": "^9.1.0",
       // "lint-staged": "^15.2.7", <-- REMOVED
-      // "husky": "^9.0.11" <-- REMOVED
     }
   } as const;
   await fs.writeJson(pkgPath, mergePackageJson(pkg, delta), { spaces: 2 });

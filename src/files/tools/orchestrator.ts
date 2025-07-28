@@ -7,7 +7,7 @@ import { updateStatus } from "./status.js";
 function getProjectStructure(): string {
   const ignore = [
     "node_modules/**", ".git/**", "dist/**", "tools/**",
-    "state/**", "logs/**", ".husky/**", ".claude/**", "PLAN.md",
+    "state/**", "logs/**", ".claude/**", "PLAN.md",
     "*.lock", "project-context.xml"
   ];
   const files = glob.sync("**/*", { ignore, nodir: true, dot: true });
