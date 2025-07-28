@@ -205,10 +205,6 @@ Running `claude-project init` copies these templates into your repository:
 - `.prettierrc.json` - Prettier formatting rules
 - `tsconfig.json` - TypeScript configuration for target project
 
-### Git Hooks
-- `.husky/pre-commit` - Runs lint-staged before commits
-- `.husky/pre-push` - Runs full test suite before pushes
-
 ### Sample Content
 - `claude-Tasks/task-001-sample.md` - Example task for testing
 
@@ -231,8 +227,6 @@ After running `claude-project init`, these npm scripts are added to your `packag
 - `npm run test` - Run tests in watch mode
 - `npm run test:ci` - Run tests once with coverage (used by git hooks)
 
-### Git Hooks
-- `npm run prepare` - Install Husky git hooks (runs automatically after `npm install`)
 
 ## Requirements
 
@@ -288,11 +282,6 @@ npm run lint:fix
 npm run lint
 ```
 
-#### "Permission denied on git hooks"
-Ensure git hooks have execute permissions:
-```bash
-chmod +x .husky/pre-commit .husky/pre-push
-```
 
 #### "Port 5177 already in use"
 Stop existing web interface or use a different port:
@@ -429,9 +418,6 @@ your-project/
 │       ├── docs-update.md
 │       ├── self-review.md
 │       └── push-pr.md
-├── .husky/
-│   ├── pre-commit
-│   └── pre-push
 ├── tools/
 │   ├── orchestrator.ts
 │   ├── status.ts

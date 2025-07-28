@@ -63,19 +63,19 @@
 ### Phase 7: Documentation and Publish locally
 - [x] Write comprehensive README with install, usage, troubleshooting
 - [x] use npm link to "publish" so that user can test the package locally.
-- [ ] Final end-to-end testing
+- [X] Final end-to-end testing
 
 ### Definition of Done Checklist
-- [ ] CLI compiles and runs without errors
-- [ ] Templates copy correctly without overwriting existing files
-- [ ] Orchestrator executes all six steps in correct order
-- [ ] Git commits happen at each checkpoint with proper messages
-- [ ] Status tracking works and persists across interruptions
-- [ ] PreToolUse validator blocks out-of-order edits reliably
-- [ ] Git hooks enforce tests and lint on push
-- [ ] TUI and web view show live step and phase information
-- [ ] Sample task completes end-to-end and opens draft PR
-- [ ] Type checking passes: `npx tsc --noEmit`
+- [X] CLI compiles and runs without errors
+- [X] Templates copy correctly without overwriting existing files
+- [X] Orchestrator executes all six steps in correct order
+- [X] Git commits happen at each checkpoint with proper messages
+- [X] Status tracking works and persists across interruptions
+- [X] PreToolUse validator blocks out-of-order edits reliably
+- [ ] NOT DONE - removing this for now Git hooks enforce tests and lint on push
+- [X] TUI and web view show live step and phase information
+- [] NOT DONE - GITHUB PERMISSIONS NOT ACTIVATED YET ON PURPOSE WHILE WE'RE TESTING THE BASIC MVP Sample task completes end-to-end and opens draft PR
+- [x] Type checking passes: `npx tsc --noEmit`
 
 ---
 
