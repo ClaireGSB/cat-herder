@@ -23,7 +23,7 @@ export async function init(targetRoot: string) {
       overwrite: false,
       errorOnExist: false,
   });
-  console.log(pc.green("Created .claude/commands directory with default commands."));
+  console.log(pc.green("Created .claude/ directory with default commands and settings."));
 
   // 3. Create a sample task and folder
   const taskFolder = "claude-Tasks";

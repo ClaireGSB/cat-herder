@@ -1,17 +1,32 @@
 {
   "permissions": {
     "allow": [
-      "Read","Write","Edit","MultiEdit","Grep","Glob","LS",
-      "Bash(git *:*)","Bash(npm *:*)","Bash(vitest:*:*)","Bash(node:*)"
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "Grep",
+      "Glob",
+      "LS",
+      "Bash(git *:*)",
+      "Bash(npm *:*)",
+      "Bash(vitest:*:*)",
+      "Bash(node:*)"
     ],
-    "deny": ["WebFetch","WebSearch"]
+    "deny": [
+      "WebFetch",
+      "WebSearch"
+    ]
   },
   "hooks": {
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "tsx ./tools/validators.ts preWrite < /dev/stdin" }
+          {
+            "type": "command",
+            "command": "tsx ./tools/validators.ts preWrite < /dev/stdin"
+          }
         ]
       }
     ],
@@ -19,7 +34,10 @@
       {
         "matcher": "Edit|Write|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true" }
+          {
+            "type": "command",
+            "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true"
+          }
         ]
       }
     ]
