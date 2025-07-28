@@ -29,6 +29,31 @@ Or use directly with npx (recommended):
 npx @your-scope/claude-project init
 ```
 
+## Testing
+
+test in new repo
+
+```bash
+cd .. 
+# Remove the old test app
+rm -rf my-test-app 
+# Recreate and re-initialize it
+mkdir my-test-app
+cd my-test-app
+npm init -y
+npm link @your-scope/claude-project
+claude-project init
+npm install
+```
+
+
+then run using npm script:
+
+```bash
+npm run claude:run claude-Tasks/task-001-sample.md
+```
+
+
 ## Quick Start
 
 1. **Initialize in your TypeScript repository:**
