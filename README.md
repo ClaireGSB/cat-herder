@@ -1,496 +1,184 @@
+
+***
+
 # Claude Project
 
-A CLI tool that scaffolds a structured, step-gated development workflow powered by Claude Code into any TypeScript repository.
+A command-line tool that orchestrates a structured, step-gated development workflow in your repository using Claude.
 
-## Overview
-
-`claude-project` transforms your TypeScript repository into a systematic development environment where Claude executes tasks through a controlled, six-step pipeline:
-
-1. **Plan** → Generate detailed implementation plan
-2. **Write Tests** → Create failing tests based on requirements  
-3. **Implement** → Write code to make tests pass
-4. **Update Docs** → Update documentation
-5. **Self Review** → Improve code style and naming
-6. **Open PR** → Push branch and create draft pull request
-
-Each step includes validation checkpoints, automatic git commits, and comprehensive logging. Pre-commit hooks enforce code quality, while a validator system prevents out-of-order edits that could break the workflow.
+`claude-project` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
 
 ## Installation
 
-Install globally via npm:
+Install the CLI globally using npm. This makes the `claude-project` command available anywhere on your system.
 
 ```bash
 npm install -g @your-scope/claude-project
 ```
 
-Or use directly with npx (recommended):
+## Quick Start
+
+Follow these steps to integrate the Claude workflow into your existing TypeScript project.
+
+1.  **Navigate to your project's root directory:**
+    ```bash
+    cd your-typescript-project
+    ```
+
+2.  **Initialize the project:**
+    This command is the only setup you need. It creates a `claude.config.js` file, a sample task, and adds the required scripts to your `package.json`.
+    ```bash
+    claude-project init
+    ```
+
+3.  **Install the added dev dependency:**
+    The `init` command adds `@your-scope/claude-project` to your `devDependencies` to lock in the version for your project.
+    ```bash
+    npm install
+    ```
+
+4.  **Run the automated workflow:**
+    Use the npm script to execute the sample task.
+    ```bash
+    npm run claude:run claude-Tasks/task-001-sample.md
+    ```
+
+The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
+
+## How to Test Locally (For Developers)
+
+When you are actively developing the `claude-project` tool itself, you need a way to test your local changes without publishing to npm. The `npm link` command is perfect for this.
+
+This process involves two main steps:
+1.  Create a global link to your local `claude-project` source code.
+2.  Create a separate, clean test project and link it to your global `claude-project`.
+
+Here is the complete workflow:
+
+**Step 1: In your `claude-project` directory**
+
+First, build your project to ensure the `dist` directory is up to date. Then, run `npm link` to register your local version as a global package on your machine.
 
 ```bash
-npx @your-scope/claude-project init
+# In your claude-project repository root
+npm run build
+npm link
 ```
+Your computer now knows that any call to `claude-project` should use your local source code.
 
-## Testing
+**Step 2: Set up a separate test environment**
 
-test in new repo
+Create a brand new directory to simulate a user's project. This keeps your development environment clean.
 
 ```bash
-cd .. 
-# Remove the old test app
-rm -rf my-test-app 
-# Recreate and re-initialize it
+# Navigate out of your project directory
+cd ..
+
+# Remove any old test app to start fresh
+rm -rf my-test-app
+
+# Create and set up a new test app
 mkdir my-test-app
 cd my-test-app
 npm init -y
-# initialize git
 git init
-# add readme
 echo "# My Test App" > README.md
-# first commit
 git add .
 git commit -m "Initial commit"
-# Install claude-project
-npm link @your-scope/claude-project
-claude-project init
-npm install
 # open vscode
 code .
 ```
 
+**Step 3: Link the test environment to your local tool**
 
-then run using npm script:
+Inside the new `my-test-app` directory, run `npm link @your-scope/claude-project`. This tells the test project to use the globally linked version of your tool, which points directly to your local source code.
 
 ```bash
-npm run claude:run claude-Tasks/task-001-sample.md
+# Inside the my-test-app directory
+npm link @your-scope/claude-project
 ```
 
+**Step 4: Run the init command**
 
-## Quick Start
-
-1. **Initialize in your TypeScript repository:**
-   ```bash
-   cd your-typescript-project
-   npx claude-project init
-   npm install
-   ```
-
-2. **Create your first task:**
-   ```bash
-   # Edit the sample task or create a new one
-   code claude-Tasks/task-001-sample.md
-   ```
-
-3. **Run the automated workflow:**
-   ```bash
-   npm run claude:run claude-Tasks/task-001-sample.md
-   ```
-
-4. **Monitor progress** (optional):
-   ```bash
-   # Terminal UI
-   npm run claude:tui
-   
-   # Web interface
-   npm run claude:web
-   # Open http://localhost:5177
-   
-   # Status check
-   npm run claude:status
-   ```
-
-The workflow will execute each step automatically, committing at checkpoints and creating a draft PR when complete.
-
-## Usage Guide
-
-### Commands
-
-- `claude-project init [options]` - Initialize workflow in current repository
-
-#### Options
-- `--task-folder <path>` - Custom folder for task files (default: `claude-Tasks`)
-
-### Task Files
-
-Tasks are written in Markdown format in the `claude-Tasks/` directory. Each task should include:
-
-```markdown
-# Task Title
-
-## Objective
-Clear description of what needs to be implemented.
-
-## Requirements
-- Specific requirement 1
-- Specific requirement 2
-
-## Acceptance Criteria
-- Testable criterion 1
-- Testable criterion 2
-```
-
-### Managing Multiple Tasks
-
-- Tasks run sequentially through the 6-step pipeline
-- Each task gets its own branch and state tracking
-- Watch mode automatically processes new tasks: `npm run claude:watch`
-
-## Workflow Overview
-
-### The Six-Step Pipeline
-
-Each task progresses through these phases:
-
-#### 1. Plan (`/project:plan-task`)
-- **Input**: Task markdown file
-- **Output**: `PLAN.md` with implementation strategy
-- **Tools**: Read, Glob, Grep only
-- **Validation**: PLAN.md must exist
-
-#### 2. Write Tests (`/project:write-tests`)
-- **Input**: Task file and PLAN.md
-- **Output**: Test files in `/test` directory
-- **Tools**: Read, Write, Edit, Bash (vitest/npm)
-- **Validation**: Tests must exist and fail initially
-
-#### 3. Implement (`/project:implement`)
-- **Input**: Existing tests
-- **Output**: Source code to pass tests
-- **Tools**: Read, Write, Edit, MultiEdit, Bash (vitest/npm)
-- **Validation**: All tests must pass
-
-#### 4. Update Docs (`/project:docs-update`)
-- **Input**: Implemented changes
-- **Output**: Updated README.md and documentation
-- **Tools**: Read, Write, Edit
-- **Validation**: None (manual review)
-
-#### 5. Self Review (`/project:self-review`)
-- **Input**: Complete implementation
-- **Output**: Improved code style and documentation
-- **Tools**: Read, Edit, Glob, Grep
-- **Validation**: Lint fixes applied
-
-#### 6. Open PR (`/project:push-pr`)
-- **Input**: Final code
-- **Output**: Pushed branch and draft PR
-- **Tools**: Bash (git/gh), Read
-- **Validation**: PR successfully created
-
-### State Management
-
-The workflow maintains state in:
-- `state/current.state.json` - Current task progress
-- `logs/` - Detailed logs for each step
-- Git commits at each checkpoint
-
-## Templates and Files
-
-Running `claude-project init` copies these templates into your repository:
-
-### Claude Configuration
-- `.claude/settings.json` - Claude permissions and hooks
-- `.claude/commands/` - Six workflow command definitions
-
-### Development Tools
-- `tools/orchestrator.ts` - Main workflow orchestrator
-- `tools/status.ts` - State management utilities
-- `tools/validators.ts` - PreToolUse validation hooks
-- `tools/proc.ts` - Process execution with logging
-- `tools/status-cli.ts` - Command-line status viewer
-- `tools/tui.ts` - Terminal UI for monitoring
-- `tools/web.ts` - Web interface for status
-- `tools/watch-tasks.ts` - File watcher for auto-execution
-
-### Configuration Files
-- `.eslintrc.cjs` - ESLint configuration
-- `.prettierrc.json` - Prettier formatting rules
-- `tsconfig.json` - TypeScript configuration for target project
-
-### Sample Content
-- `claude-Tasks/task-001-sample.md` - Example task for testing
-
-## Scripts Reference
-
-After running `claude-project init`, these npm scripts are added to your `package.json`:
-
-### Core Workflow
-- `npm run claude:run <task.md>` - Execute a specific task through the full pipeline
-- `npm run claude:watch` - Watch for new task files and auto-execute them
-
-### Monitoring & Status
-- `npm run claude:status` - Display current task status as JSON
-- `npm run claude:tui` - Launch terminal UI for live monitoring (press 'q' to quit)
-- `npm run claude:web` - Start web interface on http://localhost:5177
-
-### Development
-- `npm run lint` - Run ESLint on all files
-- `npm run lint:fix` - Run ESLint with auto-fix
-- `npm run test` - Run tests in watch mode
-- `npm run test:ci` - Run tests once with coverage (used by git hooks)
-
-
-## Requirements
-
-### System Dependencies
-- **Node.js**: 18.0.0 or higher
-- **Git**: Any recent version
-- **GitHub CLI**: Required for the PR step (`gh` command)
-  ```bash
-  # Install GitHub CLI with Homebrew on macOS
-  brew install gh
-  # Or follow official installation guide for other platforms
-  # https://cli.github.com/manual/installation
-  ```
-
-### Project Prerequisites
-- TypeScript project with `package.json`
-- Git repository (initialized with `git init`)
-- GitHub remote configured (for PR creation)
-
-### Recommended Setup
-- VS Code with Claude Code extension
-- Git configured with user name and email
-- GitHub authentication configured for `gh` CLI
-
-## Troubleshooting
-
-### Common Issues
-
-#### "claude command not found"
-Ensure Claude Code CLI is installed and in your PATH:
-```bash
-# Check if Claude is installed
-which claude
-# If not found, install Claude Code CLI
-```
-
-#### "PreToolUse validation failed"
-The validator is preventing out-of-order edits. Check current workflow state:
-```bash
-npm run claude:status
-```
-Complete the current step or reset state if needed.
-
-#### "Tests are not failing as expected"
-The workflow expects tests to fail initially in step 2. Ensure tests are properly written to validate the requirements before implementation exists.
-
-#### "Git hooks blocking commits"
-Pre-commit hooks enforce code quality:
-```bash
-# Fix lint issues
-npm run lint:fix
-# Fix any remaining issues manually
-npm run lint
-```
-
-
-#### "Port 5177 already in use"
-Stop existing web interface or use a different port:
-```bash
-# Kill existing process
-pkill -f "node.*web.ts"
-# Edit tools/web.ts to use different port if needed
-```
-
-### Debug Mode
-
-Enable verbose logging by setting environment variable:
-```bash
-DEBUG=claude-project npm run claude:run task.md
-```
-
-### Reset State
-
-If workflow gets stuck, manually reset:
-```bash
-rm -rf state/ logs/
-git reset --hard HEAD  # WARNING: loses uncommitted changes
-```
-
-### Getting Help
-
-1. Check the status: `npm run claude:status`
-2. Review logs in the `logs/` directory  
-3. Examine state in `state/current.state.json`
-4. Ensure all prerequisites are installed and configured
-
-## Examples
-
-### Complete Workflow Example
-
-Here's a full example of setting up and running a task:
+You can now use the `claude-project` command as if it were globally installed. Run the `init` command to set up the configuration in your test project.
 
 ```bash
-# 1. Set up a new TypeScript project
-mkdir my-project && cd my-project
-npm init -y
-npm install typescript @types/node --save-dev
-
-# 2. Initialize git and GitHub
-git init
-gh repo create my-project --public
-git remote add origin https://github.com/username/my-project.git
-
-# 3. Scaffold claude-project workflow
-npx claude-project init
+# Inside my-test-app
+claude-project init
 npm install
-
-# 4. Create a task
-cat > claude-Tasks/task-002-add-calculator.md << 'EOF'
-# Add Calculator Module
-
-## Objective
-Create a simple calculator module with basic arithmetic operations.
-
-## Requirements
-- Create a Calculator class with add, subtract, multiply, divide methods
-- Handle division by zero with appropriate error
-- Export the class for use in other modules
-- All methods should accept two numbers and return a number
-
-## Acceptance Criteria
-- Calculator.add(2, 3) returns 5
-- Calculator.divide(10, 0) throws an error
-- All operations work with positive and negative numbers
-- Class is properly exported and importable
-EOF
-
-# 5. Run the workflow
-npm run claude:run claude-Tasks/task-002-add-calculator.md
-
-# 6. Monitor progress (in separate terminal)
-npm run claude:tui
 ```
 
-### Task File Template
+Now you are ready to test! Any changes you make to the source code in your `claude-project` directory will be reflected immediately when you run commands like `claude-project run` or `npm run claude:run` inside `my-test-app`. Just remember to run `npm run build` in your `claude-project` directory after you make changes.
 
-```markdown
-# [Feature Name]
+## How It Works
 
-## Objective
-Clear, one-sentence description of what needs to be built.
+### Configuration (`claude.config.js`)
 
-## Requirements
-- Functional requirement 1
-- Functional requirement 2
-- Non-functional requirement (performance, security, etc.)
+All configuration is managed in a single `claude.config.js` file at the root of your project. This file allows you to customize where tasks, logs, and state files are stored.
 
-## Acceptance Criteria  
-- Testable criterion 1 (what success looks like)
-- Testable criterion 2 (edge cases covered)
-- Testable criterion 3 (error conditions handled)
+```javascript
+// claude.config.js
 
-## Notes (Optional)
-- Technical constraints
-- Dependencies
-- Reference materials
+/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
+export default {
+  /**
+   * The folder where your task markdown files are stored.
+   */
+  taskFolder: "claude-Tasks",
+
+  /**
+   * The directory to store state files for running tasks.
+   */
+  statePath: ".claude/state",
+
+  /**
+   * The directory to store detailed logs for each step of a task.
+   */
+  logsPath: ".claude/logs",
+
+  /**
+   * An array of glob patterns to ignore when gathering project structure.
+   */
+  structureIgnore: [
+    "node_modules/**",
+    ".git/**",
+    "dist/**",
+    ".claude/**",
+    "*.lock",
+  ],
+};
 ```
 
-### Monitoring During Execution
+### The Six-Step Workflow
 
-While a task runs, you can monitor progress:
+Each task is executed through a consistent and reliable pipeline:
 
-```bash
-# Terminal 1: Run the task
-npm run claude:run claude-Tasks/my-task.md
+1.  **Plan:** Generates a detailed implementation plan (`PLAN.md`).
+2.  **Write Tests:** Creates failing tests based on the plan.
+3.  **Implement:** Writes the source code to make the tests pass.
+4.  **Update Docs:** Updates the `README.md` and other documentation.
+5.  **Self Review:** Refactors code for style and clarity without changing behavior.
+6.  **Commit:** Each step creates a git commit, providing a checkpoint to resume from.
 
-# Terminal 2: Watch status
-npm run claude:tui
+## Commands Reference
 
-# Terminal 3: View logs in real-time
-tail -f logs/01-plan.log      # During planning phase
-tail -f logs/02-tests.log     # During test writing
-tail -f logs/03-implement.log # During implementation
+### CLI Commands
 
-# Check status programmatically
-npm run claude:status | jq '.currentStep'
-```
+-   `claude-project init`: Scaffolds the workflow in the current repository.
+-   `claude-project run <path-to-task.md>`: Runs the full workflow for a specific task.
+-   `claude-project watch`: (Future implementation) Watches the task folder for new files.
+-   `claude-project status`: (Future implementation) Shows the status of running tasks.
 
-### Directory Structure After Init
+### NPM Scripts
 
-```
-your-project/
-├── .claude/
-│   ├── settings.json
-│   └── commands/
-│       ├── plan-task.md
-│       ├── write-tests.md
-│       ├── implement.md
-│       ├── docs-update.md
-│       ├── self-review.md
-│       └── push-pr.md
-├── tools/
-│   ├── orchestrator.ts
-│   ├── status.ts
-│   ├── validators.ts
-│   ├── proc.ts
-│   ├── status-cli.ts
-│   ├── tui.ts
-│   ├── web.ts
-│   └── watch-tasks.ts
-├── claude-Tasks/
-│   └── task-001-sample.md
-├── .eslintrc.cjs
-├── .prettierrc.json
-├── package.json (updated with scripts)
-└── tsconfig.json
-```
+The `init` command adds these helpful scripts to your `package.json`:
 
-### Working with Branches
+-   `npm run claude:run <path-to-task.md>`: The recommended way to run a task.
+-   `npm run claude:tui`: Launches a terminal UI to monitor task progress.
+-   `npm run claude:web`: Starts a minimal web server to view status.
 
-The orchestrator automatically manages branches:
+## System Requirements
 
-```bash
-# Each task creates a new branch
-# Branch name format: claude-task-{taskId}-{timestamp}
-
-# View current branch during execution
-git branch --show-current
-
-# After completion, you'll have:
-# - All changes committed to the task branch
-# - A draft PR opened in GitHub
-# - State and logs preserved for debugging
-```
-
-## Configuration
-
-### Customizing Task Folder
-
-```bash
-# Use a different folder for tasks
-claude-project init --task-folder features
-# Creates 'features/' instead of 'claude-Tasks/'
-```
-
-### Modifying Workflow Steps
-
-The six steps are defined in `.claude/commands/`. You can customize:
-
-- Tool permissions in command frontmatter
-- Prompt instructions
-- Validation requirements
-
-Example command modification:
-```markdown
----
-description: Write failing tests with custom framework
-allowed-tools: Read, Write, Edit, Bash(jest *:*), Bash(npm *:*)
----
-Use Jest instead of Vitest for testing...
-```
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-This is a bootstrap tool for development workflows. Contributions welcome for:
-- Additional template configurations
-- Enhanced monitoring interfaces  
-- Integration with other testing frameworks
-- Workflow customization options
-
-## Version
-
-Current version: 0.1.0
+-   **Node.js**: Version 18.0 or higher.
+-   **Git**: Must be installed and configured.
+-   **Claude CLI**: The `claude` command-line tool must be installed and authenticated on your system.
+-   **GitHub CLI**: The `gh` command is required if you wish to implement and use a PR-creation step.
