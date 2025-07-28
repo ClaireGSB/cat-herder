@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import pc from "picocolors";
+import fs from "fs";
+import path from "path";
+import readline from "readline";
 
 import { init } from "./init.js";
 import { runTask } from "./tools/orchestrator.js";
@@ -46,7 +49,7 @@ program
 // `validate` command
 program
   .command("validate")
-  .description("Validates the claude.config.js pipeline.")
+  .description("Validates the claude.config.js pipeline and offers to fix permissions.")
   .action(async () => {
     try {
       const config = await getConfig();
@@ -56,17 +59,37 @@ program
       }
       
       const projectRoot = getProjectRoot();
-      const { isValid, errors } = validatePipeline(config, projectRoot);
+      const { isValid, errors, missingPermissions } = validatePipeline(config, projectRoot);
 
       if (isValid) {
         console.log(pc.green("✔ Pipeline configuration is valid."));
         console.log(pc.gray(`  › Found ${config.pipeline.length} steps.`));
+        return;
+      }
+
+      console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
+      for (const error of errors) {
+        console.error(pc.yellow(`  - ${error}`));
+      }
+
+      // --- Interactive Fixer Logic ---
+      if (missingPermissions.length > 0) {
+        console.log(pc.cyan("\nThis command can automatically add the missing permissions for you."));
+        
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        rl.question(pc.bold("Would you like to add these permissions to .claude/settings.json? (y/N) "), (answer) => {
+          if (answer.toLowerCase() === 'y') {
+            fixPermissions(projectRoot, missingPermissions);
+          } else {
+            console.log(pc.gray("Aborted. Please add permissions manually."));
+          }
+          rl.close();
+        });
       } else {
-        console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
-        for (const error of errors) console.error(pc.yellow(`  - ${error}`));
         console.error(pc.gray("\nPlease fix the errors above and run 'claude-project validate' again."));
         process.exit(1);
       }
+
     } catch (error: any) {
       console.error(pc.red(`Validation error: ${error.message}`));
       process.exit(1);
@@ -97,6 +120,30 @@ program
   .description("Watches the tasks directory and runs new tasks automatically.")
   .action(startWatcher);
 
+
+// Helper function to safely update settings.json
+function fixPermissions(projectRoot: string, permissionsToAdd: string[]) {
+    const settingsPath = path.join(projectRoot, ".claude", "settings.json");
+    try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        
+        // Ensure the path to the 'allow' array exists
+        if (!settings.permissions) settings.permissions = {};
+        if (!settings.permissions.allow) settings.permissions.allow = [];
+
+        // Use a Set to prevent duplicates
+        const updatedPermissions = new Set([...settings.permissions.allow, ...permissionsToAdd]);
+        settings.permissions.allow = [...updatedPermissions];
+
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        console.log(pc.green("\n✔ Successfully updated .claude/settings.json."));
+        console.log(pc.cyan("  Run 'claude-project validate' again to confirm."));
+
+    } catch (e: any) {
+        console.error(pc.red(`\nError updating settings.json: ${e.message}`));
+        console.error(pc.gray("Please fix the file manually."));
+    }
+}
 
 // Parse commands from the process arguments
 program.parseAsync(process.argv);

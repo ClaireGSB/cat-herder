@@ -24,8 +24,8 @@ This provides a seamless, guided experience for configuring the pipeline's secur
 ## Summary Checklist
 
 -   [x] **Step 1:** Modify the Validator to Return Structured Data
--   [ ] **Step 2:** Implement the Interactive `validate` Command in `index.ts`
--   [ ] **Step 3:** (No Change) Confirm the `run` Command's Validator Remains Non-Interactive
+-   [x] **Step 2:** Implement the Interactive `validate` Command in `index.ts`
+-   [x] **Step 3:** (No Change) Confirm the `run` Command's Validator Remains Non-Interactive
 
 ---
 
