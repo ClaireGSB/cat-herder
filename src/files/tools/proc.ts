@@ -2,8 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdirSync, createWriteStream } from "node:fs";
 import { dirname } from "node:path";
 
-export function runStreaming(cmd: string, args: string[], logPath: string): Promise<number> {
-  console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
+export function runStreaming(cmd: string, args: string[], logPath: string): Promise<{ code: number; output: string }> {  console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
 
   mkdirSync(dirname(logPath), { recursive: true });
@@ -11,11 +10,13 @@ export function runStreaming(cmd: string, args: string[], logPath: string): Prom
   const logStream = createWriteStream(logPath, { flags: "w" }); 
 
   const startTime = new Date();
-  // --- NEW: Add a detailed header to the log file ---
+  // --- Add a detailed header to the log file ---
   logStream.write(`--- Log started at: ${startTime.toISOString()} ---\n`);
   logStream.write(`--- Working directory: ${process.cwd()} ---\n`);
   logStream.write(`--- Command: ${cmd} ${args.join(" ")} ---\n`);
   logStream.write(`-------------------------------------------------\n\n`);
+
+  let fullOutput = "";
 
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { shell: false, stdio: "pipe" });
@@ -30,11 +31,13 @@ export function runStreaming(cmd: string, args: string[], logPath: string): Prom
     p.stdout.on("data", (chunk) => {
       process.stdout.write(chunk);
       logStream.write(chunk);
+      fullOutput += chunk.toString();
     });
 
     p.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       logStream.write(chunk);
+      fullOutput += chunk.toString();
     });
 
     p.on("close", (code) => {
@@ -49,7 +52,7 @@ export function runStreaming(cmd: string, args: string[], logPath: string): Prom
       console.log(`[Proc] Subprocess exited with code ${code}`);
       logStream.write(footer + footer2 + footer3);
       logStream.end();
-      resolve(code ?? 1);
+      resolve({ code: code ?? 1, output: fullOutput });
     });
 
     p.stdin.end();

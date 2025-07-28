@@ -31,7 +31,7 @@ async function step(name: string, args: string[], log: string, check: () => void
   console.log(`\n[Orchestrator] Starting step: ${name}`);
   updateStatus("state/current.state.json", s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const code = await runStreaming("claude", ["--verbose", ...args], log);
+  const { code, output } = await runStreaming("claude", ["--verbose", ...args], log);
 
   console.log(`[Orchestrator] Step "${name}" finished with exit code: ${code}`);
   if (code !== 0) {
