@@ -1,40 +1,40 @@
 
-
-# Implementation Plan: Robust Git Workflow
+# Implementation Plan: Robust Git Workflow (V2)
 
 ### Goal
 
-To integrate a safe, automated Git branching strategy into the orchestrator. For every `claude-project run`, the tool will automatically create a unique, dedicated branch for the task. This will isolate the AI's work, prevent accidental commits to primary branches, and establish a clean foundation for future features like pull request generation.
+To integrate a safe, automated Git branching strategy that works seamlessly for **both local-only and remote-connected** Git repositories. This will isolate AI-generated work without making assumptions about the user's hosting setup.
 
 ### Description
 
-The current system commits work directly to the user's current branch. We will modify the `orchestrator.ts` to perform the following sequence at the beginning of a `runTask` execution:
-1.  **Safety Check:** Verify that the user's Git working directory is clean. If not, abort with a helpful message.
-2.  **Sync `main`:** Check out and pull the latest changes for the `main` branch to ensure the task starts from a fresh, up-to-date baseline.
-3.  **Create Task Branch:** Generate a unique branch name from the task file (e.g., `claude/create-simple-math-utility`).
-4.  **Execute on Branch:** Perform all subsequent operations (running steps, making `chore` commits) on this newly created task branch.
+We will refactor the `setupGitBranch` function to be more intelligent and resilient. The new sequence will be:
+1.  **Safety Check:** Verify the working directory is clean.
+2.  **Checkout `main`:** Switch to the local `main` branch.
+3.  **Detect Remote:** Check if a remote named `origin` exists.
+4.  **Conditional Pull:** If `origin` exists, *then* attempt to `git pull` the latest changes, with a graceful fallback if the pull fails due to network or auth issues.
+5.  **Create Task Branch:** Proceed to create or check out the dedicated task branch.
 
-This makes the tool dramatically safer and aligns with professional development best practices.
+This ensures the tool "just works" for all users, providing helpful feedback instead of crashing.
 
 ---
 
 ## Summary Checklist
 
--   [x] **Step 1:** Add Git helper functions to the orchestrator.
--   [x] **Step 2:** Integrate the Git setup logic at the beginning of `runTask`.
--   [x] **Step 3:** Update the `README.md` to explain the new branching behavior.
+-   [ ] **Step 1:** Implement the new, robust `setupGitBranch` function.
+-   [ ] **Step 2:** Integrate the function into the `runTask` orchestrator.
+-   [ ] **Step 3:** Update documentation to clarify the behavior.
 
 ---
 
 ## Detailed Implementation Steps
 
-### Step 1: Add Git Helper Functions
+### Step 1: Implement the New `setupGitBranch` Function
 
-**Objective:** Create two new functions inside `orchestrator.ts` to handle branch name generation and the Git setup sequence.
+**Objective:** Replace the previous brittle function with a new version that intelligently handles the presence of a remote repository.
 
-**Task:** Add the following functions to the top of `src/tools/orchestrator.ts`.
+**Task:** Replace the existing `taskPathToBranchName` and `setupGitBranch` functions in `src/tools/orchestrator.ts` with these new, improved versions.
 
-**File: `src/tools/orchestrator.ts` (Additions)**
+**File: `src/tools/orchestrator.ts` (Updated Functions)**
 ```typescript
 // Add this import at the top
 import { execSync } from "node:child_process";
@@ -55,7 +55,7 @@ function taskPathToBranchName(taskPath: string): string {
 }
 
 /**
- * Sets up the Git environment for a task run.
+ * Sets up the Git environment for a task run, handling both local and remote repos.
  * @param projectRoot The absolute path to the project root.
  * @param taskPath The path to the task file.
  * @returns The name of the created or checked-out branch.
@@ -69,12 +69,30 @@ function setupGitBranch(projectRoot: string, taskPath: string): string {
     throw new Error("Git working directory is not clean. Please commit or stash your changes before starting a new task.");
   }
 
-  // 2. Sync with the main branch.
-  console.log(pc.gray("  › Syncing with main branch..."));
-  execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
-  execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe' });
+  // 2. Check out the local main branch.
+  console.log(pc.gray("  › Switching to main branch..."));
+  try {
+      execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  } catch (e) {
+      throw new Error("Could not check out 'main' branch. Does it exist? This tool currently requires a 'main' branch as the base for new work.");
+  }
 
-  // 3. Create or check out the dedicated task branch.
+  // 3. Detect remote and attempt to pull.
+  try {
+    // This command will fail if 'origin' does not exist, moving to the catch block.
+    execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.gray("  › Remote 'origin' found. Syncing with remote..."));
+    try {
+      // Add a timeout in case of network issues.
+      execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
+    } catch (pullError) {
+      console.warn(pc.yellow("  ! Warning: Could not pull from 'origin/main'. Proceeding with local version. Please check your network connection and Git credentials."));
+    }
+  } catch (remoteError) {
+    console.log(pc.yellow("  › No remote 'origin' found. Proceeding with local 'main' branch."));
+  }
+
+  // 4. Create or check out the dedicated task branch.
   const branchName = taskPathToBranchName(taskPath);
   const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
 
@@ -92,11 +110,11 @@ function setupGitBranch(projectRoot: string, taskPath: string): string {
 
 ### Step 2: Integrate Git Setup into `runTask`
 
-**Objective:** Call the new `setupGitBranch` function at the very beginning of the `runTask` execution flow.
+**Objective:** This step should already be complete from the previous plan, but it is included here for completeness. Confirm that `setupGitBranch` is the first action in `runTask`.
 
-**Task:** Modify the `runTask` function in `src/tools/orchestrator.ts`.
+**Task:** Review the `runTask` function in `src/tools/orchestrator.ts`.
 
-**File: `src/tools/orchestrator.ts` (Updated `runTask`)**
+**File: `src/tools/orchestrator.ts` (Review `runTask`)**
 ```typescript
 // ... imports and helper functions ...
 
@@ -104,32 +122,29 @@ export async function runTask(taskRelativePath: string) {
   const config = await getConfig();
   const projectRoot = getProjectRoot();
 
-  // --- NEW GIT WORKFLOW INTEGRATION ---
-  // This is now the first action of any run.
+  // This should be the very first action of the run.
   const branchName = setupGitBranch(projectRoot, taskRelativePath);
   console.log(pc.cyan(`[Orchestrator] Task will be executed on branch: ${branchName}`));
-  // --- END OF NEW SECTION ---
 
-  const { isValid, errors } = validatePipeline(config, projectRoot);
-  // ... (rest of the function continues as before, validation, setup, loop, etc.)
+  // ... (rest of the function continues as before)
 }
 ```
 
 ### Step 3: Update README.md
 
-**Objective:** Inform users about this important new behavior so they understand where the AI's work is being committed.
+**Objective:** Your documentation should reflect the tool's robustness and clarify the behavior for both local and remote repositories.
 
-**Task:** Add a new subsection to the "How It Works" section of the main `README.md`.
+**Task:** Update the "Isolated Git Branches" section in `README.md`.
 
-**File: `README.md` (Add this new section)**
+**File: `README.md` (Updated Section)**
 ```markdown
 ### Isolated Git Branches
 
 To ensure safety and a clean Git history, the orchestrator automatically manages branches for you. When you run a task:
 
 1.  It first checks that your repository has no uncommitted changes.
-2.  It creates a unique, dedicated branch for the task (e.g., `claude/my-new-feature`).
-3.  All commits generated by the AI during the pipeline are made to this task branch.
+2.  It switches to your local `main` branch. If you have a remote repository named `origin`, it attempts to pull the latest changes to ensure you're up to date. (If you have a local-only repository, it safely skips this step).
+3.  It then creates a unique, dedicated branch for the task (e.g., `claude/my-new-feature`).
+4.  All commits generated by the AI during the pipeline are made to this task branch.
 
-This keeps your `main` branch clean and isolates all automated work, preparing it for a proper code review and pull request.
-```
+This keeps your `main` branch clean and isolates all automated work, whether you are working locally or with a remote team.
