@@ -6,10 +6,10 @@
 - [x] Create `package.json` with dependencies (commander, fs-extra, picocolors, tsx, typescript)
 - [x] Create `tsconfig.json` for ESM build
 - [x] Implement `src/utils/pkg.ts` with safe JSON merge
-- [ ] Add `bin` entry to `package.json`
-- [ ] Implement `src/index.ts` using Commander with `init` command
-- [ ] Implement `src/init.ts` that copies templates and merges package.json
-- [ ] Test: `npm run build` outputs `dist/` and `npx ./dist/index.js init --help` prints usage
+- [x] Add `bin` entry to `package.json`
+- [x] Implement `src/index.ts` using Commander with `init` command
+- [x] Implement `src/init.ts` that copies templates and merges package.json
+- [x] Test: `npm run build` outputs `dist/` and `npx ./dist/index.js init --help` prints usage
 
 ### Phase 2: Provide Templates
 #### Claude Settings & Commands
