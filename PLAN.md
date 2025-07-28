@@ -53,12 +53,12 @@
 
 ### Phase 6: QA Testing
 - [x] Test `npx claude-project init` in fresh TS repo
-- [ ] Test `npm run claude:run claude-Tasks/task-001-sample.md`
-- [ ] Verify TUI and web interfaces work
-- [ ] Confirm step checkpoints, commits, logs, status work
-- [ ] Verify PR creation works
-- [ ] Fix any discovered defects
-- [ ] If test repo has been created, remove it
+- [x] Test `npm run claude:run claude-Tasks/task-001-sample.md`
+- [x] Verify TUI and web interfaces work
+- [x] Confirm step checkpoints, commits, logs, status work
+- [x] Verify PR creation works
+- [x] Fix any discovered defects
+- [x] If test repo has been created, remove it
 
 ### Phase 7: Documentation and Publish
 - [ ] Write comprehensive README with install, usage, troubleshooting

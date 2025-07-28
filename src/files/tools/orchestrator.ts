@@ -18,16 +18,16 @@ function testsShouldPass() { execSync("npm run test:ci", { stdio: "inherit" }); 
 
 export async function runTask(taskPath: string) {
   execSync("mkdir -p state logs", { stdio: "ignore" });
-  await step("plan", ["/project:plan-task", taskPath], "logs/01-plan.log", () => { if (!existsSync("PLAN.md")) throw new Error("PLAN.md missing"); });
-  await step("write_tests", ["/project:write-tests", taskPath], "logs/02-tests.log", async () => {
+  await step("plan", ["/plan-task", taskPath], "logs/01-plan.log", () => { if (!existsSync("PLAN.md")) throw new Error("PLAN.md missing"); });
+  await step("write_tests", ["/write-tests", taskPath], "logs/02-tests.log", async () => {
     const tests = await glob("test/**/*.{test,spec}.ts");
     if (!tests.length) throw new Error("No tests found");
     testsShouldFail();
   });
-  await step("implement", ["/project:implement"], "logs/03-implement.log", () => { testsShouldPass(); });
-  await step("docs", ["/project:docs-update"], "logs/04-docs.log", () => {});
-  await step("review", ["/project:self-review"], "logs/05-review.log", () => { execSync("npm run lint:fix || true", { stdio: "inherit" }); });
-  await step("pr", ["/project:push-pr"], "logs/06-pr.log", () => {});
+  await step("implement", ["/implement"], "logs/03-implement.log", () => { testsShouldPass(); });
+  await step("docs", ["/docs-update"], "logs/04-docs.log", () => {});
+  await step("review", ["/self-review"], "logs/05-review.log", () => { execSync("npm run lint:fix || true", { stdio: "inherit" }); });
+  await step("pr", ["/push-pr"], "logs/06-pr.log", () => {});
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
