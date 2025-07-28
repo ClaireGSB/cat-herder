@@ -35,8 +35,32 @@ async function step(name: string, args: string[], log: string, check: () => void
 
   console.log(`[Orchestrator] Step "${name}" finished with exit code: ${code}`);
   if (code !== 0) {
+    // --- NEW: ELEGANT ERROR HANDLING ---
+    const output = readFileSync(log, 'utf-8');
+
+    // Check for the specific usage limit error
+    if (output.includes("Claude AI usage limit reached")) {
+      const parts = output.split('|');
+      // The timestamp is the second part
+      const timestamp = parts.length > 1 ? parseInt(parts[1], 10) : null;
+      
+      let errorMessage = `[Orchestrator] ERROR: Claude AI usage limit reached.`;
+      
+      if (timestamp) {
+        const resetDate = new Date(timestamp * 1000);
+        errorMessage += `\n[Orchestrator] Your API quota will reset at: ${resetDate.toLocaleString()}`;
+      }
+      
+      errorMessage += `\n[Orchestrator] Please wait and try again later.`;
+
+      // Set a more appropriate status
+      updateStatus("state/current.state.json", s => { s.phase = "interrupted"; s.steps[name] = "interrupted"; });
+      throw new Error(errorMessage);
+    }
+    
+    // Fallback for all other generic errors
     updateStatus("state/current.state.json", s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`${name} failed`);
+    throw new Error(`[Orchestrator] Step "${name}" failed with a generic error. Check the log file for details: ${log}`);
   }
 
   console.log(`[Orchestrator] Running checks for step: ${name}`);
