@@ -38,3 +38,7 @@ Thumbs.db
 
 # Package artifacts
 *.tgz
+
+# Project-context
+.project-context.toml
+project-context.xml
