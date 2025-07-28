@@ -1,222 +1,135 @@
 
 
----
-
-# Implementation Plan: Interactive Permission Helper
+# Implementation Plan: Robust Git Workflow
 
 ### Goal
 
-To enhance the `claude-project validate` command to be interactive. When it detects that a command in the pipeline requires a permission not present in `.claude/settings.json`, it will clearly list the missing permissions and prompt the user to automatically add them.
+To integrate a safe, automated Git branching strategy into the orchestrator. For every `claude-project run`, the tool will automatically create a unique, dedicated branch for the task. This will isolate the AI's work, prevent accidental commits to primary branches, and establish a clean foundation for future features like pull request generation.
 
 ### Description
 
-Instead of simply failing, the validator will become a powerful setup tool. The new user workflow will be:
-1.  A user customizes their pipeline by adding a new step with a new command (e.g., a `lint` step).
-2.  They run `claude-project validate`.
-3.  The tool detects that the new command requires `Bash(npm run lint:fix)`, which is missing from `settings.json`.
-4.  Instead of just erroring, it will display the missing permission and ask: `Would you like to add the missing permissions to .claude/settings.json? (y/N)`.
-5.  If the user presses `y`, the tool will safely read `settings.json`, add the new permission(s) to the `allow` array (without deleting existing ones), and write the file back.
+The current system commits work directly to the user's current branch. We will modify the `orchestrator.ts` to perform the following sequence at the beginning of a `runTask` execution:
+1.  **Safety Check:** Verify that the user's Git working directory is clean. If not, abort with a helpful message.
+2.  **Sync `main`:** Check out and pull the latest changes for the `main` branch to ensure the task starts from a fresh, up-to-date baseline.
+3.  **Create Task Branch:** Generate a unique branch name from the task file (e.g., `claude/create-simple-math-utility`).
+4.  **Execute on Branch:** Perform all subsequent operations (running steps, making `chore` commits) on this newly created task branch.
 
-This provides a seamless, guided experience for configuring the pipeline's security requirements. The silent validation in the `run` command will remain non-interactive and simply report the error as it does now.
+This makes the tool dramatically safer and aligns with professional development best practices.
 
 ---
 
 ## Summary Checklist
 
--   [x] **Step 1:** Modify the Validator to Return Structured Data
--   [x] **Step 2:** Implement the Interactive `validate` Command in `index.ts`
--   [x] **Step 3:** (No Change) Confirm the `run` Command's Validator Remains Non-Interactive
+-   [x] **Step 1:** Add Git helper functions to the orchestrator.
+-   [ ] **Step 2:** Integrate the Git setup logic at the beginning of `runTask`.
+-   [ ] **Step 3:** Update the `README.md` to explain the new branching behavior.
 
 ---
 
 ## Detailed Implementation Steps
 
-### Step 1: Modify the Validator to Return Structured Data
+### Step 1: Add Git Helper Functions
 
-**Objective:** The validator needs to distinguish between general errors and fixable permission errors. We will change its return type to provide this structured data.
+**Objective:** Create two new functions inside `orchestrator.ts` to handle branch name generation and the Git setup sequence.
 
-**Task:** Replace the contents of `src/tools/validator.ts` with this new version.
+**Task:** Add the following functions to the top of `src/tools/orchestrator.ts`.
 
-**File: `src/tools/validator.ts` (Updated)**
+**File: `src/tools/orchestrator.ts` (Additions)**
 ```typescript
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import { ClaudeProjectConfig } from "../config.js";
-import { contextProviders } from "./providers.js";
+// Add this import at the top
+import { execSync } from "node:child_process";
+// ... other imports
 
-function parseFrontmatter(content: string): Record<string, any> | null {
-  // ... (this function remains the same)
+/**
+ * Converts a task file path into a Git-friendly branch name.
+ * e.g., "claude-Tasks/01-sample.md" -> "claude/01-sample"
+ * @param taskPath The path to the task file.
+ */
+function taskPathToBranchName(taskPath: string): string {
+  const taskFileName = path.basename(taskPath, '.md');
+  const sanitized = taskFileName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-');
+  return `claude/${sanitized}`;
 }
 
-// The new return type for our function
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  missingPermissions: string[];
-}
+/**
+ * Sets up the Git environment for a task run.
+ * @param projectRoot The absolute path to the project root.
+ * @param taskPath The path to the task file.
+ * @returns The name of the created or checked-out branch.
+ */
+function setupGitBranch(projectRoot: string, taskPath: string): string {
+  console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
 
-export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
-  const errors: string[] = [];
-  const missingPermissions: string[] = []; // <-- New array for fixable errors
-  // ... (loading settings.json and other setup is the same)
-
-  // --- Main Loop ---
-  for (const [index, step] of config.pipeline.entries()) {
-    // ... (existing checks for step structure are the same)
-    
-    // --- Permission Check Logic ---
-    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-    if (fs.existsSync(commandFilePath)) {
-      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
-      const frontmatter = parseFrontmatter(commandContent);
-      const toolsValue = frontmatter?.['allowed-tools'];
-      
-      let requiredTools: string[] = [];
-      if (typeof toolsValue === 'string') {
-        requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean);
-      } else if (Array.isArray(toolsValue)) {
-        requiredTools = toolsValue;
-      }
-      
-      for (const tool of requiredTools) {
-        if (tool && !allowedPermissions.includes(tool)) {
-          // Instead of just a generic error, we add to both arrays
-          const errorMessage = `Step ${index + 1} ('${step.name}'): Requires missing permission "${tool}"`;
-          errors.push(errorMessage);
-          missingPermissions.push(tool); // <-- Add to the structured list
-        }
-      }
-    }
-    // ... (rest of the checks)
+  // 1. Safety Check: Abort if there are uncommitted changes.
+  const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
+  if (gitStatus) {
+    throw new Error("Git working directory is not clean. Please commit or stash your changes before starting a new task.");
   }
 
-  // Use a Set to remove duplicate missing permissions before returning
-  const uniqueMissingPermissions = [...new Set(missingPermissions)];
+  // 2. Sync with the main branch.
+  console.log(pc.gray("  › Syncing with main branch..."));
+  execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe' });
 
-  return { 
-    isValid: errors.length === 0, 
-    errors,
-    missingPermissions: uniqueMissingPermissions,
-  };
+  // 3. Create or check out the dedicated task branch.
+  const branchName = taskPathToBranchName(taskPath);
+  const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
+
+  if (existingBranches) {
+    console.log(pc.yellow(`  › Branch "${branchName}" already exists. Checking it out.`));
+    execSync(`git checkout ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  } else {
+    console.log(pc.green(`  › Creating and checking out new branch: "${branchName}"`));
+    execSync(`git checkout -b ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  }
+  
+  return branchName;
 }
 ```
 
-### Step 2: Implement the Interactive `validate` Command
+### Step 2: Integrate Git Setup into `runTask`
 
-**Objective:** This is the core of the feature. We'll rewrite the `validate` command to use the new structured data from the validator, display the errors, and present the interactive prompt if there are fixable permission issues.
+**Objective:** Call the new `setupGitBranch` function at the very beginning of the `runTask` execution flow.
 
-**Task:** Replace the `validate` command's action in `src/index.ts`.
+**Task:** Modify the `runTask` function in `src/tools/orchestrator.ts`.
 
-**File: `src/index.ts` (Updated `validate` command)**
+**File: `src/tools/orchestrator.ts` (Updated `runTask`)**
 ```typescript
-#!/usr/bin/env node
-import { Command } from "commander";
-import pc from "picocolors";
-import fs from "fs";
-import path from "path";
-import readline from "readline"; // <-- Import readline for prompts
-import { init } from "./init.js";
-// ... (other imports)
-import { validatePipeline } from "./tools/validator.js";
-import { getConfig, getProjectRoot } from "./config.js";
+// ... imports and helper functions ...
 
-// ... (program definition and other commands)
-
-program
-  .command("validate")
-  .description("Validates the claude.config.js pipeline and offers to fix permissions.")
-  .action(async () => {
-    try {
-      const config = await getConfig();
-      const projectRoot = getProjectRoot();
-      const { isValid, errors, missingPermissions } = validatePipeline(config, projectRoot);
-
-      if (isValid) {
-        console.log(pc.green("✔ Pipeline configuration is valid."));
-        return;
-      }
-
-      console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
-      for (const error of errors) {
-        console.error(pc.yellow(`  - ${error}`));
-      }
-
-      // --- Interactive Fixer Logic ---
-      if (missingPermissions.length > 0) {
-        console.log(pc.cyan("\nThis command can automatically add the missing permissions for you."));
-        
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        rl.question(pc.bold("Would you like to add these permissions to .claude/settings.json? (y/N) "), (answer) => {
-          if (answer.toLowerCase() === 'y') {
-            fixPermissions(projectRoot, missingPermissions);
-          } else {
-            console.log(pc.gray("Aborted. Please add permissions manually."));
-          }
-          rl.close();
-        });
-      }
-
-    } catch (error: any) {
-      console.error(pc.red(`Validation error: ${error.message}`));
-      process.exit(1);
-    }
-  });
-
-// Helper function to safely update settings.json
-function fixPermissions(projectRoot: string, permissionsToAdd: string[]) {
-    const settingsPath = path.join(projectRoot, ".claude", "settings.json");
-    try {
-        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-        
-        // Ensure the path to the 'allow' array exists
-        if (!settings.permissions) settings.permissions = {};
-        if (!settings.permissions.allow) settings.permissions.allow = [];
-
-        // Use a Set to prevent duplicates
-        const updatedPermissions = new Set([...settings.permissions.allow, ...permissionsToAdd]);
-        settings.permissions.allow = [...updatedPermissions];
-
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        console.log(pc.green("\n✔ Successfully updated .claude/settings.json."));
-        console.log(pc.cyan("  Run 'claude-project validate' again to confirm."));
-
-    } catch (e: any) {
-        console.error(pc.red(`\nError updating settings.json: ${e.message}`));
-        console.error(pc.gray("Please fix the file manually."));
-    }
-}
-
-// ... (rest of the file)
-```
-
-### Step 3: Confirm the `run` Command Remains Non-Interactive
-
-**Objective:** Ensure that the `run` command's silent validation does **not** become interactive.
-
-**Task:** Review the `orchestrator.ts` file to confirm its behavior is still correct.
-
-**File: `src/tools/orchestrator.ts` (Review - No Changes Needed)**
-```typescript
-// ...
 export async function runTask(taskRelativePath: string) {
   const config = await getConfig();
   const projectRoot = getProjectRoot();
 
-  // The `errors` array now contains the user-friendly permission error messages.
-  // The `missingPermissions` array is simply ignored here, so no prompt occurs.
-  // This logic remains perfectly correct for a non-interactive check.
-  const { isValid, errors } = validatePipeline(config, projectRoot);
-  if (!isValid) {
-    console.error(pc.red("✖ Your pipeline configuration is invalid. Cannot run task.\n"));
-    for (const error of errors) {
-      console.error(pc.yellow(`  - ${error}`));
-    }
-    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
-    process.exit(1);
-  }
+  // --- NEW GIT WORKFLOW INTEGRATION ---
+  // This is now the first action of any run.
+  const branchName = setupGitBranch(projectRoot, taskRelativePath);
+  console.log(pc.cyan(`[Orchestrator] Task will be executed on branch: ${branchName}`));
+  // --- END OF NEW SECTION ---
 
-  // ... rest of the function continues
+  const { isValid, errors } = validatePipeline(config, projectRoot);
+  // ... (rest of the function continues as before, validation, setup, loop, etc.)
 }
 ```
-This design is robust. The validator provides structured data, and each command (`validate` and `run`) uses that data in the way that is most appropriate for its context (interactive vs. non-interactive).
+
+### Step 3: Update README.md
+
+**Objective:** Inform users about this important new behavior so they understand where the AI's work is being committed.
+
+**Task:** Add a new subsection to the "How It Works" section of the main `README.md`.
+
+**File: `README.md` (Add this new section)**
+```markdown
+### Isolated Git Branches
+
+To ensure safety and a clean Git history, the orchestrator automatically manages branches for you. When you run a task:
+
+1.  It first checks that your repository has no uncommitted changes.
+2.  It creates a unique, dedicated branch for the task (e.g., `claude/my-new-feature`).
+3.  All commits generated by the AI during the pipeline are made to this task branch.
+
+This keeps your `main` branch clean and isolates all automated work, preparing it for a proper code review and pull request.
+```

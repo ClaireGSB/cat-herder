@@ -9,6 +9,55 @@ import { runCheck, CheckConfig } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
 
+/**
+ * Converts a task file path into a Git-friendly branch name.
+ * e.g., "claude-Tasks/01-sample.md" -> "claude/01-sample"
+ * @param taskPath The path to the task file.
+ */
+function taskPathToBranchName(taskPath: string): string {
+  const taskFileName = path.basename(taskPath, '.md');
+  const sanitized = taskFileName
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-');
+  return `claude/${sanitized}`;
+}
+
+/**
+ * Sets up the Git environment for a task run.
+ * @param projectRoot The absolute path to the project root.
+ * @param taskPath The path to the task file.
+ * @returns The name of the created or checked-out branch.
+ */
+function setupGitBranch(projectRoot: string, taskPath: string): string {
+  console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
+
+  // 1. Safety Check: Abort if there are uncommitted changes.
+  const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
+  if (gitStatus) {
+    throw new Error("Git working directory is not clean. Please commit or stash your changes before starting a new task.");
+  }
+
+  // 2. Sync with the main branch.
+  console.log(pc.gray("  › Syncing with main branch..."));
+  execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe' });
+
+  // 3. Create or check out the dedicated task branch.
+  const branchName = taskPathToBranchName(taskPath);
+  const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
+
+  if (existingBranches) {
+    console.log(pc.yellow(`  › Branch "${branchName}" already exists. Checking it out.`));
+    execSync(`git checkout ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  } else {
+    console.log(pc.green(`  › Creating and checking out new branch: "${branchName}"`));
+    execSync(`git checkout -b ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  }
+  
+  return branchName;
+}
+
 async function executeStep(
   name: string,
   command: string,
