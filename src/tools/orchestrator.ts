@@ -91,6 +91,12 @@ export async function runTask(taskRelativePath: string) {
   }
   const projectRoot = getProjectRoot();
 
+  // --- NEW GIT WORKFLOW INTEGRATION ---
+  // This is now the first action of any run.
+  const branchName = setupGitBranch(projectRoot, taskRelativePath);
+  console.log(pc.cyan(`[Orchestrator] Task will be executed on branch: ${branchName}`));
+  // --- END OF NEW SECTION ---
+
   // --- IMPLICIT VALIDATION STEP (Step 5) ---
   const { isValid, errors } = validatePipeline(config, projectRoot);
   if (!isValid) {
