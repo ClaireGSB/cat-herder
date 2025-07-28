@@ -18,7 +18,7 @@ We will also introduce a `claude-project validate` command to act as a "linter" 
 ## Summary Checklist
 
 -   [x] **Step 1:** Update the Configuration Template (`claude.config.js`)
--   [ ] **Step 2:** Create Context and Check Providers
+-   [x] **Step 2:** Create Context and Check Providers
 -   [ ] **Step 3:** Implement the Centralized Pipeline Validator
 -   [ ] **Step 4:** Refactor the Orchestrator to be Pipeline-Driven
 -   [ ] **Step 5:** Implement the `claude-project validate` Command
