@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-echo "pre-commit placeholder"
+. "$(dirname "$0")/_/husky.sh"
+
+npx lint-staged

@@ -1,1 +1,27 @@
-{}
+{
+  "permissions": {
+    "allow": [
+      "Read","Write","Edit","MultiEdit","Grep","Glob","LS",
+      "Bash(git *:*)","Bash(npm *:*)","Bash(vitest:*:*)","Bash(node:*)"
+    ],
+    "deny": ["WebFetch","WebSearch"]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "tsx ./tools/validators.ts preWrite < /dev/stdin" }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true" }
+        ]
+      }
+    ]
+  }
+}

@@ -13,25 +13,25 @@
 
 ### Phase 2: Provide Templates
 #### Claude Settings & Commands
-- [ ] Create `src/files/dot-claude/settings.json` with PreToolUse and PostToolUse hooks
-- [ ] Create `src/files/dot-claude/commands/plan-task.md`
-- [ ] Create `src/files/dot-claude/commands/write-tests.md`
-- [ ] Create `src/files/dot-claude/commands/implement.md`
-- [ ] Create `src/files/dot-claude/commands/docs-update.md`
-- [ ] Create `src/files/dot-claude/commands/self-review.md`
-- [ ] Create `src/files/dot-claude/commands/push-pr.md`
+- [x] Create `src/files/dot-claude/settings.json` with PreToolUse and PostToolUse hooks
+- [x] Create `src/files/dot-claude/commands/plan-task.md`
+- [x] Create `src/files/dot-claude/commands/write-tests.md`
+- [x] Create `src/files/dot-claude/commands/implement.md`
+- [x] Create `src/files/dot-claude/commands/docs-update.md`
+- [x] Create `src/files/dot-claude/commands/self-review.md`
+- [x] Create `src/files/dot-claude/commands/push-pr.md`
 
 #### Configuration Files
-- [ ] Create `src/files/configs/.eslintrc.cjs`
-- [ ] Create `src/files/configs/.prettierrc.json`
-- [ ] Create `src/files/configs/tsconfig.json` (for target repos)
+- [x] Create `src/files/configs/.eslintrc.cjs`
+- [x] Create `src/files/configs/.prettierrc.json`
+- [x] Create `src/files/configs/tsconfig.json` (for target repos)
 
 #### Sample Task
-- [ ] Create `src/files/tasks/sample.md`
+- [x] Create `src/files/tasks/sample.md`
 
 #### Git Hooks
-- [ ] Create `src/files/husky/pre-commit`
-- [ ] Create `src/files/husky/pre-push`
+- [x] Create `src/files/husky/pre-commit`
+- [x] Create `src/files/husky/pre-push`
 
 ### Phase 3: Implement Orchestrator and Helpers
 - [ ] Create `src/files/tools/proc.ts` for streaming subprocess output

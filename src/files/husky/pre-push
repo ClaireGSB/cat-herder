@@ -1,2 +1,4 @@
 #!/usr/bin/env bash
-echo "pre-push placeholder"
+. "$(dirname "$0")/_/husky.sh"
+
+npm run test:ci
