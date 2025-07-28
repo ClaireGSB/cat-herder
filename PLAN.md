@@ -43,8 +43,8 @@
 - [x] Create `src/files/tools/web.ts` for minimal Express web view
 
 ### Phase 4: Watcher and Run Commands
-- [ ] Create `src/files/tools/watch-tasks.ts` using chokidar
-- [ ] Ensure all npm scripts are added via init.ts package.json merge
+- [x] Create `src/files/tools/watch-tasks.ts` using chokidar
+- [x] Ensure all npm scripts are added via init.ts package.json merge
 
 ### Phase 5: Husky Hooks Implementation
 - [ ] Verify pre-commit hook runs lint-staged
