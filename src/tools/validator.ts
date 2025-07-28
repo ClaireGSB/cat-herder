@@ -15,6 +15,7 @@ function parseFrontmatter(content: string): Record<string, any> | null {
     try {
       return yaml.load(match[1]) as Record<string, any>;
     } catch {
+      // If YAML is malformed, treat it as if there's no frontmatter.
       return null;
     }
   }
@@ -30,7 +31,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
   const knownContextKeys = Object.keys(contextProviders);
   const validCheckTypes = ["none", "fileExists", "shell"];
 
-  // Load settings.json permissions
+  // 1. Load settings.json permissions
   const settingsPath = path.join(projectRoot, ".claude", "settings.json");
   let allowedPermissions: string[] = [];
   if (fs.existsSync(settingsPath)) {
@@ -49,42 +50,52 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     return { isValid: false, errors };
   }
 
+  // 2. Loop through each step in the pipeline
   for (const [index, step] of config.pipeline.entries()) {
     const stepNum = index + 1;
 
+    // --- Basic Step Structure Validation ---
     if (!step.command) {
         errors.push(`Step ${stepNum} ('${step.name}'): is missing the 'command' property.`);
-        continue; // Skip further checks for this malformed step
+        continue;
+    }
+    if (!step.check || !step.check.type) {
+        errors.push(`Step ${stepNum} ('${step.name}'): is missing a valid 'check' object with a 'type' property.`);
+        continue;
     }
 
+    // --- Command File and Permission Validation ---
     const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
     if (!fs.existsSync(commandFilePath)) {
       errors.push(`Step ${stepNum} ('${step.name}'): Command file not found at .claude/commands/${step.command}.md`);
     } else {
-      // Perform permission check
       const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
       const frontmatter = parseFrontmatter(commandContent);
-      const requiredTools: string[] = frontmatter?.['allowed-tools'] || [];
+      const toolsValue = frontmatter?.['allowed-tools'];
+      
+      let requiredTools: string[] = [];
+
+       if (typeof toolsValue === 'string') {
+        requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean); // filter(Boolean) removes empty strings
+      } else if (Array.isArray(toolsValue)) {
+        requiredTools = toolsValue;
+      }
       
       for (const tool of requiredTools) {
-        // Simple exact match check for permissions
         if (!allowedPermissions.includes(tool)) {
           errors.push(`Step ${stepNum} ('${step.name}'): Command requires tool "${tool}", which is not listed in the "allow" section of .claude/settings.json.`);
         }
       }
     }
 
+    // --- Context Validation ---
     for (const contextKey of step.context) {
       if (!knownContextKeys.includes(contextKey)) {
         errors.push(`Step ${stepNum} ('${step.name}'): Unknown context provider '${contextKey}'. Available: ${knownContextKeys.join(", ")}`);
       }
     }
     
-    if (!step.check || !step.check.type) {
-        errors.push(`Step ${stepNum} ('${step.name}'): is missing a valid 'check' object with a 'type' property.`);
-        continue;
-    }
-
+    // --- Check Validation ---
     if (!validCheckTypes.includes(step.check.type)) {
       errors.push(`Step ${stepNum} ('${step.name}'): Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
     }
