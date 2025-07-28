@@ -193,6 +193,12 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 check: { type: "none" }
 ```
 
+### Permissions and Security (`.claude/settings.json`)
+
+For the orchestrator to run non-interactively, it needs permission to execute commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions.
+
+This file pre-approves `Bash` commands that are essential for the workflow (scoped to `npm` and `git`) while denying network access. If you have an existing `settings.json`, `init` will not overwrite it. You can customize this file to tighten or expand permissions according to your project's security requirements.
+
 ## Commands Reference
 
 ### CLI Commands

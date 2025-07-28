@@ -19,8 +19,8 @@ This task involves creating a default `settings.json` template within our tool's
 ## Summary Checklist
 
 -   [x] **Step 1:** Create the Default `settings.json` Template
--   [ ] **Step 2:** Update the `init` Command to Safely Copy the Template
--   [ ] **Step 3:** Update Documentation to Explain the `settings.json` File
+-   [x] **Step 2:** Update the `init` Command to Safely Copy the Template
+-   [x] **Step 3:** Update Documentation to Explain the `settings.json` File
 
 ---
 
