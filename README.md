@@ -195,9 +195,24 @@ check: { type: "none" }
 
 ### Permissions and Security (`.claude/settings.json`)
 
-For the orchestrator to run non-interactively, it needs permission to execute commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions.
+For the orchestrator to run non-interactively, it needs permission to execute `Bash` commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions to enable this.
 
-This file pre-approves `Bash` commands that are essential for the workflow (scoped to `npm` and `git`) while denying network access. If you have an existing `settings.json`, `init` will not overwrite it. You can customize this file to tighten or expand permissions according to your project's security requirements.
+This file pre-approves `Bash` commands that are essential for the default workflow (scoped to `npm`, `git`, and `vitest`) while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**, preserving your custom configuration.
+
+Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command acts as a safety net and a helper. When you add a new step or command that requires a `Bash` permission not listed in your `settings.json`, the validator will detect it and offer to fix it for you.
+
+For example, if you add a `lint` step that needs to run `npm run lint:fix`, the validator will show you:
+
+> ```
+> ✖ Pipeline configuration is invalid:
+> 
+>   - Step 4 ('lint'): Requires missing permission "Bash(npm run lint:fix)"
+> 
+> This command can automatically add the missing permissions for you.
+> Would you like to add these permissions to .claude/settings.json? (y/N)
+> ```
+
+If you press `y` and hit Enter, the tool will safely and automatically add the required permission to your `settings.json` file. This turns the validator into a powerful assistant, ensuring your security settings always stay in sync with your workflow.
 
 ## Commands Reference
 
