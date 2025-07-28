@@ -1,0 +1,40 @@
+# Node & TypeScript
+node_modules/
+dist/
+lib/
+*.tsbuildinfo
+
+# Tests & coverage
+coverage/
+.nyc_output/
+.vitest/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Caches & temp
+.cache/
+.tmp/
+temp/
+tmp/
+
+# Editors & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Package artifacts
+*.tgz
