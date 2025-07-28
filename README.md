@@ -94,20 +94,18 @@ This is the loop you will follow every time you make changes to `claude-project`
 npm run build
 ```
 
-2.  **Clean Your Test Environment:** Navigate to your test app directory and run the master clean-up command. This completely resets it, removing all artifacts from the previous run.
+2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
 ```bash
 # In your my-test-app directory
-rm -f claude.config.js PLAN.md && rm -rf .claude/ claude-Tasks/ node_modules/ package-lock.json && git clean -fdx
+rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 ```
 
-3.  **Re-Initialize, Link, and Install:** Run the same setup commands as in the initial setup.
+
+3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
-# Inside the my-test-app directory
-claude-project init
-npm link @your-scope/claude-project
-npm install
+# In your my-test-app directory
+npm run claude:run claude-Tasks/task-001-sample.md
 ```
-Now you are ready to run a fresh test with your latest changes: `npm run claude:run claude-Tasks/task-001-sample.md`.
 
 ## How It Works
 
@@ -192,6 +190,27 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 // No automated validation
 check: { type: "none" }
 ```
+
+### Permissions and Security (`.claude/settings.json`)
+
+For the orchestrator to run non-interactively, it needs permission to execute `Bash` commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions to enable this.
+
+This file pre-approves `Bash` commands that are essential for the default workflow (scoped to `npm`, `git`, and `vitest`) while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**, preserving your custom configuration.
+
+Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command acts as a safety net and a helper. When you add a new step or command that requires a `Bash` permission not listed in your `settings.json`, the validator will detect it and offer to fix it for you.
+
+For example, if you add a `lint` step that needs to run `npm run lint:fix`, the validator will show you:
+
+> ```
+> ✖ Pipeline configuration is invalid:
+> 
+>   - Step 4 ('lint'): Requires missing permission "Bash(npm run lint:fix)"
+> 
+> This command can automatically add the missing permissions for you.
+> Would you like to add these permissions to .claude/settings.json? (y/N)
+> ```
+
+If you press `y` and hit Enter, the tool will safely and automatically add the required permission to your `settings.json` file. This turns the validator into a powerful assistant, ensuring your security settings always stay in sync with your workflow.
 
 ## Commands Reference
 
