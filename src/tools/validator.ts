@@ -22,12 +22,20 @@ function parseFrontmatter(content: string): Record<string, any> | null {
   return null;
 }
 
+// The new return type for our function
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  missingPermissions: string[];
+}
+
 /**
  * Validates a pipeline configuration against available commands and providers.
- * @returns An object with an `isValid` boolean and an array of error strings.
+ * @returns A ValidationResult object with validation status, errors, and missing permissions.
  */
-export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): { isValid: boolean; errors: string[] } {
+export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
   const errors: string[] = [];
+  const missingPermissions: string[] = []; // New array for fixable errors
   const knownContextKeys = Object.keys(contextProviders);
   const validCheckTypes = ["none", "fileExists", "shell"];
 
@@ -47,7 +55,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
 
   if (!config.pipeline || !Array.isArray(config.pipeline)) {
     errors.push("Configuration is missing a valid 'pipeline' array.");
-    return { isValid: false, errors };
+    return { isValid: false, errors, missingPermissions: [] };
   }
 
   // 2. Loop through each step in the pipeline
@@ -82,8 +90,11 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       }
       
       for (const tool of requiredTools) {
-        if (!allowedPermissions.includes(tool)) {
-          errors.push(`Step ${stepNum} ('${step.name}'): Command requires tool "${tool}", which is not listed in the "allow" section of .claude/settings.json.`);
+        if (tool && !allowedPermissions.includes(tool)) {
+          // Instead of just a generic error, we add to both arrays
+          const errorMessage = `Step ${stepNum} ('${step.name}'): Requires missing permission "${tool}"`;
+          errors.push(errorMessage);
+          missingPermissions.push(tool); // Add to the structured list
         }
       }
     }
@@ -101,5 +112,12 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     }
   }
 
-  return { isValid: errors.length === 0, errors };
+  // Use a Set to remove duplicate missing permissions before returning
+  const uniqueMissingPermissions = [...new Set(missingPermissions)];
+
+  return { 
+    isValid: errors.length === 0, 
+    errors,
+    missingPermissions: uniqueMissingPermissions,
+  };
 }

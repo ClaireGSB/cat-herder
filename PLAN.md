@@ -1,110 +1,222 @@
 
 
-# Implementation Plan: Non-Interactive Permissions via `settings.json`
+---
+
+# Implementation Plan: Interactive Permission Helper
 
 ### Goal
 
-To enable a fully automated, non-interactive pipeline execution by providing a default `.claude/settings.json` file. This file will pre-authorize the specific `Bash` commands required by the default pipeline (e.g., `npm`, `git`), thereby eliminating the need for interactive permission prompts from the `claude` CLI during a run.
+To enhance the `claude-project validate` command to be interactive. When it detects that a command in the pipeline requires a permission not present in `.claude/settings.json`, it will clearly list the missing permissions and prompt the user to automatically add them.
 
 ### Description
 
-The `claude` command-line tool, for security reasons, prompts the user for permission before executing powerful tools like `Bash`. In an automated workflow, these prompts halt the process and are undesirable. The official mechanism to grant persistent, non-interactive permissions is a `.claude/settings.json` file in the root of the user's project.
+Instead of simply failing, the validator will become a powerful setup tool. The new user workflow will be:
+1.  A user customizes their pipeline by adding a new step with a new command (e.g., a `lint` step).
+2.  They run `claude-project validate`.
+3.  The tool detects that the new command requires `Bash(npm run lint:fix)`, which is missing from `settings.json`.
+4.  Instead of just erroring, it will display the missing permission and ask: `Would you like to add the missing permissions to .claude/settings.json? (y/N)`.
+5.  If the user presses `y`, the tool will safely read `settings.json`, add the new permission(s) to the `allow` array (without deleting existing ones), and write the file back.
 
-This task involves creating a default `settings.json` template within our tool's source code and updating the `init` command to scaffold it into the user's project.
-
-**Handling Existing Files:** If a user already has a `.claude/settings.json` file, **we will not overwrite it**. The `init` command will detect the existing file and skip the copy process, printing a message to the user. This is a critical safety measure to respect any custom configurations the user may have already created.
+This provides a seamless, guided experience for configuring the pipeline's security requirements. The silent validation in the `run` command will remain non-interactive and simply report the error as it does now.
 
 ---
 
 ## Summary Checklist
 
--   [x] **Step 1:** Create the Default `settings.json` Template
--   [x] **Step 2:** Update the `init` Command to Safely Copy the Template
--   [x] **Step 3:** Update Documentation to Explain the `settings.json` File
+-   [x] **Step 1:** Modify the Validator to Return Structured Data
+-   [ ] **Step 2:** Implement the Interactive `validate` Command in `index.ts`
+-   [ ] **Step 3:** (No Change) Confirm the `run` Command's Validator Remains Non-Interactive
 
 ---
 
 ## Detailed Implementation Steps
 
-### Step 1: Create the Default `settings.json` Template
+### Step 1: Modify the Validator to Return Structured Data
 
-**Objective:** Create the permissions file with a set of safe but sufficient defaults for the pipeline to operate.
+**Objective:** The validator needs to distinguish between general errors and fixable permission errors. We will change its return type to provide this structured data.
 
-**Task:** Create a new file at `src/dot-claude/settings.json`. The `dot-claude` directory should already exist and contain your `commands` subdirectory.
+**Task:** Replace the contents of `src/tools/validator.ts` with this new version.
 
-**File: `src/dot-claude/settings.json` (New File)**
-```json
-{
-  "permissions": {
-    "allow": [
-      "Read",
-      "Write",
-      "Edit",
-      "MultiEdit",
-      "Grep",
-      "Glob",
-      "LS",
-      "Bash(git *:*)",
-      "Bash(npm *:*)",
-      "Bash(vitest:*:*)",
-      "Bash(node:*)"
-    ],
-    "deny": [
-      "WebFetch",
-      "WebSearch"
-    ]
-  },
-  "hooks": {}
-}
-```
-*   **Rationale:** This configuration allows all standard file operations and explicitly permits `Bash` commands that start with `git` or `npm`, which are essential for committing code and running tests. It denies potentially unsafe network tools like `WebFetch` and `WebSearch`.
-
-### Step 2: Update the `init` Command to Safely Copy the Template
-
-**Objective:** Modify the `init` command to copy the entire `.claude` directory (which now includes `settings.json` and `commands/`) into the user's project, ensuring it does not overwrite existing files.
-
-**Task:** The existing `fs.copy` command in `init.ts` is already configured correctly with `overwrite: false`. We simply need to ensure the new `settings.json` file is in the source `src/dot-claude` directory and that the console log message is clear to the user.
-
-**File: `src/init.ts` (Review and Confirm)**
+**File: `src/tools/validator.ts` (Updated)**
 ```typescript
-import fs from "fs-extra";
+import fs from "fs";
 import path from "path";
-import pc from "picocolors";
-import { mergePackageJson } from "./utils/pkg.js";
+import yaml from "js-yaml";
+import { ClaudeProjectConfig } from "../config.js";
+import { contextProviders } from "./providers.js";
 
-export async function init(targetRoot: string) {
-  console.log(pc.cyan("Initializing claude-project..."));
+function parseFrontmatter(content: string): Record<string, any> | null {
+  // ... (this function remains the same)
+}
 
-  // ... (config file creation)
+// The new return type for our function
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  missingPermissions: string[];
+}
 
-  // This block of code handles the copy. It is already correct.
-  // By copying the parent `dot-claude` directory, it will automatically
-  // include the new `settings.json` file. The `overwrite: false`
-  // option correctly handles the case where the user already has files.
-  const dotClaudeTemplatePath = path.resolve(new URL("../dot-claude", import.meta.url).pathname);
-  const targetDotClaudePath = path.join(targetRoot, ".claude");
-  await fs.copy(dotClaudeTemplatePath, targetDotClaudePath, {
-      overwrite: false,
-      errorOnExist: false,
-  });
-  
-  // Update the log message to be more descriptive.
-  console.log(pc.green("Created .claude/ directory with default commands and settings."));
+export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
+  const errors: string[] = [];
+  const missingPermissions: string[] = []; // <-- New array for fixable errors
+  // ... (loading settings.json and other setup is the same)
 
-  // ... (rest of the file remains the same)
+  // --- Main Loop ---
+  for (const [index, step] of config.pipeline.entries()) {
+    // ... (existing checks for step structure are the same)
+    
+    // --- Permission Check Logic ---
+    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+    if (fs.existsSync(commandFilePath)) {
+      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
+      const frontmatter = parseFrontmatter(commandContent);
+      const toolsValue = frontmatter?.['allowed-tools'];
+      
+      let requiredTools: string[] = [];
+      if (typeof toolsValue === 'string') {
+        requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean);
+      } else if (Array.isArray(toolsValue)) {
+        requiredTools = toolsValue;
+      }
+      
+      for (const tool of requiredTools) {
+        if (tool && !allowedPermissions.includes(tool)) {
+          // Instead of just a generic error, we add to both arrays
+          const errorMessage = `Step ${index + 1} ('${step.name}'): Requires missing permission "${tool}"`;
+          errors.push(errorMessage);
+          missingPermissions.push(tool); // <-- Add to the structured list
+        }
+      }
+    }
+    // ... (rest of the checks)
+  }
+
+  // Use a Set to remove duplicate missing permissions before returning
+  const uniqueMissingPermissions = [...new Set(missingPermissions)];
+
+  return { 
+    isValid: errors.length === 0, 
+    errors,
+    missingPermissions: uniqueMissingPermissions,
+  };
 }
 ```
 
-### Step 3: Update Documentation
+### Step 2: Implement the Interactive `validate` Command
 
-**Objective:** Inform the user about the new `.claude/settings.json` file in the `README.md` so they understand its purpose.
+**Objective:** This is the core of the feature. We'll rewrite the `validate` command to use the new structured data from the validator, display the errors, and present the interactive prompt if there are fixable permission issues.
 
-**Task:** Add a new subsection to the "How It Works" section of the main `README.md`.
+**Task:** Replace the `validate` command's action in `src/index.ts`.
 
-**File: `README.md` (Add this new section)**
+**File: `src/index.ts` (Updated `validate` command)**
+```typescript
+#!/usr/bin/env node
+import { Command } from "commander";
+import pc from "picocolors";
+import fs from "fs";
+import path from "path";
+import readline from "readline"; // <-- Import readline for prompts
+import { init } from "./init.js";
+// ... (other imports)
+import { validatePipeline } from "./tools/validator.js";
+import { getConfig, getProjectRoot } from "./config.js";
 
-### Permissions and Security (`.claude/settings.json`)
+// ... (program definition and other commands)
 
-For the orchestrator to run non-interactively, it needs permission to execute commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions.
+program
+  .command("validate")
+  .description("Validates the claude.config.js pipeline and offers to fix permissions.")
+  .action(async () => {
+    try {
+      const config = await getConfig();
+      const projectRoot = getProjectRoot();
+      const { isValid, errors, missingPermissions } = validatePipeline(config, projectRoot);
 
-This file pre-approves `Bash` commands that are essential for the workflow (scoped to `npm` and `git`) while denying network access. If you have an existing `settings.json`, `init` will not overwrite it. You can customize this file to tighten or expand permissions according to your project's security requirements.```
+      if (isValid) {
+        console.log(pc.green("✔ Pipeline configuration is valid."));
+        return;
+      }
+
+      console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
+      for (const error of errors) {
+        console.error(pc.yellow(`  - ${error}`));
+      }
+
+      // --- Interactive Fixer Logic ---
+      if (missingPermissions.length > 0) {
+        console.log(pc.cyan("\nThis command can automatically add the missing permissions for you."));
+        
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        rl.question(pc.bold("Would you like to add these permissions to .claude/settings.json? (y/N) "), (answer) => {
+          if (answer.toLowerCase() === 'y') {
+            fixPermissions(projectRoot, missingPermissions);
+          } else {
+            console.log(pc.gray("Aborted. Please add permissions manually."));
+          }
+          rl.close();
+        });
+      }
+
+    } catch (error: any) {
+      console.error(pc.red(`Validation error: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// Helper function to safely update settings.json
+function fixPermissions(projectRoot: string, permissionsToAdd: string[]) {
+    const settingsPath = path.join(projectRoot, ".claude", "settings.json");
+    try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        
+        // Ensure the path to the 'allow' array exists
+        if (!settings.permissions) settings.permissions = {};
+        if (!settings.permissions.allow) settings.permissions.allow = [];
+
+        // Use a Set to prevent duplicates
+        const updatedPermissions = new Set([...settings.permissions.allow, ...permissionsToAdd]);
+        settings.permissions.allow = [...updatedPermissions];
+
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        console.log(pc.green("\n✔ Successfully updated .claude/settings.json."));
+        console.log(pc.cyan("  Run 'claude-project validate' again to confirm."));
+
+    } catch (e: any) {
+        console.error(pc.red(`\nError updating settings.json: ${e.message}`));
+        console.error(pc.gray("Please fix the file manually."));
+    }
+}
+
+// ... (rest of the file)
+```
+
+### Step 3: Confirm the `run` Command Remains Non-Interactive
+
+**Objective:** Ensure that the `run` command's silent validation does **not** become interactive.
+
+**Task:** Review the `orchestrator.ts` file to confirm its behavior is still correct.
+
+**File: `src/tools/orchestrator.ts` (Review - No Changes Needed)**
+```typescript
+// ...
+export async function runTask(taskRelativePath: string) {
+  const config = await getConfig();
+  const projectRoot = getProjectRoot();
+
+  // The `errors` array now contains the user-friendly permission error messages.
+  // The `missingPermissions` array is simply ignored here, so no prompt occurs.
+  // This logic remains perfectly correct for a non-interactive check.
+  const { isValid, errors } = validatePipeline(config, projectRoot);
+  if (!isValid) {
+    console.error(pc.red("✖ Your pipeline configuration is invalid. Cannot run task.\n"));
+    for (const error of errors) {
+      console.error(pc.yellow(`  - ${error}`));
+    }
+    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
+    process.exit(1);
+  }
+
+  // ... rest of the function continues
+}
+```
+This design is robust. The validator provides structured data, and each command (`validate` and `run`) uses that data in the way that is most appropriate for its context (interactive vs. non-interactive).
