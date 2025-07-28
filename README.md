@@ -94,20 +94,18 @@ This is the loop you will follow every time you make changes to `claude-project`
 npm run build
 ```
 
-2.  **Clean Your Test Environment:** Navigate to your test app directory and run the master clean-up command. This completely resets it, removing all artifacts from the previous run.
+2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
 ```bash
 # In your my-test-app directory
-rm -f claude.config.js PLAN.md && rm -rf .claude/ claude-Tasks/ node_modules/ package-lock.json && git clean -fdx
+rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 ```
 
-3.  **Re-Initialize, Link, and Install:** Run the same setup commands as in the initial setup.
+
+3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
-# Inside the my-test-app directory
-claude-project init
-npm link @your-scope/claude-project
-npm install
+# In your my-test-app directory
+npm run claude:run claude-Tasks/task-001-sample.md
 ```
-Now you are ready to run a fresh test with your latest changes: `npm run claude:run claude-Tasks/task-001-sample.md`.
 
 ## How It Works
 
