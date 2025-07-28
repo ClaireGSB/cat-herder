@@ -22,8 +22,8 @@ We will also introduce a `claude-project validate` command to act as a "linter" 
 -   [x] **Step 3:** Implement the Centralized Pipeline Validator
 -   [x] **Step 4:** Refactor the Orchestrator to be Pipeline-Driven
 -   [x] **Step 5:** Implement the `claude-project validate` Command
--   [ ] **Step 6:** Integrate Silent Validation into the `run` Command
--   [ ] **Step 7:** Update the `README.md` Documentation
+-   [x] **Step 6:** Integrate Silent Validation into the `run` Command
+-   [x] **Step 7:** Update the `README.md` Documentation
 
 ---
 
