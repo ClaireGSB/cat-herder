@@ -34,13 +34,13 @@
 - [x] Create `src/files/husky/pre-push`
 
 ### Phase 3: Implement Orchestrator and Helpers
-- [ ] Create `src/files/tools/proc.ts` for streaming subprocess output
-- [ ] Create `src/files/tools/status.ts` for atomic status and events logging
-- [ ] Create `src/files/tools/validators.ts` for PreToolUse blocking based on state
-- [ ] Create `src/files/tools/orchestrator.ts` for step machine and validations
-- [ ] Create `src/files/tools/status-cli.ts` for quick status visibility
-- [ ] Create `src/files/tools/tui.ts` for terminal UI
-- [ ] Create `src/files/tools/web.ts` for minimal Express web view
+- [x] Create `src/files/tools/proc.ts` for streaming subprocess output
+- [x] Create `src/files/tools/status.ts` for atomic status and events logging
+- [x] Create `src/files/tools/validators.ts` for PreToolUse blocking based on state
+- [x] Create `src/files/tools/orchestrator.ts` for step machine and validations
+- [x] Create `src/files/tools/status-cli.ts` for quick status visibility
+- [x] Create `src/files/tools/tui.ts` for terminal UI
+- [x] Create `src/files/tools/web.ts` for minimal Express web view
 
 ### Phase 4: Watcher and Run Commands
 - [ ] Create `src/files/tools/watch-tasks.ts` using chokidar
