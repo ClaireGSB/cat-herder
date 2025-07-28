@@ -64,6 +64,7 @@ program
       } else {
         console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
         for (const error of errors) console.error(pc.yellow(`  - ${error}`));
+        console.error(pc.gray("\nPlease fix the errors above and run 'claude-project validate' again."));
         process.exit(1);
       }
     } catch (error: any) {
