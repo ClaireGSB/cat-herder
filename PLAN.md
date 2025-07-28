@@ -1,92 +1,123 @@
 
 
-# Implementation Plan: Branch-Aware Task Resumption
+# Implementation Plan: State-Aware & Configurable Task Orchestration
 
 ### Goal
 
-To refactor the Git setup logic to be fully aware of the current state, allowing for seamless resumption of partially completed or aborted tasks. The tool must intelligently handle cases where a task's branch already exists and may even be the currently active branch.
+To refactor the `runTask` orchestrator into a fully state-aware and user-configurable system. The tool will: (1) check if a task is already complete before taking any action; (2) intelligently resume tasks on their existing Git branches; and (3) allow users to disable the automatic branch management entirely via a new configuration setting.
 
 ### Description
 
-The current Git setup is too simplistic and fails in common resume scenarios. We will replace it with a more sophisticated function that follows a "state-aware" logic:
+This plan addresses several key user experience improvements. The start of the `runTask` flow will be re-architected to follow this logic:
 
-1.  **Check Task Status:** As implemented in the last step, the tool will first check if the overall task is marked as `done`. If so, it will exit.
-2.  **Determine Expected Branch:** The orchestrator will calculate the branch name that corresponds to the task (e.g., `claude/task-001-sample`).
-3.  **Check Current Branch:** The orchestrator will check what Git branch the user is *currently* on.
-    *   **Scenario A: Already on the Correct Branch.** If the current branch matches the expected task branch, the tool will assume it's a "resume" operation. It will **skip** the "clean working directory" check and all `git checkout` commands, and proceed directly to running the pipeline steps.
-    *   **Scenario B: On a Different Branch (e.g., `main`).** If the user is on any other branch, the tool will perform the full setup sequence: check for a clean working directory, sync the `main` branch, and then create or check out the task branch before proceeding.
+1.  **Status First:** The tool will read the task's `state.json` file. If the task is `done`, it exits gracefully.
+2.  **Check Branching Config:** A new flag, `manageGitBranch`, will be added to `claude.config.js` (defaulting to `true`).
+3.  **Execute Git Logic (if enabled):** If `manageGitBranch` is `true`, the tool will perform the state-aware branching logic:
+    *   **Resume:** If on the correct branch, it continues.
+    *   **New Task:** If on a different branch, it performs the safe setup (clean check, sync main, checkout task branch).
+4.  **Execute Git Logic (if disabled):** If `manageGitBranch` is `false`, the tool will skip all branch-related checks and operations, printing a warning that it's operating on the user's current branch.
+5.  **Run Pipeline:** The pipeline execution proceeds as normal on whichever branch is active after the Git logic is complete.
 
-This change elevates the tool from a simple script to a truly resilient assistant that supports the natural, often interrupted, workflow of a developer.
+This provides the best of all worlds: a safe, automated default for most users, and a flexible "power user" mode for those with custom workflows.
 
 ---
 
 ## Summary Checklist
 
--   [ ] **Step 1:** Replace `setupGitBranch` with the new, state-aware `ensureCorrectGitBranch` function.
--   [ ] **Step 2:** Integrate the new function into the `runTask` orchestrator.
--   [ ] **Step 3:** Update the `README.md` to highlight the new intelligent resume capability.
+-   [ ] **Step 1:** Update the Configuration Template (`claude.config.js`) to include the new `manageGitBranch` flag.
+-   [ ] **Step 2:** Modify the Git Function to Respect the Configuration Flag.
+-   [ ] **Step 3:** Refactor the `runTask` Orchestrator for the Complete State-First Logic.
+-   [ ] **Step 4:** Update the `README.md` to Explain the New Behavior and Configuration Option.
 
 ---
 
 ## Detailed Implementation Steps
 
-### Step 1: Implement the New `ensureCorrectGitBranch` Function
+### Step 1: Update the Configuration Template
 
-**Objective:** Create a single, robust function that correctly handles both starting new tasks and resuming existing ones.
+**Objective:** Add the new `manageGitBranch` boolean flag to the default configuration.
 
-**Task:** In `src/tools/orchestrator.ts`, completely **replace** the old `setupGitBranch` function with this new `ensureCorrectGitBranch` function. The `taskPathToBranchName` helper remains the same.
+**Task:** Add the new property to `src/templates/claude.config.js`.
 
-**File: `src/tools/orchestrator.ts` (Updated Functions)**
+**File: `src/templates/claude.config.js` (Updated)**
+```javascript
+// claude.config.js
+/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
+module.exports = {
+  taskFolder: "claude-Tasks",
+  statePath: ".claude/state",
+  logsPath: ".claude/logs",
+  structureIgnore: [ /* ... */ ],
+
+  /**
+   * (NEW) If true, the orchestrator will automatically create and manage a
+   * dedicated Git branch for each task. If false, it will run on your current branch.
+   */
+  manageGitBranch: true,
+
+  pipeline: [ /* ... */ ],
+};
+```
+
+### Step 2: Modify the Git Function to Respect the Flag
+
+**Objective:** Wrap the logic in our `ensureCorrectGitBranch` function in a conditional check based on the new config flag.
+
+**Task:** Modify the `ensureCorrectGitBranch` function in `src/tools/orchestrator.ts`.
+
+**File: `src/tools/orchestrator.ts` (Updated `ensureCorrectGitBranch`)**
 ```typescript
 // ... (imports and taskPathToBranchName helper function remain the same) ...
 
 /**
- * Ensures the repository is on the correct branch for the given task.
- * Intelligently handles starting new tasks vs. resuming existing ones.
+ * Ensures the repository is on the correct branch for the given task,
+ * respecting the user's configuration.
+ * @param config The loaded project configuration.
  * @param projectRoot The absolute path to the project root.
  * @param taskPath The path to the task file.
- * @returns The name of the task's branch.
+ * @returns The name of the branch the task will run on.
  */
-function ensureCorrectGitBranch(projectRoot: string, taskPath: string): string {
-  const expectedBranch = taskPathToBranchName(taskPath);
+function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string, taskPath: string): string {
   const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
 
-  // SCENARIO A: We are already on the correct branch for the task.
+  // SCENARIO A: User has disabled automatic branch management.
+  if (config.manageGitBranch === false) {
+    console.log(pc.yellow("› Automatic branch management is disabled."));
+    console.log(pc.yellow(`› Task will run on your current branch: "${currentBranch}"`));
+    return currentBranch;
+  }
+
+  // SCENARIO B: Branch management is enabled (default behavior).
+  const expectedBranch = taskPathToBranchName(taskPath);
+
   if (currentBranch === expectedBranch) {
     console.log(pc.cyan(`[Orchestrator] Resuming task on existing branch: "${expectedBranch}"`));
-    // We do nothing else. We stay on the branch and proceed.
     return expectedBranch;
   }
 
-  // SCENARIO B: We are on a different branch and need to set up.
   console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
 
-  // 1. Safety Check: Abort if the current branch has uncommitted changes.
   const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
   if (gitStatus) {
-    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes before starting a new task.`);
+    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes.`);
   }
 
-  // 2. Check out the local main branch.
   console.log(pc.gray("  › Switching to main branch..."));
   try {
-      execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+    execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
   } catch (e) {
-      throw new Error("Could not check out 'main' branch. This tool requires a 'main' branch as the base.");
+    throw new Error("Could not check out 'main' branch. A 'main' branch is required for automated branch management.");
   }
 
-  // 3. Detect remote and attempt to pull.
   try {
     execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
-    console.log(pc.gray("  › Remote 'origin' found. Syncing with remote..."));
+    console.log(pc.gray("  › Remote 'origin' found. Syncing..."));
     execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
   } catch (err) {
     console.log(pc.yellow("  › No remote 'origin' found or pull failed. Proceeding with local 'main'."));
   }
 
-  // 4. Create or check out the dedicated task branch.
   const existingBranches = execSync(`git branch --list ${expectedBranch}`, { cwd: projectRoot }).toString().trim();
-
   if (existingBranches) {
     console.log(pc.yellow(`  › Branch "${expectedBranch}" already exists. Checking it out.`));
     execSync(`git checkout ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
@@ -99,44 +130,102 @@ function ensureCorrectGitBranch(projectRoot: string, taskPath: string): string {
 }
 ```
 
-### Step 2: Integrate the New Function into `runTask`
+### Step 3: Refactor the `runTask` Orchestrator
 
-**Objective:** Update the main `runTask` function to call our new, smarter Git function.
+**Objective:** Update the main `runTask` function to pass the `config` object to the Git function.
 
-**Task:** In `src/tools/orchestrator.ts`, find the line that calls `setupGitBranch` and change it to `ensureCorrectGitBranch`.
+**Task:** Replace the `runTask` function in `src/tools/orchestrator.ts` with this final version.
 
-**File: `src/tools/orchestrator.ts` (Updated `runTask`)**
+**File: `src/tools/orchestrator.ts` (Final `runTask` function)**
 ```typescript
-// ... (imports) ...
-
 export async function runTask(taskRelativePath: string) {
-  // ... (status check logic remains the same) ...
-  
-  // Replace the old function call with the new one.
-  const branchName = ensureCorrectGitBranch(projectRoot, taskRelativePath);
-  
-  // The log message is now conditional, so we can remove it from here.
-  // console.log(pc.cyan(`[Orchestrator] Task will be executed on branch: ${branchName}`));
+  const config = await getConfig();
+  const projectRoot = getProjectRoot();
+  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
 
-  // ... (rest of the function remains the same) ...
+  // 1. Determine paths and check status FIRST.
+  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+  const status: TaskStatus = readStatus(statusFile);
+
+  if (status.phase === 'done') {
+    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
+    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
+    return;
+  }
+
+  // 2. Validate the pipeline configuration.
+  const { isValid, errors } = validatePipeline(config, projectRoot);
+  if (!isValid) {
+    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
+    for (const error of errors) console.error(pc.yellow(`  - ${error}`));
+    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
+    process.exit(1);
+  }
+
+  // 3. Ensure we are on the correct Git branch (now respects the user's config).
+  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
+
+  // 4. Proceed with execution.
+  updateStatus(statusFile, s => {
+    if (s.taskId === 'unknown') s.taskId = taskId;
+    s.branch = branchName;
+  });
+
+  const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
+  mkdirSync(logsDir, { recursive: true });
+  const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
+
+  for (const [index, stepConfig] of config.pipeline.entries()) {
+    const { name, command, context: contextKeys, check } = stepConfig;
+    const currentStepStatus = readStatus(statusFile);
+    if (currentStepStatus.steps[name] === 'done') {
+      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
+      continue;
+    }
+    const context = {};
+    for (const key of contextKeys) {
+      context[key] = contextProviders[key](projectRoot, taskContent);
+    }
+    const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
+    await executeStep(name, command, context, statusFile, logFile, check);
+  }
+
+  updateStatus(statusFile, s => { s.phase = 'done'; });
+  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
 }
 ```
 
-### Step 3: Update README.md
+### Step 4: Update README.md
 
-**Objective:** Let users know that the tool is now smart enough to resume their work.
+**Objective:** Document the new `manageGitBranch` configuration option so users know it exists.
 
-**Task:** Update the "Isolated Git Branches" section in `README.md`.
+**Task:** Add a description of the new flag in the `README.md`'s configuration section.
 
-**File: `README.md` (Updated Section)**
-```markdown
+**File: `README.md` (Updated "How It Works" Section)**```markdown
+## How It Works
+
+### The Configurable Pipeline (`claude.config.js`)
+
+This tool is driven by a `pipeline` array in your `claude.config.js`. You have full control to customize the workflow. The config file also contains other settings:
+
+```javascript
+// claude.config.js
+module.exports = {
+  // ... taskFolder, statePath, etc.
+
+  /**
+   * If true (default), the tool automatically creates a dedicated Git branch
+   * for each task. Set to false to run the tool on your current branch.
+   */
+  manageGitBranch: true,
+
+  pipeline: [ /* ... your steps ... */ ],
+};
+```
+
 ### Isolated and Resumable Git Branches
 
-To ensure safety and a clean Git history, the orchestrator automatically manages branches for you. When you run a task:
-
-1.  It first checks if the task is already complete. If so, it exits.
-2.  It then checks your current branch. **If you are already on the correct branch for the task, it seamlessly resumes the work from where it left off.**
-3.  If you are on a different branch, it checks for uncommitted changes, syncs with your `main` branch, and then creates or checks out a unique, dedicated branch for the task (e.g., `claude/my-new-feature`).
-4.  All commits generated by the AI are made to this task branch.
-
-This system keeps your `main` branch clean and isolates all automated work, while intelligently supporting a natural workflow of starting, stopping, and resuming tasks.
+By default (`manageGitBranch: true`), the orchestrator automatically manages Git branches for you. When you run a task:
+// ... (rest of the section is the same)```
