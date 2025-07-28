@@ -23,6 +23,7 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
   const pkg = await fs.readJson(pkgPath);
   const delta = {
     scripts: {
+      "prepare": "husky install",
       "claude:run": "tsx tools/orchestrator.ts",
       "claude:watch": "tsx tools/watch-tasks.ts",
       "claude:status": "tsx tools/status-cli.ts",

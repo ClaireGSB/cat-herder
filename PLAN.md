@@ -52,12 +52,13 @@
 - [x] Test hooks block commits/pushes on failures
 
 ### Phase 6: QA Testing
-- [ ] Test `npx claude-project init` in fresh TS repo
+- [x] Test `npx claude-project init` in fresh TS repo
 - [ ] Test `npm run claude:run claude-Tasks/task-001-sample.md`
 - [ ] Verify TUI and web interfaces work
 - [ ] Confirm step checkpoints, commits, logs, status work
 - [ ] Verify PR creation works
 - [ ] Fix any discovered defects
+- [ ] If test repo has been created, remove it
 
 ### Phase 7: Documentation and Publish
 - [ ] Write comprehensive README with install, usage, troubleshooting
