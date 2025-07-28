@@ -3,58 +3,70 @@ import path from "path";
 import pc from "picocolors";
 import { mergePackageJson } from "./utils/pkg.js";
 
-export async function init(targetRoot: string, opts: { taskFolder: string }) {
-  const tpl = path.resolve(new URL("./files", import.meta.url).pathname);
+export async function init(targetRoot: string) {
+  console.log(pc.cyan("Initializing claude-project..."));
 
-  await fs.copy(path.join(tpl, "dot-claude"), path.join(targetRoot, ".claude"), { overwrite: false });
-  await fs.copy(path.join(tpl, "tools"), path.join(targetRoot, "tools"), { overwrite: false });
-  // copying config files individually to control their name (we need to rename tsconfig; had to name it tsconfig.template.json to avoid type errors)
-  await fs.copy(path.join(tpl, "configs", ".eslintrc.cjs"), path.join(targetRoot, ".eslintrc.cjs"), { overwrite: false });
-  await fs.copy(path.join(tpl, "configs", ".prettierrc.json"), path.join(targetRoot, ".prettierrc.json"), { overwrite: false });
-  await fs.copy(path.join(tpl, "configs", "vitest.config.js"), path.join(targetRoot, "vitest.config.js"), { overwrite: false });
-  await fs.copy(path.join(tpl, "configs", "tsconfig.template.json"), path.join(targetRoot, "tsconfig.json"), { overwrite: false });
+  // 1. Create the config file from the template
+  const configTemplatePath = path.resolve(new URL("./templates/claude.config.js", import.meta.url).pathname);
+  const targetConfigPath = path.join(targetRoot, "claude.config.js");
+  if (fs.existsSync(targetConfigPath)) {
+    console.log(pc.yellow("claude.config.js already exists, skipping."));
+  } else {
+    await fs.copy(configTemplatePath, targetConfigPath);
+    console.log(pc.green("Created claude.config.js"));
+  }
+  
+  // 2. Copy the .claude command templates
+  const dotClaudeTemplatePath = path.resolve(new URL("./dot-claude", import.meta.url).pathname);
+  const targetDotClaudePath = path.join(targetRoot, ".claude");
+  await fs.copy(dotClaudeTemplatePath, targetDotClaudePath, {
+      overwrite: false,
+      errorOnExist: false,
+  });
+  console.log(pc.green("Created .claude/commands directory with default commands."));
 
-  await fs.ensureDir(path.join(targetRoot, opts.taskFolder));
-  await fs.copy(path.join(tpl, "tasks", "sample.md"), path.join(targetRoot, opts.taskFolder, "task-001-sample.md"), { overwrite: false });
+  // 3. Create a sample task and folder
+  const taskFolder = "claude-Tasks";
+  await fs.ensureDir(path.join(targetRoot, taskFolder));
+  const sampleTaskTemplatePath = path.resolve(new URL("./tasks/sample.md", import.meta.url).pathname);
+  const sampleTaskTargetPath = path.join(targetRoot, taskFolder, "task-001-sample.md");
+    if (fs.existsSync(sampleTaskTargetPath)) {
+    console.log(pc.yellow("Sample task already exists, skipping."));
+  } else {
+    await fs.copy(sampleTaskTemplatePath, sampleTaskTargetPath);
+    console.log(pc.green(`Created ${sampleTaskTargetPath}`));
+  }
 
+  // 4. Merge scripts and devDependencies
   const pkgPath = path.join(targetRoot, "package.json");
+  if (!fs.existsSync(pkgPath)) {
+      console.error(pc.red("Error: package.json not found in the current directory."));
+      process.exit(1);
+  }
   const pkg = await fs.readJson(pkgPath);
 
-  // --- MODIFIED DELTA OBJECT ---
   const delta = {
     scripts: {
-      "claude:run": "tsx tools/orchestrator.ts",
-      "claude:watch": "tsx tools/watch-tasks.ts",
-      "claude:status": "tsx tools/status-cli.ts",
-      "claude:tui": "tsx tools/tui.ts",
-      "claude:web": "tsx tools/web.ts",
-      "lint": "eslint .",
-      "lint:fix": "eslint . --fix",
-      "test": "vitest",
-      "test:ci": "vitest run --coverage"
+      "claude:run": "claude-project run",
+      "claude:watch": "claude-project watch",
+      "claude:status": "claude-project status",
+      "claude:tui": "claude-project tui",
+      "claude:web": "claude-project web",
+      // Add standard test scripts
+      "test": "vitest run",
+      "test:watch": "vitest",
+      "coverage": "vitest run --coverage",
     },
     devDependencies: {
-      // Core dependencies for the orchestrator itself
-      "tsx": "^4.15.7",
-      "typescript": "^5.5.4",
+      "@your-scope/claude-project": "0.1.0",
       "vitest": "^1.6.0",
-      "@vitest/coverage-v8": "^1.6.0", 
-      "@types/node": "^20.12.7",
-      "chokidar": "^3.6.0",
-      "blessed": "^0.1.81",
-      "glob": "^10.4.5",
-      "express": "^4.19.2",
-      
-      // Optional QA dependencies for user convenience
-      "eslint": "^8.57.0",
-      "@typescript-eslint/eslint-plugin": "^7.7.1",
-      "@typescript-eslint/parser": "^7.7.1",
-      "prettier": "^3.3.3",
-      "eslint-config-prettier": "^9.1.0",
-      // "lint-staged": "^15.2.7", <-- REMOVED
-    }
-  } as const;
-  await fs.writeJson(pkgPath, mergePackageJson(pkg, delta), { spaces: 2 });
+      "@vitest/coverage-v8": "^1.6.0",
+      "prettier": "^3.6.2",
+    },
+  };
 
-  console.log(pc.cyan("Scaffolded .claude, tools, configs, and scripts. Git hooks are NOT managed by this tool."));
+  await fs.writeJson(pkgPath, mergePackageJson(pkg, delta), { spaces: 2 });
+  console.log(pc.green("Updated package.json with scripts and dev dependencies."));
+  console.log(pc.blue("\nInitialization complete!"));
+  console.log(pc.blue("Run `npm install` to set up your project."));
 }
