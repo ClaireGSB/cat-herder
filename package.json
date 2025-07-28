@@ -1,1 +1,30 @@
-{"name":"@your-scope/claude-project","version":"0.1.0","type":"module","bin":{"claude-project":"./dist/index.js"},"dependencies":{"chokidar":"^4.0.3","commander":"^14.0.0","fs-extra":"^11.3.0","picocolors":"^1.1.1"},"devDependencies":{"@types/blessed":"^0.1.25","@types/express":"^4.17.21","@types/fs-extra":"^11.0.4","@types/node":"^20.12.7","blessed":"^0.1.81","express":"^4.19.2","glob":"^10.4.5","husky":"^9.1.7","tsx":"^4.20.3","typescript":"^5.8.3"},"scripts":{"build":"tsc -p tsconfig.json && cp -r src/files dist/","dev":"tsx src/index.ts"}}
+{
+  "name": "@your-scope/claude-project",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "claude-project": "./dist/index.js"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "commander": "^14.0.0",
+    "fs-extra": "^11.3.0",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/blessed": "^0.1.25",
+    "@types/express": "^4.17.21",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^20.12.7",
+    "blessed": "^0.1.81",
+    "express": "^4.19.2",
+    "glob": "^10.4.5",
+    "husky": "^9.1.7",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/files dist/",
+    "dev": "tsx src/index.ts"
+  }
+}

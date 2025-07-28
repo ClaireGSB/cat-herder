@@ -52,6 +52,8 @@ git commit -m "Initial commit"
 npm link @your-scope/claude-project
 claude-project init
 npm install
+# open vscode
+code .
 ```
 
 
