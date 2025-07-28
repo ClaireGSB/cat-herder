@@ -47,9 +47,9 @@
 - [x] Ensure all npm scripts are added via init.ts package.json merge
 
 ### Phase 5: Husky Hooks Implementation
-- [ ] Verify pre-commit hook runs lint-staged
-- [ ] Verify pre-push hook runs test:ci
-- [ ] Test hooks block commits/pushes on failures
+- [x] Verify pre-commit hook runs lint-staged
+- [x] Verify pre-push hook runs test:ci
+- [x] Test hooks block commits/pushes on failures
 
 ### Phase 6: QA Testing
 - [ ] Test `npx claude-project init` in fresh TS repo

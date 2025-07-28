@@ -23,7 +23,6 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
   const pkg = await fs.readJson(pkgPath);
   const delta = {
     scripts: {
-      "prepare": "husky install",
       "claude:run": "tsx tools/orchestrator.ts",
       "claude:watch": "tsx tools/watch-tasks.ts",
       "claude:status": "tsx tools/status-cli.ts",
@@ -39,7 +38,7 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
       "typescript": "^5.5.4",
       "vitest": "^1.6.0",
       "@types/node": "^20.12.7",
-      "eslint": "^9.6.0",
+      "eslint": "^8.57.0",
       "@typescript-eslint/eslint-plugin": "^7.7.1",
       "@typescript-eslint/parser": "^7.7.1",
       "prettier": "^3.3.3",
@@ -48,7 +47,8 @@ export async function init(targetRoot: string, opts: { taskFolder: string }) {
       "chokidar": "^3.6.0",
       "blessed": "^0.1.81",
       "glob": "^10.4.5",
-      "express": "^4.19.2"
+      "express": "^4.19.2",
+      "husky": "^9.0.11"
     }
   } as const;
   await fs.writeJson(pkgPath, mergePackageJson(pkg, delta), { spaces: 2 });

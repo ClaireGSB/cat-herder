@@ -42,3 +42,6 @@ Thumbs.db
 # Project-context
 .project-context.toml
 project-context.xml
+
+# Test workspaces
+test-hooks-workspace/
