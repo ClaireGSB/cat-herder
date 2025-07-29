@@ -12,4 +12,4 @@ Generate a step-by-step, detailed implementation plan to complete the next incom
 As the last steps,
 - verify the work (e.g. run typecheck or tests) 
 - mark the step as "done" in PLAN.md
-- Commit your work using only the name of the step you just finished as commit message
+- Commit your work using the name and short description of the step you just finished as commit message
