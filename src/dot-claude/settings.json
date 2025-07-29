@@ -29,17 +29,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true"
-          }
-        ]
-      }
     ]
   }
 }

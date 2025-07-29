@@ -1,135 +1,144 @@
 
 
-### PLAN.md
+# PLAN.md
 
-#### 1. Title & Goal
+### **Title: Fix Chain of Thought (CoT) Logging via JSON Streaming**
 
-**Title:** Implement Declarative, Pipeline-Driven File Access Guardrails
-
-**Goal:** To refactor the workflow validation logic so that it is defined directly within the user's `claude.config.js` pipeline, making the enforcement of rules flexible, transparent, and non-opinionated.
+**Goal:** To correctly capture Claude's "thinking" output by switching from raw text parsing to the official JSON streaming format provided by the `claude` CLI.
 
 ---
 
-#### 2. Description
+### **Description**
 
-Currently, our tool uses a hardcoded validator script (`validators.ts`) to enforce a specific Test-Driven Development (TDD) workflow. This is too rigid and conflicts with our goal of providing a fully customizable pipeline. If a user renames or removes the `write_tests` step, the current validation logic breaks.
+The previous implementation for CoT logging resulted in empty `.thoughts.log` files. The root cause was twofold:
 
-The new behavior will allow users to declaratively define file write permissions (`allowWrite`) for each step in their `claude.config.js`. A single, generic `PreToolUse` hook will then read the current step and its corresponding rules from the user's config, enforcing them at runtime. This makes the guardrails adaptable to any pipeline structure the user creates, including workflows that do not involve tests.
+1.  **Incorrect CLI Invocation:** Piping the prompt to the `claude` command via `stdin` causes it to return only the final, clean output, stripping away the `<claude>` thinking tags.
+2.  **Conflicting Hook (Now Removed):** A `PostToolUse` hook in `settings.json` was consuming and discarding all of Claude's output before it could be processed.
 
----
-
-#### 3. Summary Checklist
-
--   [x] **Configuration:** Update `claude.config.js` type definitions and the default template to include the new `fileAccess` property.
--   [x] **Implementation:** Create the new generic `pipeline-validator.ts` script to enforce these declarative file access rules.
--   [x] **Integration:** Update `src/dot-claude/settings.json` to replace the old hook with the new generic validator hook.
--   [x] **Cleanup:** Remove the old, hardcoded `validators.ts` script from the project.
--   [x] **Documentation:** Update the `README.md` file to document the new `fileAccess` feature and explain how users can customize it.
+This plan corrects the issue by using the documented `claude` CLI flags (`-p` and `--output-format stream-json`) to get a structured data stream. This is a more robust and reliable method than parsing XML tags from raw text.
 
 ---
 
-#### 4. Detailed Implementation Steps
+### **Summary Checklist**
 
-##### **Step 1: Update Configuration & Templates**
+-   [x] **Refactor `src/tools/proc.ts`**: Rewrite the `runStreaming` function to use the `--output-format stream-json` flag and parse the resulting JSON objects.
+-   [x] **Update `src/tools/orchestrator.ts`**: Modify `executeStep` to call the new `runStreaming` function with the prompt as a command-line argument instead of `stdin`.
+-   [x] **Remove Conflicting Hook**: Ensure the `PostToolUse` hook in `src/dot-claude/settings.json` has been removed to prevent it from interfering with the output stream.
+-   [x] **Update Documentation**: Revise the `README.md` to accurately describe the logging mechanism and the content of each log file.
 
-*   **Objective:** Modify the core configuration types and the user-facing template to support the new `fileAccess` property. This makes the feature available to users.
-*   **Tasks:**
-    1.  Modify `src/config.ts`:
-        *   Find the `PipelineStep` interface.
-        *   Add a new optional property: `fileAccess?: { allowWrite?: string[] }`.
-    2.  Modify `src/templates/claude.config.js`:
-        *   For each step in the default `pipeline` array, add the new `fileAccess` property.
-        *   Populate it with sensible defaults that match the step's purpose.
+---
 
-*   **Code Snippet (`src/config.ts`):**
+### **Detailed Implementation Steps**
+
+#### 1. Refactor `runStreaming` to Handle JSON Output (`src/tools/proc.ts`)
+
+*   **Objective:** To switch from parsing raw text to reliably parsing a stream of JSON objects from the `claude` CLI, routing content to the appropriate log files.
+*   **Task:**
+    1.  Modify the signature of the `runStreaming` function. It should now require a `thoughtsLogPath` and take the prompt content as a `prompt: string` argument instead of the optional `stdinData`.
+    2.  Change the arguments passed to the `spawn` command to include `-p` and `--output-format stream-json`.
+    3.  Implement a streaming JSON parser inside `p.stdout.on("data", ...)`:
+        *   Use a buffer to handle JSON objects that may be split across multiple data chunks.
+        *   Process each complete line, parse it as a JSON object, and use a `switch` statement on the `type` property.
+        *   If `type` is `"thinking"`, write the `content` to the `thoughtsStream`.
+        *   If `type` is `"tool_code"` or `"final_answer"`, write the `content` to the main `logStream` and to the console (`process.stdout`).
+
+*   **Code Snippet (New `runStreaming` logic):**
     ```typescript
-    export interface PipelineStep {
-      name: string;
-      command: string;
-      context: string[];
-      check: CheckConfig;
-      fileAccess?: { // <-- Add this new property
-        allowWrite?: string[];
-      };
+    // In src/tools/proc.ts
+
+    export function runStreaming(
+      cmd: string,
+      args: string[],
+      logPath: string,
+      thoughtsLogPath: string, // Now required
+      cwd: string,
+      prompt: string // Prompt is now a direct argument
+    ): Promise<{ code: number; output: string }> {
+      
+      const finalArgs = [...args, "-p", prompt, "--output-format", "stream-json"];
+      
+      // ... create logStream and thoughtsStream ...
+
+      p.stdout.on("data", (chunk) => {
+        // ... buffer and line splitting logic ...
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line);
+            switch (json.type) {
+              case "thinking":
+                thoughtsStream.write(json.content + "\n");
+                break;
+              case "tool_code":
+              case "final_answer":
+                process.stdout.write(json.content);
+                logStream.write(json.content);
+                finalOutput += json.content;
+                break;
+            }
+          } catch (e) { /* handle parse error */ }
+        }
+      });
+      // ...
     }
     ```
 
-*   **Code Snippet (`src/templates/claude.config.js`):**
-    ```javascript
-    // ... inside the pipeline array ...
-    {
-      name: "write_tests",
-      command: "write-tests",
-      context: ["planContent", "taskDefinition"],
-      check: { type: "shell", command: "npm test", expect: "fail" },
-      // Add this block
-      fileAccess: {
-        allowWrite: ["test/**/*", "tests/**/*"]
-      }
-    },
-    {
-      name: "implement",
-      command: "implement",
-      context: ["planContent"],
-      check: { type: "shell", command: "npm test", expect: "pass" },
-      // Add this block
-      fileAccess: {
-        allowWrite: ["src/**/*"]
-      }
-    },
+#### 2. Update `orchestrator.ts` to Pass Prompt as an Argument
+
+*   **Objective:** To adapt the `executeStep` function to use the new, more reliable `runStreaming` function signature.
+*   **Task:**
+    1.  Open `src/tools/orchestrator.ts`.
+    2.  Update the `executeStep` function signature to require `thoughtsLogFile: string`.
+    3.  Modify the call to `runStreaming`. Pass `fullPrompt` as the final argument instead of the `stdinData` parameter.
+
+*   **Code Snippet (Updated call in `executeStep`):**
+    ```typescript
+    // In src/tools/orchestrator.ts
+
+    // Previous call:
+    // const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt);
+
+    // New call:
+    const { code } = await runStreaming(
+      "claude",
+      [`/project:${command}`],
+      logFile,
+      thoughtsLogFile, // Pass the new path
+      projectRoot,
+      fullPrompt // Pass the prompt as an argument
+    );
     ```
 
-##### **Step 2: Create the Generic Validator Script**
+#### 3. Remove Conflicting `PostToolUse` Hook
 
-*   **Objective:** Implement the core logic that dynamically enforces the rules from the user's configuration at runtime.
-*   **Tasks:**
-    1.  Create a new file: `src/tools/pipeline-validator.ts`.
-    2.  The script must read JSON data from `stdin` to get the `file_path` Claude intends to edit.
-    3.  It needs to identify the currently running task by finding the most recently modified `.state.json` file in the configured `statePath`.
-    4.  From the state file, it must extract the `currentStep` name.
-    5.  It will then load the user's `claude.config.js` to get the full pipeline definition.
-    6.  It must find the step in the pipeline that matches the `currentStep` name and retrieve its `fileAccess.allowWrite` array.
-    7.  You will need a glob-matching utility. `minimatch` is a good choice as it is already a dependency of `glob`. Add it to the project's dependencies.
-    8.  Check if the `file_path` from stdin matches any of the glob patterns in the `allowWrite` array.
-
-##### **Step 3: Integrate the New Hook**
-
-*   **Objective:** Point the default `PreToolUse` hook to the new generic validator so it runs automatically.
-*   **Tasks:**
+*   **Objective:** To permanently remove the hook that was incorrectly consuming and discarding Claude's output stream.
+*   **Task:**
     1.  Open `src/dot-claude/settings.json`.
-    2.  In the `PreToolUse` section, change the `command` to execute the new script.
+    2.  Locate the `"PostToolUse"` key within the `"hooks"` object.
+    3.  Delete the entire `"PostToolUse"` array and key.
 
-*   **Code Snippet (`src/dot-claude/settings.json`):**
-    ```json
-    // Find this line:
-    "command": "tsx ./tools/validators.ts preWrite < /dev/stdin"
-
-    // And change it to:
-    "command": "tsx ./tools/pipeline-validator.ts < /dev/stdin"
+*   **Code Snippet (What to remove from `settings.json`):**
+    ```diff
+    -    "PostToolUse": [
+    -      {
+    -        "matcher": "Edit|Write|MultiEdit",
+    -        "hooks": [
+    -          {
+    -            "type": "command",
+    -            "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true"
+    -          }
+    -        ]
+    -      }
+    -    ]
     ```
 
-##### **Step 4: Cleanup**
+#### 4. Update Documentation (`README.md`)
 
-*   **Objective:** Remove the old, now-redundant script to keep the codebase clean.
-*   **Tasks:**
-    1.  Delete the file `src/tools/validators.ts`.
-
----
-
-#### 5. Error Handling & Warnings
-
-*   **No `fileAccess` Property:** If a step in the pipeline has no `fileAccess` property, the validator must gracefully allow the write operation to proceed.
-*   **Configuration/State Not Found:** If `claude.config.js` or the task's `.state.json` file cannot be found or parsed, the validator should log a clear error to `stderr` and fail safely by blocking the write operation.
-*   **Blocked Action:** When the validator blocks a file write, the error message must be clear and actionable.
-    *   **Example Error Message:** `Blocked: The current step 'implement' only allows file modifications matching ["src/**/*"]. Action on 'README.md' denied.`
-
----
-
-#### 6. Documentation Changes
-
-*   **Objective:** Clearly explain the new `fileAccess` feature to users in the `README.md` so they can customize their workflows.
-*   **Tasks:**
-    1.  In `README.md`, add a new subsection under "How It Works" titled **"Customizable Guardrails (`fileAccess`)"**.
-    2.  Explain what the `fileAccess` property does and show an example of the `allowWrite` array with glob patterns.
-    3.  Explain that this feature allows them to control which files Claude can modify at each stage of the pipeline.
-    4.  Mention that removing the `fileAccess` property from a step disables the guardrail for that step, providing maximum flexibility.
+*   **Objective:** To ensure the project's documentation accurately reflects the logging system for future users and developers.
+*   **Task:**
+    1.  Open `README.md`.
+    2.  Add a new section called `### Debugging and Logs`.
+    3.  Clearly explain the purpose of the two log files generated for each step:
+        *   `XX-step-name.log`: This contains the final, clean output from the AI (e.g., the code it wrote).
+        *   `XX-step-name.thoughts.log`: This contains the detailed, step-by-step reasoning (Chain of Thought) from the AI.
+    4.  Advise users to check the `.thoughts.log` file when they need to understand *why* the AI produced a particular result.

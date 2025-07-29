@@ -89,16 +89,17 @@ async function executeStep(
   fullPrompt: string,
   statusFile: string,
   logFile: string,
+  reasoningLogFile: string,
   check: CheckConfig
 ) {
   const projectRoot = getProjectRoot();
   console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt);
+  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
   if (code !== 0) {
     updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check log for details: ${logFile}`);
+    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
   }
 
   await runCheck(check, projectRoot);
@@ -172,7 +173,8 @@ export async function runTask(taskRelativePath: string) {
     fullPrompt += `--- YOUR INSTRUCTIONS ---\n${commandInstructions}`;
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-    await executeStep(name, command, fullPrompt, statusFile, logFile, check);
+    const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
+    await executeStep(name, command, fullPrompt, statusFile, logFile, reasoningLogFile, check);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
