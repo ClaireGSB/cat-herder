@@ -11,6 +11,7 @@
     "cosmiconfig": "^9.0.0",
     "fs-extra": "^11.3.0",
     "js-yaml": "^4.1.0",
+    "minimatch": "^10.0.3",
     "picocolors": "^1.1.1"
   },
   "devDependencies": {

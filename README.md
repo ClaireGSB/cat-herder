@@ -107,6 +107,32 @@ rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 npm run claude:run claude-Tasks/task-001-sample.md
 ```
 
+4. **Removing old test repo and creating fresh one** 
+
+If you want to start over with a fresh test environment, you can delete the `my-test-app` directory and repeat the initial setup steps.
+
+```bash
+# --- 1. Tear Down the Old Environment ---
+echo "Removing old test environment..."
+rm -rf my-test-app
+
+# --- 2. Create the New Project Shell ---
+echo "Creating a fresh test environment..."
+mkdir my-test-app
+cd my-test-app
+npm init -y > /dev/null
+git init > /dev/null
+git commit --allow-empty -m "Initial commit" > /dev/null
+
+# --- 3. Link and Initialize Your Tool ---
+echo "Linking to local claude-project and initializing..."
+npm link @your-scope/claude-project
+claude-project init
+npm install
+
+echo "\n✅ Fresh test environment is ready!"
+```
+
 ## How It Works
 
 ### The Configurable Pipeline (`claude.config.js`)
@@ -148,30 +174,43 @@ module.exports = {
       command: "plan-task",
       context: ["projectStructure", "taskDefinition"],
       check: { type: "fileExists", path: "PLAN.md" },
+      fileAccess: {
+        allowWrite: ["PLAN.md"]
+      }
     },
     {
       name: "write_tests",
       command: "write-tests",
       context: ["planContent", "taskDefinition"],
       check: { type: "shell", command: "npm test", expect: "fail" },
+      fileAccess: {
+        allowWrite: ["test/**/*", "tests/**/*"]
+      }
     },
     {
       name: "implement",
       command: "implement",
       context: ["planContent"],
       check: { type: "shell", command: "npm test", expect: "pass" },
+      fileAccess: {
+        allowWrite: ["src/**/*"]
+      }
     },
     {
       name: "docs",
       command: "docs-update",
       context: ["planContent", "projectStructure"],
       check: { type: "none" },
+      fileAccess: {
+        allowWrite: ["README.md", "docs/**/*", "*.md"]
+      }
     },
     {
       name: "review",
       command: "self-review",
       context: [],
       check: { type: "none" },
+      // No fileAccess restriction for review step - allows any necessary fixes
     },
   ],
 };
@@ -196,6 +235,60 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 // No automated validation
 check: { type: "none" }
 ```
+
+### Customizable Guardrails (`fileAccess`)
+
+The `fileAccess` property allows you to control which files Claude can modify during each step of your pipeline. This provides fine-grained control over the development workflow and prevents accidental modifications to unintended files.
+
+**Basic Usage:**
+Add the `fileAccess` property to any pipeline step:
+
+```javascript
+{
+  name: "implement",
+  command: "implement",
+  context: ["planContent"],
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  fileAccess: {
+    allowWrite: ["src/**/*", "lib/**/*"]
+  }
+}
+```
+
+**Key Features:**
+- **Glob Pattern Matching**: Uses standard glob patterns for flexible file matching (e.g., `src/**/*`, `*.md`, `test/**/*.spec.ts`)
+- **Step-Specific Control**: Each pipeline step can have different file access rules
+- **Optional Enforcement**: Omitting the `fileAccess` property allows unrestricted file access for that step
+- **Clear Error Messages**: When a file write is blocked, you'll receive a clear message indicating which patterns are allowed
+
+**Common Examples:**
+```javascript
+// Allow only test file modifications
+fileAccess: {
+  allowWrite: ["test/**/*", "tests/**/*", "**/*.test.ts", "**/*.spec.ts"]
+}
+
+// Allow source code changes
+fileAccess: {
+  allowWrite: ["src/**/*", "lib/**/*"]
+}
+
+// Allow documentation updates
+fileAccess: {
+  allowWrite: ["README.md", "docs/**/*", "*.md"]
+}
+
+// No restrictions (same as omitting fileAccess entirely)
+// fileAccess: { allowWrite: ["**/*"] }
+```
+
+**Error Handling:**
+When Claude attempts to modify a file that doesn't match the allowed patterns, the operation is blocked with a message like:
+```
+Blocked: The current step 'implement' only allows file modifications matching ["src/**/*"]. Action on 'README.md' denied.
+```
+
+This feature ensures that each step of your pipeline only modifies the files it should, providing confidence in your automated workflow.
 
 ### Isolated and Resumable Git Branches
 

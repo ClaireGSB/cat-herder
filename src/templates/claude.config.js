@@ -29,6 +29,9 @@ module.exports = {
       context: ["projectStructure", "taskDefinition"],
       // Check that the PLAN.md file was created.
       check: { type: "fileExists", path: "PLAN.md" },
+      fileAccess: {
+        allowWrite: ["PLAN.md"]
+      }
     },
     {
       name: "write_tests",
@@ -36,6 +39,9 @@ module.exports = {
       context: ["planContent", "taskDefinition"],
       // Check that tests were written AND that they fail as expected.
       check: { type: "shell", command: "npm test", expect: "fail" },
+      fileAccess: {
+        allowWrite: ["test/**/*", "tests/**/*"]
+      }
     },
     {
       name: "implement",
@@ -43,6 +49,9 @@ module.exports = {
       context: ["planContent"],
       // Check that the tests now pass.
       check: { type: "shell", command: "npm test", expect: "pass" },
+      fileAccess: {
+        allowWrite: ["src/**/*"]
+      }
     },
     {
       name: "docs",
@@ -50,12 +59,16 @@ module.exports = {
       context: ["planContent", "projectStructure"],
       // No automated check for documentation; this is a manual review step.
       check: { type: "none" },
+      fileAccess: {
+        allowWrite: ["README.md", "docs/**/*", "*.md"]
+      }
     },
     {
       name: "review",
       command: "self-review",
       context: [],
       check: { type: "none" },
+      // No fileAccess restriction for review step - allows any necessary fixes
     },
   ],
 };
