@@ -97,7 +97,10 @@ export function runStreaming(
               }
               break;
             default:
-              // Silently ignore other JSON types (system, etc.)
+              // Log unknown JSON types to reasoning log for debugging
+              const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+              reasoningStream.write(`[${timestamp}] [DEBUG] Unknown JSON type: ${json.type}\n`);
+              reasoningStream.write(`[${timestamp}] [DEBUG] Content: ${JSON.stringify(json, null, 2)}\n\n`);
               break;
           }
         } catch (e) {
