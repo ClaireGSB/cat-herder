@@ -8,10 +8,17 @@ export function runStreaming(
   args: string[],
   logPath: string,
   cwd: string,
-  stdinData?: string
+  stdinData?: string,
+  thoughtsLogPath?: string
 ): Promise<{ code: number; output: string }> {
-  console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
+  // Conditionally add the new flag
+  const finalArgs = thoughtsLogPath ? [...args, "--thinking-log", thoughtsLogPath] : args;
+
+  console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
+  if (thoughtsLogPath) {
+    console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
+  }
 
   // --- THIS IS THE NEWLY ADDED SECTION FOR CLI LOGGING ---
   // Log the prompt context being sent to stdin directly to the console.
@@ -43,7 +50,7 @@ export function runStreaming(
   let fullOutput = "";
 
   return new Promise((resolve) => {
-    const p = spawn(cmd, args, { shell: false, stdio: "pipe", cwd: cwd });
+    const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
     
     if (stdinData) {
         p.stdin.write(stdinData);
