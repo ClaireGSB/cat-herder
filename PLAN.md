@@ -24,7 +24,7 @@ The new behavior will allow users to declaratively define file write permissions
 -   [x] **Implementation:** Create the new generic `pipeline-validator.ts` script to enforce these declarative file access rules.
 -   [x] **Integration:** Update `src/dot-claude/settings.json` to replace the old hook with the new generic validator hook.
 -   [x] **Cleanup:** Remove the old, hardcoded `validators.ts` script from the project.
--   [ ] **Documentation:** Update the `README.md` file to document the new `fileAccess` feature and explain how users can customize it.
+-   [x] **Documentation:** Update the `README.md` file to document the new `fileAccess` feature and explain how users can customize it.
 
 ---
 
