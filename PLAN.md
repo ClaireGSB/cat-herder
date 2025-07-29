@@ -1,231 +1,135 @@
 
 
-# Implementation Plan: State-Aware & Configurable Task Orchestration
+### PLAN.md
 
-### Goal
+#### 1. Title & Goal
 
-To refactor the `runTask` orchestrator into a fully state-aware and user-configurable system. The tool will: (1) check if a task is already complete before taking any action; (2) intelligently resume tasks on their existing Git branches; and (3) allow users to disable the automatic branch management entirely via a new configuration setting.
+**Title:** Implement Declarative, Pipeline-Driven File Access Guardrails
 
-### Description
-
-This plan addresses several key user experience improvements. The start of the `runTask` flow will be re-architected to follow this logic:
-
-1.  **Status First:** The tool will read the task's `state.json` file. If the task is `done`, it exits gracefully.
-2.  **Check Branching Config:** A new flag, `manageGitBranch`, will be added to `claude.config.js` (defaulting to `true`).
-3.  **Execute Git Logic (if enabled):** If `manageGitBranch` is `true`, the tool will perform the state-aware branching logic:
-    *   **Resume:** If on the correct branch, it continues.
-    *   **New Task:** If on a different branch, it performs the safe setup (clean check, sync main, checkout task branch).
-4.  **Execute Git Logic (if disabled):** If `manageGitBranch` is `false`, the tool will skip all branch-related checks and operations, printing a warning that it's operating on the user's current branch.
-5.  **Run Pipeline:** The pipeline execution proceeds as normal on whichever branch is active after the Git logic is complete.
-
-This provides the best of all worlds: a safe, automated default for most users, and a flexible "power user" mode for those with custom workflows.
+**Goal:** To refactor the workflow validation logic so that it is defined directly within the user's `claude.config.js` pipeline, making the enforcement of rules flexible, transparent, and non-opinionated.
 
 ---
 
-## Summary Checklist
+#### 2. Description
 
--   [x] **Step 1:** Update the Configuration Template (`claude.config.js`) to include the new `manageGitBranch` flag.
--   [x] **Step 2:** Modify the Git Function to Respect the Configuration Flag.
--   [x] **Step 3:** Refactor the `runTask` Orchestrator for the Complete State-First Logic.
--   [x] **Step 4:** Update the `README.md` to Explain the New Behavior and Configuration Option.
+Currently, our tool uses a hardcoded validator script (`validators.ts`) to enforce a specific Test-Driven Development (TDD) workflow. This is too rigid and conflicts with our goal of providing a fully customizable pipeline. If a user renames or removes the `write_tests` step, the current validation logic breaks.
+
+The new behavior will allow users to declaratively define file write permissions (`allowWrite`) for each step in their `claude.config.js`. A single, generic `PreToolUse` hook will then read the current step and its corresponding rules from the user's config, enforcing them at runtime. This makes the guardrails adaptable to any pipeline structure the user creates, including workflows that do not involve tests.
 
 ---
 
-## Detailed Implementation Steps
+#### 3. Summary Checklist
 
-### Step 1: Update the Configuration Template
+-   [x] **Configuration:** Update `claude.config.js` type definitions and the default template to include the new `fileAccess` property.
+-   [ ] **Implementation:** Create the new generic `pipeline-validator.ts` script to enforce these declarative file access rules.
+-   [ ] **Integration:** Update `src/dot-claude/settings.json` to replace the old hook with the new generic validator hook.
+-   [ ] **Cleanup:** Remove the old, hardcoded `validators.ts` script from the project.
+-   [ ] **Documentation:** Update the `README.md` file to document the new `fileAccess` feature and explain how users can customize it.
 
-**Objective:** Add the new `manageGitBranch` boolean flag to the default configuration.
+---
 
-**Task:** Add the new property to `src/templates/claude.config.js`.
+#### 4. Detailed Implementation Steps
 
-**File: `src/templates/claude.config.js` (Updated)**
-```javascript
-// claude.config.js
-/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
-module.exports = {
-  taskFolder: "claude-Tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
-  structureIgnore: [ /* ... */ ],
+##### **Step 1: Update Configuration & Templates**
 
-  /**
-   * (NEW) If true, the orchestrator will automatically create and manage a
-   * dedicated Git branch for each task. If false, it will run on your current branch.
-   */
-  manageGitBranch: true,
+*   **Objective:** Modify the core configuration types and the user-facing template to support the new `fileAccess` property. This makes the feature available to users.
+*   **Tasks:**
+    1.  Modify `src/config.ts`:
+        *   Find the `PipelineStep` interface.
+        *   Add a new optional property: `fileAccess?: { allowWrite?: string[] }`.
+    2.  Modify `src/templates/claude.config.js`:
+        *   For each step in the default `pipeline` array, add the new `fileAccess` property.
+        *   Populate it with sensible defaults that match the step's purpose.
 
-  pipeline: [ /* ... */ ],
-};
-```
-
-### Step 2: Modify the Git Function to Respect the Flag
-
-**Objective:** Wrap the logic in our `ensureCorrectGitBranch` function in a conditional check based on the new config flag.
-
-**Task:** Modify the `ensureCorrectGitBranch` function in `src/tools/orchestrator.ts`.
-
-**File: `src/tools/orchestrator.ts` (Updated `ensureCorrectGitBranch`)**
-```typescript
-// ... (imports and taskPathToBranchName helper function remain the same) ...
-
-/**
- * Ensures the repository is on the correct branch for the given task,
- * respecting the user's configuration.
- * @param config The loaded project configuration.
- * @param projectRoot The absolute path to the project root.
- * @param taskPath The path to the task file.
- * @returns The name of the branch the task will run on.
- */
-function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string, taskPath: string): string {
-  const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
-
-  // SCENARIO A: User has disabled automatic branch management.
-  if (config.manageGitBranch === false) {
-    console.log(pc.yellow("› Automatic branch management is disabled."));
-    console.log(pc.yellow(`› Task will run on your current branch: "${currentBranch}"`));
-    return currentBranch;
-  }
-
-  // SCENARIO B: Branch management is enabled (default behavior).
-  const expectedBranch = taskPathToBranchName(taskPath);
-
-  if (currentBranch === expectedBranch) {
-    console.log(pc.cyan(`[Orchestrator] Resuming task on existing branch: "${expectedBranch}"`));
-    return expectedBranch;
-  }
-
-  console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
-
-  const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
-  if (gitStatus) {
-    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes.`);
-  }
-
-  console.log(pc.gray("  › Switching to main branch..."));
-  try {
-    execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
-  } catch (e) {
-    throw new Error("Could not check out 'main' branch. A 'main' branch is required for automated branch management.");
-  }
-
-  try {
-    execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
-    console.log(pc.gray("  › Remote 'origin' found. Syncing..."));
-    execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
-  } catch (err) {
-    console.log(pc.yellow("  › No remote 'origin' found or pull failed. Proceeding with local 'main'."));
-  }
-
-  const existingBranches = execSync(`git branch --list ${expectedBranch}`, { cwd: projectRoot }).toString().trim();
-  if (existingBranches) {
-    console.log(pc.yellow(`  › Branch "${expectedBranch}" already exists. Checking it out.`));
-    execSync(`git checkout ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
-  } else {
-    console.log(pc.green(`  › Creating and checking out new branch: "${expectedBranch}"`));
-    execSync(`git checkout -b ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
-  }
-  
-  return expectedBranch;
-}
-```
-
-### Step 3: Refactor the `runTask` Orchestrator
-
-**Objective:** Update the main `runTask` function to pass the `config` object to the Git function.
-
-**Task:** Replace the `runTask` function in `src/tools/orchestrator.ts` with this final version.
-
-**File: `src/tools/orchestrator.ts` (Final `runTask` function)**
-```typescript
-export async function runTask(taskRelativePath: string) {
-  const config = await getConfig();
-  const projectRoot = getProjectRoot();
-  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
-
-  // 1. Determine paths and check status FIRST.
-  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
-  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
-  mkdirSync(path.dirname(statusFile), { recursive: true });
-  const status: TaskStatus = readStatus(statusFile);
-
-  if (status.phase === 'done') {
-    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
-    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
-    return;
-  }
-
-  // 2. Validate the pipeline configuration.
-  const { isValid, errors } = validatePipeline(config, projectRoot);
-  if (!isValid) {
-    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
-    for (const error of errors) console.error(pc.yellow(`  - ${error}`));
-    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
-    process.exit(1);
-  }
-
-  // 3. Ensure we are on the correct Git branch (now respects the user's config).
-  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
-
-  // 4. Proceed with execution.
-  updateStatus(statusFile, s => {
-    if (s.taskId === 'unknown') s.taskId = taskId;
-    s.branch = branchName;
-  });
-
-  const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
-  mkdirSync(logsDir, { recursive: true });
-  const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
-
-  for (const [index, stepConfig] of config.pipeline.entries()) {
-    const { name, command, context: contextKeys, check } = stepConfig;
-    const currentStepStatus = readStatus(statusFile);
-    if (currentStepStatus.steps[name] === 'done') {
-      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
-      continue;
+*   **Code Snippet (`src/config.ts`):**
+    ```typescript
+    export interface PipelineStep {
+      name: string;
+      command: string;
+      context: string[];
+      check: CheckConfig;
+      fileAccess?: { // <-- Add this new property
+        allowWrite?: string[];
+      };
     }
-    const context = {};
-    for (const key of contextKeys) {
-      context[key] = contextProviders[key](projectRoot, taskContent);
-    }
-    const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-    await executeStep(name, command, context, statusFile, logFile, check);
-  }
+    ```
 
-  updateStatus(statusFile, s => { s.phase = 'done'; });
-  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
-}
-```
+*   **Code Snippet (`src/templates/claude.config.js`):**
+    ```javascript
+    // ... inside the pipeline array ...
+    {
+      name: "write_tests",
+      command: "write-tests",
+      context: ["planContent", "taskDefinition"],
+      check: { type: "shell", command: "npm test", expect: "fail" },
+      // Add this block
+      fileAccess: {
+        allowWrite: ["test/**/*", "tests/**/*"]
+      }
+    },
+    {
+      name: "implement",
+      command: "implement",
+      context: ["planContent"],
+      check: { type: "shell", command: "npm test", expect: "pass" },
+      // Add this block
+      fileAccess: {
+        allowWrite: ["src/**/*"]
+      }
+    },
+    ```
 
-### Step 4: Update README.md
+##### **Step 2: Create the Generic Validator Script**
 
-**Objective:** Document the new `manageGitBranch` configuration option so users know it exists.
+*   **Objective:** Implement the core logic that dynamically enforces the rules from the user's configuration at runtime.
+*   **Tasks:**
+    1.  Create a new file: `src/tools/pipeline-validator.ts`.
+    2.  The script must read JSON data from `stdin` to get the `file_path` Claude intends to edit.
+    3.  It needs to identify the currently running task by finding the most recently modified `.state.json` file in the configured `statePath`.
+    4.  From the state file, it must extract the `currentStep` name.
+    5.  It will then load the user's `claude.config.js` to get the full pipeline definition.
+    6.  It must find the step in the pipeline that matches the `currentStep` name and retrieve its `fileAccess.allowWrite` array.
+    7.  You will need a glob-matching utility. `minimatch` is a good choice as it is already a dependency of `glob`. Add it to the project's dependencies.
+    8.  Check if the `file_path` from stdin matches any of the glob patterns in the `allowWrite` array.
 
-**Task:** Add a description of the new flag in the `README.md`'s configuration section.
+##### **Step 3: Integrate the New Hook**
 
-**File: `README.md` (Updated "How It Works" Section)**```markdown
-## How It Works
+*   **Objective:** Point the default `PreToolUse` hook to the new generic validator so it runs automatically.
+*   **Tasks:**
+    1.  Open `src/dot-claude/settings.json`.
+    2.  In the `PreToolUse` section, change the `command` to execute the new script.
 
-### The Configurable Pipeline (`claude.config.js`)
+*   **Code Snippet (`src/dot-claude/settings.json`):**
+    ```json
+    // Find this line:
+    "command": "tsx ./tools/validators.ts preWrite < /dev/stdin"
 
-This tool is driven by a `pipeline` array in your `claude.config.js`. You have full control to customize the workflow. The config file also contains other settings:
+    // And change it to:
+    "command": "tsx ./tools/pipeline-validator.ts < /dev/stdin"
+    ```
 
-```javascript
-// claude.config.js
-module.exports = {
-  // ... taskFolder, statePath, etc.
+##### **Step 4: Cleanup**
 
-  /**
-   * If true (default), the tool automatically creates a dedicated Git branch
-   * for each task. Set to false to run the tool on your current branch.
-   */
-  manageGitBranch: true,
+*   **Objective:** Remove the old, now-redundant script to keep the codebase clean.
+*   **Tasks:**
+    1.  Delete the file `src/tools/validators.ts`.
 
-  pipeline: [ /* ... your steps ... */ ],
-};
-```
+---
 
-### Isolated and Resumable Git Branches
+#### 5. Error Handling & Warnings
 
-By default (`manageGitBranch: true`), the orchestrator automatically manages Git branches for you. When you run a task:
-// ... (rest of the section is the same)```
+*   **No `fileAccess` Property:** If a step in the pipeline has no `fileAccess` property, the validator must gracefully allow the write operation to proceed.
+*   **Configuration/State Not Found:** If `claude.config.js` or the task's `.state.json` file cannot be found or parsed, the validator should log a clear error to `stderr` and fail safely by blocking the write operation.
+*   **Blocked Action:** When the validator blocks a file write, the error message must be clear and actionable.
+    *   **Example Error Message:** `Blocked: The current step 'implement' only allows file modifications matching ["src/**/*"]. Action on 'README.md' denied.`
+
+---
+
+#### 6. Documentation Changes
+
+*   **Objective:** Clearly explain the new `fileAccess` feature to users in the `README.md` so they can customize their workflows.
+*   **Tasks:**
+    1.  In `README.md`, add a new subsection under "How It Works" titled **"Customizable Guardrails (`fileAccess`)"**.
+    2.  Explain what the `fileAccess` property does and show an example of the `allowWrite` array with glob patterns.
+    3.  Explain that this feature allows them to control which files Claude can modify at each stage of the pipeline.
+    4.  Mention that removing the `fileAccess` property from a step disables the guardrail for that step, providing maximum flexibility.

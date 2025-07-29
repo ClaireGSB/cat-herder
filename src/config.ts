@@ -8,6 +8,9 @@ export interface PipelineStep {
   command: string;
   context: string[];
   check: CheckConfig;
+  fileAccess?: {
+    allowWrite?: string[];
+  };
 }
 
 // This is the type definition for the user's claude.config.js file
