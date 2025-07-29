@@ -89,13 +89,14 @@ async function executeStep(
   fullPrompt: string,
   statusFile: string,
   logFile: string,
+  thoughtsLogFile: string,
   check: CheckConfig
 ) {
   const projectRoot = getProjectRoot();
   console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt);
+  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt, thoughtsLogFile);
   if (code !== 0) {
     updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
     throw new Error(`Step "${name}" failed. Check log for details: ${logFile}`);
@@ -172,7 +173,8 @@ export async function runTask(taskRelativePath: string) {
     fullPrompt += `--- YOUR INSTRUCTIONS ---\n${commandInstructions}`;
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-    await executeStep(name, command, fullPrompt, statusFile, logFile, check);
+    const thoughtsLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.thoughts.log`);
+    await executeStep(name, command, fullPrompt, statusFile, logFile, thoughtsLogFile, check);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
