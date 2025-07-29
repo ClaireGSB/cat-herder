@@ -4,7 +4,7 @@ import path from "node:path";
 import pc from "picocolors";
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, ClaudeProjectConfig } from "../config.js";
 import { runCheck, CheckConfig } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
@@ -24,56 +24,63 @@ function taskPathToBranchName(taskPath: string): string {
 }
 
 /**
- * Sets up the Git environment for a task run, handling both local and remote repos.
+ * Ensures the repository is on the correct branch for the given task,
+ * respecting the user's configuration.
+ * @param config The loaded project configuration.
  * @param projectRoot The absolute path to the project root.
  * @param taskPath The path to the task file.
- * @returns The name of the created or checked-out branch.
+ * @returns The name of the branch the task will run on.
  */
-function setupGitBranch(projectRoot: string, taskPath: string): string {
+function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string, taskPath: string): string {
+  const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
+
+  // SCENARIO A: User has disabled automatic branch management.
+  if (config.manageGitBranch === false) {
+    console.log(pc.yellow("› Automatic branch management is disabled."));
+    console.log(pc.yellow(`› Task will run on your current branch: "${currentBranch}"`));
+    return currentBranch;
+  }
+
+  // SCENARIO B: Branch management is enabled (default behavior).
+  const expectedBranch = taskPathToBranchName(taskPath);
+
+  if (currentBranch === expectedBranch) {
+    console.log(pc.cyan(`[Orchestrator] Resuming task on existing branch: "${expectedBranch}"`));
+    return expectedBranch;
+  }
+
   console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
 
-  // 1. Safety Check: Abort if there are uncommitted changes.
   const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
   if (gitStatus) {
-    throw new Error("Git working directory is not clean. Please commit or stash your changes before starting a new task.");
+    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes.`);
   }
 
-  // 2. Check out the local main branch.
   console.log(pc.gray("  › Switching to main branch..."));
   try {
-      execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+    execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
   } catch (e) {
-      throw new Error("Could not check out 'main' branch. Does it exist? This tool currently requires a 'main' branch as the base for new work.");
+    throw new Error("Could not check out 'main' branch. A 'main' branch is required for automated branch management.");
   }
 
-  // 3. Detect remote and attempt to pull.
   try {
-    // This command will fail if 'origin' does not exist, moving to the catch block.
     execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
-    console.log(pc.gray("  › Remote 'origin' found. Syncing with remote..."));
-    try {
-      // Add a timeout in case of network issues.
-      execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
-    } catch (pullError) {
-      console.warn(pc.yellow("  ! Warning: Could not pull from 'origin/main'. Proceeding with local version. Please check your network connection and Git credentials."));
-    }
-  } catch (remoteError) {
-    console.log(pc.yellow("  › No remote 'origin' found. Proceeding with local 'main' branch."));
+    console.log(pc.gray("  › Remote 'origin' found. Syncing..."));
+    execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
+  } catch (err) {
+    console.log(pc.yellow("  › No remote 'origin' found or pull failed. Proceeding with local 'main'."));
   }
 
-  // 4. Create or check out the dedicated task branch.
-  const branchName = taskPathToBranchName(taskPath);
-  const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
-
+  const existingBranches = execSync(`git branch --list ${expectedBranch}`, { cwd: projectRoot }).toString().trim();
   if (existingBranches) {
-    console.log(pc.yellow(`  › Branch "${branchName}" already exists. Checking it out.`));
-    execSync(`git checkout ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.yellow(`  › Branch "${expectedBranch}" already exists. Checking it out.`));
+    execSync(`git checkout ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
   } else {
-    console.log(pc.green(`  › Creating and checking out new branch: "${branchName}"`));
-    execSync(`git checkout -b ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.green(`  › Creating and checking out new branch: "${expectedBranch}"`));
+    execSync(`git checkout -b ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
   }
   
-  return branchName;
+  return expectedBranch;
 }
 
 async function executeStep(
@@ -108,42 +115,49 @@ export async function runTask(taskRelativePath: string) {
     throw new Error("Failed to load configuration.");
   }
   const projectRoot = getProjectRoot();
+  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
 
-  // --- NEW GIT WORKFLOW INTEGRATION ---
-  // This is now the first action of any run.
-  const branchName = setupGitBranch(projectRoot, taskRelativePath);
-  console.log(pc.cyan(`[Orchestrator] Task will be executed on branch: ${branchName}`));
-  // --- END OF NEW SECTION ---
+  // 1. Determine paths and check status FIRST.
+  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+  const status: TaskStatus = readStatus(statusFile);
 
-  // --- IMPLICIT VALIDATION STEP (Step 5) ---
+  if (status.phase === 'done') {
+    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
+    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
+    return;
+  }
+
+  // 2. Validate the pipeline configuration.
   const { isValid, errors } = validatePipeline(config, projectRoot);
   if (!isValid) {
-    console.error(pc.red("✖ Your pipeline configuration is invalid. Cannot run task.\n"));
+    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
     for (const error of errors) console.error(pc.yellow(`  - ${error}`));
-    console.error(pc.cyan("\nPlease fix the errors in 'claude.config.js' or run 'claude-project validate' for details."));
+    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
     process.exit(1);
   }
 
-  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
+  // 3. Ensure we are on the correct Git branch (now respects the user's config).
+  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
 
-  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
-  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  // 4. Proceed with execution.
+  updateStatus(statusFile, s => {
+    if (s.taskId === 'unknown') s.taskId = taskId;
+    s.branch = branchName;
+  });
+
   const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
   mkdirSync(logsDir, { recursive: true });
-
-  const status: TaskStatus = readStatus(statusFile);
-  updateStatus(statusFile, s => { if (s.taskId === 'unknown') s.taskId = taskId; });
-
   const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
 
   for (const [index, stepConfig] of config.pipeline.entries()) {
     const { name, command, context: contextKeys, check } = stepConfig;
-
-    if (status.steps[name] === 'done') {
+    const currentStepStatus = readStatus(statusFile);
+    if (currentStepStatus.steps[name] === 'done') {
       console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
-
     const context: Record<string, string> = {};
     for (const key of contextKeys) {
       context[key] = contextProviders[key](projectRoot, taskContent);
@@ -158,7 +172,6 @@ export async function runTask(taskRelativePath: string) {
     fullPrompt += `--- YOUR INSTRUCTIONS ---\n${commandInstructions}`;
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-
     await executeStep(name, command, fullPrompt, statusFile, logFile, check);
   }
 
