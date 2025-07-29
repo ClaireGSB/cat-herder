@@ -76,10 +76,11 @@ export function runStreaming(
           const json = JSON.parse(line);
           switch (json.type) {
             case "assistant":
-              // Write assistant reasoning to reasoning log
+              // Write assistant reasoning to reasoning log with timestamp
               const reasoningText = json.message?.content?.[0]?.text;
               if (reasoningText) {
-                reasoningStream.write(reasoningText + "\n");
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+                reasoningStream.write(`[${timestamp}] ${reasoningText}\n`);
               }
               break;
             case "result":
@@ -89,6 +90,10 @@ export function runStreaming(
                 process.stdout.write(resultText);
                 logStream.write(resultText);
                 fullOutput += resultText;
+                
+                // Also write to reasoning log with timestamp and prefix
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+                reasoningStream.write(`[${timestamp}] [FINAL OUTPUT] ${resultText}\n`);
               }
               break;
             default:
