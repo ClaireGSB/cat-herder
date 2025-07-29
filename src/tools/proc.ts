@@ -72,6 +72,9 @@ export function runStreaming(
       for (const line of lines) {
         if (line.trim() === '') continue;
         
+        // Log raw line before JSON parsing attempt
+        reasoningStream.write(`[DEBUG-RAW] ${line}\n`);
+        
         try {
           const json = JSON.parse(line);
           switch (json.type) {
@@ -104,6 +107,11 @@ export function runStreaming(
               break;
           }
         } catch (e) {
+          // Log JSON parsing failures to reasoning log for debugging
+          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+          reasoningStream.write(`[${timestamp}] [DEBUG] JSON Parse Failed: ${line}\n`);
+          reasoningStream.write(`[${timestamp}] [DEBUG] Error: ${e instanceof Error ? e.message : String(e)}\n\n`);
+          
           // If JSON parsing fails, treat as regular output
           process.stdout.write(line + "\n");
           logStream.write(line + "\n");
@@ -116,9 +124,10 @@ export function runStreaming(
       process.stderr.write(chunk);
       logStream.write(chunk);
       
-      // Write stderr to reasoning log (includes hook output)
+      // Write stderr to reasoning log with enhanced debugging
       if (reasoningStream) {
-        reasoningStream.write(chunk);
+        const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+        reasoningStream.write(`[${timestamp}] [STDERR] ${chunk.toString()}`);
       }
       
       fullOutput += chunk.toString();
