@@ -112,6 +112,12 @@ export function runStreaming(
     p.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       logStream.write(chunk);
+      
+      // Write stderr to reasoning log (includes hook output)
+      if (reasoningStream) {
+        reasoningStream.write(chunk);
+      }
+      
       fullOutput += chunk.toString();
     });
 
