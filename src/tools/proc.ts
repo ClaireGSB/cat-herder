@@ -11,10 +11,7 @@ export function runStreaming(
   stdinData?: string,
   thoughtsLogPath?: string
 ): Promise<{ code: number; output: string }> {
-  // Conditionally add the new flag
-  const finalArgs = thoughtsLogPath ? [...args, "--thinking-log", thoughtsLogPath] : args;
-
-  console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
+  console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
   if (thoughtsLogPath) {
     console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
@@ -33,12 +30,23 @@ export function runStreaming(
 
   mkdirSync(dirname(logPath), { recursive: true });
   const logStream = createWriteStream(logPath, { flags: "w" });
+  
+  // Create thoughts log stream if path provided
+  let thoughtsStream: NodeJS.WritableStream | null = null;
+  if (thoughtsLogPath) {
+    mkdirSync(dirname(thoughtsLogPath), { recursive: true });
+    thoughtsStream = createWriteStream(thoughtsLogPath, { flags: "w" });
+  }
 
-  // Write detailed headers to the log file for later debugging
+  // Write detailed headers to the log files for later debugging
   const startTime = new Date();
-  logStream.write(`--- Log started at: ${startTime.toISOString()} ---\n`);
-  logStream.write(`--- Working directory: ${cwd} ---\n`);
-  logStream.write(`--- Command: ${cmd} ${args.join(" ")} ---\n`);
+  const headerInfo = `--- Log started at: ${startTime.toISOString()} ---\n--- Working directory: ${cwd} ---\n--- Command: ${cmd} ${args.join(" ")} ---\n`;
+  
+  logStream.write(headerInfo);
+  if (thoughtsStream) {
+    thoughtsStream.write(headerInfo);
+    thoughtsStream.write(`--- This file contains Claude's chain of thought (thinking process) ---\n`);
+  }
 
   if (stdinData) {
     logStream.write(`\n--- STDIN DATA ---\n`);
@@ -48,9 +56,56 @@ export function runStreaming(
   logStream.write(`-------------------------------------------------\n\n`);
 
   let fullOutput = "";
+  let buffer = ""; // Buffer for parsing thinking tags across chunks
+  let insideThinking = false;
+  let currentThinking = "";
+
+  function parseAndWriteChunk(chunk: string) {
+    buffer += chunk;
+    let cleanOutput = "";
+    
+    while (true) {
+      if (!insideThinking) {
+        // Look for opening thinking tag
+        const openMatch = buffer.match(/<claude>/);
+        if (openMatch) {
+          // Add content before the tag to clean output
+          cleanOutput += buffer.substring(0, openMatch.index);
+          buffer = buffer.substring(openMatch.index! + 8); // Remove "<claude>" from buffer
+          insideThinking = true;
+          currentThinking = "";
+        } else {
+          // No opening tag found, add all buffer content to clean output
+          cleanOutput += buffer;
+          buffer = "";
+          break;
+        }
+      } else {
+        // Look for closing thinking tag
+        const closeMatch = buffer.match(/<\/claude>/);
+        if (closeMatch) {
+          // Add thinking content to thoughts log
+          currentThinking += buffer.substring(0, closeMatch.index);
+          if (thoughtsStream) {
+            thoughtsStream.write(currentThinking + "\n\n");
+          }
+          buffer = buffer.substring(closeMatch.index! + 9); // Remove "</claude>" from buffer
+          insideThinking = false;
+          currentThinking = "";
+        } else {
+          // No closing tag yet, add all buffer content to current thinking
+          currentThinking += buffer;
+          buffer = "";
+          break;
+        }
+      }
+    }
+    
+    return cleanOutput;
+  }
 
   return new Promise((resolve) => {
-    const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
+    const p = spawn(cmd, args, { shell: false, stdio: "pipe", cwd: cwd });
     
     if (stdinData) {
         p.stdin.write(stdinData);
@@ -58,10 +113,17 @@ export function runStreaming(
     p.stdin.end();
 
     p.stdout.on("data", (chunk) => {
-      // This is the real-time output from the claude command
+      const chunkStr = chunk.toString();
+      
+      // Always show full output to console (including thinking)
       process.stdout.write(chunk);
-      logStream.write(chunk);
-      fullOutput += chunk.toString();
+      fullOutput += chunkStr;
+      
+      // Parse and separate thinking from clean output
+      const cleanOutput = parseAndWriteChunk(chunkStr);
+      if (cleanOutput) {
+        logStream.write(cleanOutput);
+      }
     });
 
     p.stderr.on("data", (chunk) => {
@@ -80,6 +142,13 @@ export function runStreaming(
 
       logStream.write(footer + footer2 + footer3);
       logStream.end();
+      
+      // Close thoughts stream if it exists
+      if (thoughtsStream) {
+        thoughtsStream.write(footer + footer2 + footer3);
+        (thoughtsStream as any).end();
+      }
+      
       resolve({ code: code ?? 1, output: fullOutput });
     });
   });
