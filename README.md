@@ -107,6 +107,32 @@ rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 npm run claude:run claude-Tasks/task-001-sample.md
 ```
 
+4. **Removing old test repo and creating fresh one** 
+
+If you want to start over with a fresh test environment, you can delete the `my-test-app` directory and repeat the initial setup steps.
+
+```bash
+# --- 1. Tear Down the Old Environment ---
+echo "Removing old test environment..."
+rm -rf my-test-app
+
+# --- 2. Create the New Project Shell ---
+echo "Creating a fresh test environment..."
+mkdir my-test-app
+cd my-test-app
+npm init -y > /dev/null
+git init > /dev/null
+git commit --allow-empty -m "Initial commit" > /dev/null
+
+# --- 3. Link and Initialize Your Tool ---
+echo "Linking to local claude-project and initializing..."
+npm link @your-scope/claude-project
+claude-project init
+npm install
+
+echo "\n✅ Fresh test environment is ready!"
+```
+
 ## How It Works
 
 ### The Configurable Pipeline (`claude.config.js`)

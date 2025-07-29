@@ -25,7 +25,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "tsx ./tools/pipeline-validator.ts < /dev/stdin"
+            "command": "node ./node_modules/@your-scope/claude-project/dist/tools/pipeline-validator.js < /dev/stdin"
           }
         ]
       }
