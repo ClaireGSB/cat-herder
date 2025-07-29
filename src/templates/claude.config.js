@@ -13,6 +13,12 @@ module.exports = {
   ],
 
   /**
+   * If true (default), the orchestrator will automatically create and manage a
+   * dedicated Git branch for each task. If false, it will run on your current branch.
+   */
+  manageGitBranch: true,
+
+  /**
    * Defines the sequence of steps in the development workflow.
    * The orchestrator will execute these steps in order.
    */

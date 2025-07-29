@@ -1,222 +1,231 @@
 
 
----
-
-# Implementation Plan: Interactive Permission Helper
+# Implementation Plan: State-Aware & Configurable Task Orchestration
 
 ### Goal
 
-To enhance the `claude-project validate` command to be interactive. When it detects that a command in the pipeline requires a permission not present in `.claude/settings.json`, it will clearly list the missing permissions and prompt the user to automatically add them.
+To refactor the `runTask` orchestrator into a fully state-aware and user-configurable system. The tool will: (1) check if a task is already complete before taking any action; (2) intelligently resume tasks on their existing Git branches; and (3) allow users to disable the automatic branch management entirely via a new configuration setting.
 
 ### Description
 
-Instead of simply failing, the validator will become a powerful setup tool. The new user workflow will be:
-1.  A user customizes their pipeline by adding a new step with a new command (e.g., a `lint` step).
-2.  They run `claude-project validate`.
-3.  The tool detects that the new command requires `Bash(npm run lint:fix)`, which is missing from `settings.json`.
-4.  Instead of just erroring, it will display the missing permission and ask: `Would you like to add the missing permissions to .claude/settings.json? (y/N)`.
-5.  If the user presses `y`, the tool will safely read `settings.json`, add the new permission(s) to the `allow` array (without deleting existing ones), and write the file back.
+This plan addresses several key user experience improvements. The start of the `runTask` flow will be re-architected to follow this logic:
 
-This provides a seamless, guided experience for configuring the pipeline's security requirements. The silent validation in the `run` command will remain non-interactive and simply report the error as it does now.
+1.  **Status First:** The tool will read the task's `state.json` file. If the task is `done`, it exits gracefully.
+2.  **Check Branching Config:** A new flag, `manageGitBranch`, will be added to `claude.config.js` (defaulting to `true`).
+3.  **Execute Git Logic (if enabled):** If `manageGitBranch` is `true`, the tool will perform the state-aware branching logic:
+    *   **Resume:** If on the correct branch, it continues.
+    *   **New Task:** If on a different branch, it performs the safe setup (clean check, sync main, checkout task branch).
+4.  **Execute Git Logic (if disabled):** If `manageGitBranch` is `false`, the tool will skip all branch-related checks and operations, printing a warning that it's operating on the user's current branch.
+5.  **Run Pipeline:** The pipeline execution proceeds as normal on whichever branch is active after the Git logic is complete.
+
+This provides the best of all worlds: a safe, automated default for most users, and a flexible "power user" mode for those with custom workflows.
 
 ---
 
 ## Summary Checklist
 
--   [x] **Step 1:** Modify the Validator to Return Structured Data
--   [x] **Step 2:** Implement the Interactive `validate` Command in `index.ts`
--   [x] **Step 3:** (No Change) Confirm the `run` Command's Validator Remains Non-Interactive
+-   [x] **Step 1:** Update the Configuration Template (`claude.config.js`) to include the new `manageGitBranch` flag.
+-   [x] **Step 2:** Modify the Git Function to Respect the Configuration Flag.
+-   [x] **Step 3:** Refactor the `runTask` Orchestrator for the Complete State-First Logic.
+-   [x] **Step 4:** Update the `README.md` to Explain the New Behavior and Configuration Option.
 
 ---
 
 ## Detailed Implementation Steps
 
-### Step 1: Modify the Validator to Return Structured Data
+### Step 1: Update the Configuration Template
 
-**Objective:** The validator needs to distinguish between general errors and fixable permission errors. We will change its return type to provide this structured data.
+**Objective:** Add the new `manageGitBranch` boolean flag to the default configuration.
 
-**Task:** Replace the contents of `src/tools/validator.ts` with this new version.
+**Task:** Add the new property to `src/templates/claude.config.js`.
 
-**File: `src/tools/validator.ts` (Updated)**
+**File: `src/templates/claude.config.js` (Updated)**
+```javascript
+// claude.config.js
+/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
+module.exports = {
+  taskFolder: "claude-Tasks",
+  statePath: ".claude/state",
+  logsPath: ".claude/logs",
+  structureIgnore: [ /* ... */ ],
+
+  /**
+   * (NEW) If true, the orchestrator will automatically create and manage a
+   * dedicated Git branch for each task. If false, it will run on your current branch.
+   */
+  manageGitBranch: true,
+
+  pipeline: [ /* ... */ ],
+};
+```
+
+### Step 2: Modify the Git Function to Respect the Flag
+
+**Objective:** Wrap the logic in our `ensureCorrectGitBranch` function in a conditional check based on the new config flag.
+
+**Task:** Modify the `ensureCorrectGitBranch` function in `src/tools/orchestrator.ts`.
+
+**File: `src/tools/orchestrator.ts` (Updated `ensureCorrectGitBranch`)**
 ```typescript
-import fs from "fs";
-import path from "path";
-import yaml from "js-yaml";
-import { ClaudeProjectConfig } from "../config.js";
-import { contextProviders } from "./providers.js";
+// ... (imports and taskPathToBranchName helper function remain the same) ...
 
-function parseFrontmatter(content: string): Record<string, any> | null {
-  // ... (this function remains the same)
-}
+/**
+ * Ensures the repository is on the correct branch for the given task,
+ * respecting the user's configuration.
+ * @param config The loaded project configuration.
+ * @param projectRoot The absolute path to the project root.
+ * @param taskPath The path to the task file.
+ * @returns The name of the branch the task will run on.
+ */
+function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string, taskPath: string): string {
+  const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
 
-// The new return type for our function
-export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
-  missingPermissions: string[];
-}
-
-export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
-  const errors: string[] = [];
-  const missingPermissions: string[] = []; // <-- New array for fixable errors
-  // ... (loading settings.json and other setup is the same)
-
-  // --- Main Loop ---
-  for (const [index, step] of config.pipeline.entries()) {
-    // ... (existing checks for step structure are the same)
-    
-    // --- Permission Check Logic ---
-    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-    if (fs.existsSync(commandFilePath)) {
-      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
-      const frontmatter = parseFrontmatter(commandContent);
-      const toolsValue = frontmatter?.['allowed-tools'];
-      
-      let requiredTools: string[] = [];
-      if (typeof toolsValue === 'string') {
-        requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean);
-      } else if (Array.isArray(toolsValue)) {
-        requiredTools = toolsValue;
-      }
-      
-      for (const tool of requiredTools) {
-        if (tool && !allowedPermissions.includes(tool)) {
-          // Instead of just a generic error, we add to both arrays
-          const errorMessage = `Step ${index + 1} ('${step.name}'): Requires missing permission "${tool}"`;
-          errors.push(errorMessage);
-          missingPermissions.push(tool); // <-- Add to the structured list
-        }
-      }
-    }
-    // ... (rest of the checks)
+  // SCENARIO A: User has disabled automatic branch management.
+  if (config.manageGitBranch === false) {
+    console.log(pc.yellow("› Automatic branch management is disabled."));
+    console.log(pc.yellow(`› Task will run on your current branch: "${currentBranch}"`));
+    return currentBranch;
   }
 
-  // Use a Set to remove duplicate missing permissions before returning
-  const uniqueMissingPermissions = [...new Set(missingPermissions)];
+  // SCENARIO B: Branch management is enabled (default behavior).
+  const expectedBranch = taskPathToBranchName(taskPath);
 
-  return { 
-    isValid: errors.length === 0, 
-    errors,
-    missingPermissions: uniqueMissingPermissions,
-  };
+  if (currentBranch === expectedBranch) {
+    console.log(pc.cyan(`[Orchestrator] Resuming task on existing branch: "${expectedBranch}"`));
+    return expectedBranch;
+  }
+
+  console.log(pc.cyan("[Orchestrator] Setting up Git environment..."));
+
+  const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
+  if (gitStatus) {
+    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes.`);
+  }
+
+  console.log(pc.gray("  › Switching to main branch..."));
+  try {
+    execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  } catch (e) {
+    throw new Error("Could not check out 'main' branch. A 'main' branch is required for automated branch management.");
+  }
+
+  try {
+    execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.gray("  › Remote 'origin' found. Syncing..."));
+    execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
+  } catch (err) {
+    console.log(pc.yellow("  › No remote 'origin' found or pull failed. Proceeding with local 'main'."));
+  }
+
+  const existingBranches = execSync(`git branch --list ${expectedBranch}`, { cwd: projectRoot }).toString().trim();
+  if (existingBranches) {
+    console.log(pc.yellow(`  › Branch "${expectedBranch}" already exists. Checking it out.`));
+    execSync(`git checkout ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
+  } else {
+    console.log(pc.green(`  › Creating and checking out new branch: "${expectedBranch}"`));
+    execSync(`git checkout -b ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
+  }
+  
+  return expectedBranch;
 }
 ```
 
-### Step 2: Implement the Interactive `validate` Command
+### Step 3: Refactor the `runTask` Orchestrator
 
-**Objective:** This is the core of the feature. We'll rewrite the `validate` command to use the new structured data from the validator, display the errors, and present the interactive prompt if there are fixable permission issues.
+**Objective:** Update the main `runTask` function to pass the `config` object to the Git function.
 
-**Task:** Replace the `validate` command's action in `src/index.ts`.
+**Task:** Replace the `runTask` function in `src/tools/orchestrator.ts` with this final version.
 
-**File: `src/index.ts` (Updated `validate` command)**
+**File: `src/tools/orchestrator.ts` (Final `runTask` function)**
 ```typescript
-#!/usr/bin/env node
-import { Command } from "commander";
-import pc from "picocolors";
-import fs from "fs";
-import path from "path";
-import readline from "readline"; // <-- Import readline for prompts
-import { init } from "./init.js";
-// ... (other imports)
-import { validatePipeline } from "./tools/validator.js";
-import { getConfig, getProjectRoot } from "./config.js";
-
-// ... (program definition and other commands)
-
-program
-  .command("validate")
-  .description("Validates the claude.config.js pipeline and offers to fix permissions.")
-  .action(async () => {
-    try {
-      const config = await getConfig();
-      const projectRoot = getProjectRoot();
-      const { isValid, errors, missingPermissions } = validatePipeline(config, projectRoot);
-
-      if (isValid) {
-        console.log(pc.green("✔ Pipeline configuration is valid."));
-        return;
-      }
-
-      console.error(pc.red("✖ Pipeline configuration is invalid:\n"));
-      for (const error of errors) {
-        console.error(pc.yellow(`  - ${error}`));
-      }
-
-      // --- Interactive Fixer Logic ---
-      if (missingPermissions.length > 0) {
-        console.log(pc.cyan("\nThis command can automatically add the missing permissions for you."));
-        
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-        rl.question(pc.bold("Would you like to add these permissions to .claude/settings.json? (y/N) "), (answer) => {
-          if (answer.toLowerCase() === 'y') {
-            fixPermissions(projectRoot, missingPermissions);
-          } else {
-            console.log(pc.gray("Aborted. Please add permissions manually."));
-          }
-          rl.close();
-        });
-      }
-
-    } catch (error: any) {
-      console.error(pc.red(`Validation error: ${error.message}`));
-      process.exit(1);
-    }
-  });
-
-// Helper function to safely update settings.json
-function fixPermissions(projectRoot: string, permissionsToAdd: string[]) {
-    const settingsPath = path.join(projectRoot, ".claude", "settings.json");
-    try {
-        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-        
-        // Ensure the path to the 'allow' array exists
-        if (!settings.permissions) settings.permissions = {};
-        if (!settings.permissions.allow) settings.permissions.allow = [];
-
-        // Use a Set to prevent duplicates
-        const updatedPermissions = new Set([...settings.permissions.allow, ...permissionsToAdd]);
-        settings.permissions.allow = [...updatedPermissions];
-
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-        console.log(pc.green("\n✔ Successfully updated .claude/settings.json."));
-        console.log(pc.cyan("  Run 'claude-project validate' again to confirm."));
-
-    } catch (e: any) {
-        console.error(pc.red(`\nError updating settings.json: ${e.message}`));
-        console.error(pc.gray("Please fix the file manually."));
-    }
-}
-
-// ... (rest of the file)
-```
-
-### Step 3: Confirm the `run` Command Remains Non-Interactive
-
-**Objective:** Ensure that the `run` command's silent validation does **not** become interactive.
-
-**Task:** Review the `orchestrator.ts` file to confirm its behavior is still correct.
-
-**File: `src/tools/orchestrator.ts` (Review - No Changes Needed)**
-```typescript
-// ...
 export async function runTask(taskRelativePath: string) {
   const config = await getConfig();
   const projectRoot = getProjectRoot();
+  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
 
-  // The `errors` array now contains the user-friendly permission error messages.
-  // The `missingPermissions` array is simply ignored here, so no prompt occurs.
-  // This logic remains perfectly correct for a non-interactive check.
+  // 1. Determine paths and check status FIRST.
+  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+  const status: TaskStatus = readStatus(statusFile);
+
+  if (status.phase === 'done') {
+    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
+    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
+    return;
+  }
+
+  // 2. Validate the pipeline configuration.
   const { isValid, errors } = validatePipeline(config, projectRoot);
   if (!isValid) {
-    console.error(pc.red("✖ Your pipeline configuration is invalid. Cannot run task.\n"));
-    for (const error of errors) {
-      console.error(pc.yellow(`  - ${error}`));
-    }
+    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
+    for (const error of errors) console.error(pc.yellow(`  - ${error}`));
     console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
     process.exit(1);
   }
 
-  // ... rest of the function continues
+  // 3. Ensure we are on the correct Git branch (now respects the user's config).
+  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
+
+  // 4. Proceed with execution.
+  updateStatus(statusFile, s => {
+    if (s.taskId === 'unknown') s.taskId = taskId;
+    s.branch = branchName;
+  });
+
+  const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
+  mkdirSync(logsDir, { recursive: true });
+  const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
+
+  for (const [index, stepConfig] of config.pipeline.entries()) {
+    const { name, command, context: contextKeys, check } = stepConfig;
+    const currentStepStatus = readStatus(statusFile);
+    if (currentStepStatus.steps[name] === 'done') {
+      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
+      continue;
+    }
+    const context = {};
+    for (const key of contextKeys) {
+      context[key] = contextProviders[key](projectRoot, taskContent);
+    }
+    const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
+    await executeStep(name, command, context, statusFile, logFile, check);
+  }
+
+  updateStatus(statusFile, s => { s.phase = 'done'; });
+  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
 }
 ```
-This design is robust. The validator provides structured data, and each command (`validate` and `run`) uses that data in the way that is most appropriate for its context (interactive vs. non-interactive).
+
+### Step 4: Update README.md
+
+**Objective:** Document the new `manageGitBranch` configuration option so users know it exists.
+
+**Task:** Add a description of the new flag in the `README.md`'s configuration section.
+
+**File: `README.md` (Updated "How It Works" Section)**```markdown
+## How It Works
+
+### The Configurable Pipeline (`claude.config.js`)
+
+This tool is driven by a `pipeline` array in your `claude.config.js`. You have full control to customize the workflow. The config file also contains other settings:
+
+```javascript
+// claude.config.js
+module.exports = {
+  // ... taskFolder, statePath, etc.
+
+  /**
+   * If true (default), the tool automatically creates a dedicated Git branch
+   * for each task. Set to false to run the tool on your current branch.
+   */
+  manageGitBranch: true,
+
+  pipeline: [ /* ... your steps ... */ ],
+};
+```
+
+### Isolated and Resumable Git Branches
+
+By default (`manageGitBranch: true`), the orchestrator automatically manages Git branches for you. When you run a task:
+// ... (rest of the section is the same)```

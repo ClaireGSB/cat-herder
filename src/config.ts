@@ -16,6 +16,7 @@ export interface ClaudeProjectConfig {
   statePath: string;
   logsPath: string;
   structureIgnore: string[];
+  manageGitBranch?: boolean;
   pipeline: PipelineStep[];
 }
 
@@ -27,6 +28,7 @@ const defaultConfig: ClaudeProjectConfig = {
   structureIgnore: [
     "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
   ],
+  manageGitBranch: true,
   pipeline: [],
 };
 
