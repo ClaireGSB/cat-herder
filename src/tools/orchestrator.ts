@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, createWriteStream } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { runStreaming } from "./proc.js";
@@ -103,10 +103,40 @@ async function executeStep(
   console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
   console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
-  if (code !== 0) {
-    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+  // Set up parent process stderr capture to catch hook output
+  const reasoningLogStream = createWriteStream(reasoningLogFile, { flags: "a" });
+  const originalStderrWrite = process.stderr.write;
+  const captureTimestamp = new Date().toISOString();
+  
+  reasoningLogStream.write(`[${captureTimestamp}] [PARENT-STDERR-CAPTURE] Starting parent stderr monitoring\n`);
+  
+  // Override stderr to capture hook output
+  process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+    const hookTimestamp = new Date().toISOString();
+    reasoningLogStream.write(`[${hookTimestamp}] [PARENT-STDERR] ${chunk.toString()}`);
+    
+    // Call original stderr write
+    return originalStderrWrite.call(this, chunk, encoding, callback);
+  };
+
+  try {
+    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
+    
+    // Restore original stderr
+    process.stderr.write = originalStderrWrite;
+    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Ending parent stderr monitoring\n`);
+    reasoningLogStream.end();
+    
+    if (code !== 0) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+    }
+  } catch (error) {
+    // Ensure stderr is restored even on error
+    process.stderr.write = originalStderrWrite;
+    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Error occurred, ending monitoring\n`);
+    reasoningLogStream.end();
+    throw error;
   }
 
   await runCheck(check, projectRoot);
