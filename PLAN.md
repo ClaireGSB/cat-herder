@@ -2,105 +2,143 @@
 
 # PLAN.md
 
-### **Title: Implement Chain of Thought (CoT) Logging**
+### **Title: Fix Chain of Thought (CoT) Logging via JSON Streaming**
 
-**Goal:** To capture Claude's reasoning process into separate log files for better debugging and analysis, without cluttering the main output logs.
+**Goal:** To correctly capture Claude's "thinking" output by switching from raw text parsing to the official JSON streaming format provided by the `claude` CLI.
 
 ---
 
 ### **Description**
 
-Currently, our tool only logs the final output from the `claude` CLI command. This makes it difficult to understand *why* the AI made a certain decision, as its "thinking" process (the content within `<claude>` thinking tags) is not stored.
+The previous implementation for CoT logging resulted in empty `.thoughts.log` files. The root cause was twofold:
 
-This update will introduce a new logging mechanism. The tool will generate a second log file for each pipeline step, which will exclusively contain the AI's chain of thought. The original log file will continue to store only the final, clean output. This separation will make both the results and the process much easier to analyze.
+1.  **Incorrect CLI Invocation:** Piping the prompt to the `claude` command via `stdin` causes it to return only the final, clean output, stripping away the `<claude>` thinking tags.
+2.  **Conflicting Hook (Now Removed):** A `PostToolUse` hook in `settings.json` was consuming and discarding all of Claude's output before it could be processed.
+
+This plan corrects the issue by using the documented `claude` CLI flags (`-p` and `--output-format stream-json`) to get a structured data stream. This is a more robust and reliable method than parsing XML tags from raw text.
 
 ---
 
 ### **Summary Checklist**
 
--   [x] **Update `src/tools/proc.ts`**: Modify the `runStreaming` function to support a new `thoughtsLogPath` and pass a `--thinking-log` flag to the `claude` CLI.
--   [x] **Modify `src/tools/orchestrator.ts`**: Update the `executeStep` and `runTask` functions to generate the path for the new thoughts log and pass it to the process runner.
--   [x] **Enhance Error Messages**: Update error handling to reference both the output log and the new thoughts log to make debugging easier.
--   [x] **Update Documentation**: Add a new section to `README.md` explaining the new logging feature and the purpose of the `.thoughts.log` files.
+-   [ ] **Refactor `src/tools/proc.ts`**: Rewrite the `runStreaming` function to use the `--output-format stream-json` flag and parse the resulting JSON objects.
+-   [ ] **Update `src/tools/orchestrator.ts`**: Modify `executeStep` to call the new `runStreaming` function with the prompt as a command-line argument instead of `stdin`.
+-   [ ] **Remove Conflicting Hook**: Ensure the `PostToolUse` hook in `src/dot-claude/settings.json` has been removed to prevent it from interfering with the output stream.
+-   [ ] **Update Documentation**: Revise the `README.md` to accurately describe the logging mechanism and the content of each log file.
 
 ---
 
 ### **Detailed Implementation Steps**
 
-#### 1. Update Process Execution Logic (`src/tools/proc.ts`)
+#### 1. Refactor `runStreaming` to Handle JSON Output (`src/tools/proc.ts`)
 
-*   **Objective:** Modify the core function that runs the `claude` command to handle the new logging requirement.
+*   **Objective:** To switch from parsing raw text to reliably parsing a stream of JSON objects from the `claude` CLI, routing content to the appropriate log files.
 *   **Task:**
-    1.  Open the file `src/tools/proc.ts`.
-    2.  Update the `runStreaming` function signature to accept a new optional parameter: `thoughtsLogPath?: string`.
-    3.  Inside the function, create a new arguments array. If `thoughtsLogPath` is provided, add the `--thinking-log` flag and its value to this array.
-    4.  Add a `console.log` message to inform the user where the thoughts are being logged, e.g., `[Proc] Logging thoughts to: ${thoughtsLogPath}`.
+    1.  Modify the signature of the `runStreaming` function. It should now require a `thoughtsLogPath` and take the prompt content as a `prompt: string` argument instead of the optional `stdinData`.
+    2.  Change the arguments passed to the `spawn` command to include `-p` and `--output-format stream-json`.
+    3.  Implement a streaming JSON parser inside `p.stdout.on("data", ...)`:
+        *   Use a buffer to handle JSON objects that may be split across multiple data chunks.
+        *   Process each complete line, parse it as a JSON object, and use a `switch` statement on the `type` property.
+        *   If `type` is `"thinking"`, write the `content` to the `thoughtsStream`.
+        *   If `type` is `"tool_code"` or `"final_answer"`, write the `content` to the main `logStream` and to the console (`process.stdout`).
 
-*   **Code Snippet (New `runStreaming` signature and logic):**
+*   **Code Snippet (New `runStreaming` logic):**
     ```typescript
+    // In src/tools/proc.ts
+
     export function runStreaming(
       cmd: string,
       args: string[],
       logPath: string,
+      thoughtsLogPath: string, // Now required
       cwd: string,
-      stdinData?: string,
-      thoughtsLogPath?: string // New parameter
+      prompt: string // Prompt is now a direct argument
     ): Promise<{ code: number; output: string }> {
-      // Conditionally add the new flag
-      const finalArgs = thoughtsLogPath ? [...args, "--thinking-log", thoughtsLogPath] : args;
-    
-      console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
-      console.log(`[Proc] Logging to: ${logPath}`);
-      if (thoughtsLogPath) {
-        console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
-      }
-    
-      // ... rest of the function uses finalArgs instead of args
+      
+      const finalArgs = [...args, "-p", prompt, "--output-format", "stream-json"];
+      
+      // ... create logStream and thoughtsStream ...
+
+      p.stdout.on("data", (chunk) => {
+        // ... buffer and line splitting logic ...
+
+        for (const line of lines) {
+          try {
+            const json = JSON.parse(line);
+            switch (json.type) {
+              case "thinking":
+                thoughtsStream.write(json.content + "\n");
+                break;
+              case "tool_code":
+              case "final_answer":
+                process.stdout.write(json.content);
+                logStream.write(json.content);
+                finalOutput += json.content;
+                break;
+            }
+          } catch (e) { /* handle parse error */ }
+        }
+      });
+      // ...
     }
     ```
 
-#### 2. Update the Orchestrator (`src/tools/orchestrator.ts`)
+#### 2. Update `orchestrator.ts` to Pass Prompt as an Argument
 
-*   **Objective:** Make the main orchestrator aware of the new thoughts log and ensure it's created for every pipeline step.
+*   **Objective:** To adapt the `executeStep` function to use the new, more reliable `runStreaming` function signature.
 *   **Task:**
     1.  Open `src/tools/orchestrator.ts`.
-    2.  In the `executeStep` function, add a new parameter to its signature: `thoughtsLogFile: string`.
-    3.  Pass this new `thoughtsLogFile` parameter down to the `runStreaming` function call.
-    4.  In the `runTask` function, inside the main `for` loop, define the path for the new log file. The name should be based on the standard log file but with the `.thoughts.log` extension.
-    5.  Pass this new path when you call `executeStep`.
+    2.  Update the `executeStep` function signature to require `thoughtsLogFile: string`.
+    3.  Modify the call to `runStreaming`. Pass `fullPrompt` as the final argument instead of the `stdinData` parameter.
 
-*   **Code Snippet (New log path creation in `runTask`):**
+*   **Code Snippet (Updated call in `executeStep`):**
     ```typescript
-    // Inside the for loop in runTask()
-    const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-    const thoughtsLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.thoughts.log`);
+    // In src/tools/orchestrator.ts
 
-    await executeStep(name, command, fullPrompt, statusFile, logFile, thoughtsLogFile, check);
+    // Previous call:
+    // const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt);
+
+    // New call:
+    const { code } = await runStreaming(
+      "claude",
+      [`/project:${command}`],
+      logFile,
+      thoughtsLogFile, // Pass the new path
+      projectRoot,
+      fullPrompt // Pass the prompt as an argument
+    );
     ```
 
-#### 3. Enhance Error Handling
+#### 3. Remove Conflicting `PostToolUse` Hook
 
-*   **Objective:** Make debugging easier by pointing the user to both relevant log files when a step fails.
+*   **Objective:** To permanently remove the hook that was incorrectly consuming and discarding Claude's output stream.
 *   **Task:**
-    1.  In `src/tools/orchestrator.ts`, locate the error handling block inside the `executeStep` function (the `if (code !== 0)` block).
-    2.  Modify the `Error` message to include the path to both the standard log and the new thoughts log.
+    1.  Open `src/dot-claude/settings.json`.
+    2.  Locate the `"PostToolUse"` key within the `"hooks"` object.
+    3.  Delete the entire `"PostToolUse"` array and key.
 
-*   **Code Snippet (Updated error message):**
-    ```typescript
-    if (code !== 0) {
-      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the chain of thought log: ${thoughtsLogFile}`);
-    }
+*   **Code Snippet (What to remove from `settings.json`):**
+    ```diff
+    -    "PostToolUse": [
+    -      {
+    -        "matcher": "Edit|Write|MultiEdit",
+    -        "hooks": [
+    -          {
+    -            "type": "command",
+    -            "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true"
+    -          }
+    -        ]
+    -      }
+    -    ]
     ```
 
-#### 4. Update Documentation
+#### 4. Update Documentation (`README.md`)
 
-*   **Objective:** Inform users about the new logging feature and how to use it for debugging.
+*   **Objective:** To ensure the project's documentation accurately reflects the logging system for future users and developers.
 *   **Task:**
-    1.  Edit the main `README.md` file.
-    2.  Add a new section titled "### Debugging and Logs".
-    3.  Explain that for each pipeline step, two log files are now created under the `.claude/logs/` directory.
-    4.  Describe the purpose of each file:
-        *   `XX-step-name.log`: Contains the final, clean output from the AI tool.
-        *   `XX-step-name.thoughts.log`: Contains the AI's detailed reasoning process (its "chain of thought").
-    5.  Mention that reviewing the `.thoughts.log` file is the best way to understand *why* an unexpected output occurred.
+    1.  Open `README.md`.
+    2.  Add a new section called `### Debugging and Logs`.
+    3.  Clearly explain the purpose of the two log files generated for each step:
+        *   `XX-step-name.log`: This contains the final, clean output from the AI (e.g., the code it wrote).
+        *   `XX-step-name.thoughts.log`: This contains the detailed, step-by-step reasoning (Chain of Thought) from the AI.
+    4.  Advise users to check the `.thoughts.log` file when they need to understand *why* the AI produced a particular result.
