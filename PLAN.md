@@ -24,7 +24,7 @@ This provides the best of all worlds: a safe, automated default for most users, 
 
 ## Summary Checklist
 
--   [ ] **Step 1:** Update the Configuration Template (`claude.config.js`) to include the new `manageGitBranch` flag.
+-   [x] **Step 1:** Update the Configuration Template (`claude.config.js`) to include the new `manageGitBranch` flag.
 -   [ ] **Step 2:** Modify the Git Function to Respect the Configuration Flag.
 -   [ ] **Step 3:** Refactor the `runTask` Orchestrator for the Complete State-First Logic.
 -   [ ] **Step 4:** Update the `README.md` to Explain the New Behavior and Configuration Option.
