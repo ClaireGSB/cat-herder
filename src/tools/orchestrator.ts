@@ -96,6 +96,13 @@ async function executeStep(
   console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
+  // Debug logging before Claude CLI execution
+  const timestamp = new Date().toISOString();
+  console.log(pc.gray(`[${timestamp}] [DEBUG] About to execute: claude /project:${command}`));
+  console.log(pc.gray(`[DEBUG] Working directory: ${projectRoot}`));
+  console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
+  console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
+
   const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
   if (code !== 0) {
     updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
