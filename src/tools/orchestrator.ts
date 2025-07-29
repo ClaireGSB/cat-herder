@@ -96,7 +96,7 @@ async function executeStep(
   console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt, thoughtsLogFile);
+  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, thoughtsLogFile, projectRoot, fullPrompt);
   if (code !== 0) {
     updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
     throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the chain of thought log: ${thoughtsLogFile}`);

@@ -21,9 +21,9 @@ This plan corrects the issue by using the documented `claude` CLI flags (`-p` an
 
 ### **Summary Checklist**
 
--   [ ] **Refactor `src/tools/proc.ts`**: Rewrite the `runStreaming` function to use the `--output-format stream-json` flag and parse the resulting JSON objects.
--   [ ] **Update `src/tools/orchestrator.ts`**: Modify `executeStep` to call the new `runStreaming` function with the prompt as a command-line argument instead of `stdin`.
--   [ ] **Remove Conflicting Hook**: Ensure the `PostToolUse` hook in `src/dot-claude/settings.json` has been removed to prevent it from interfering with the output stream.
+-   [x] **Refactor `src/tools/proc.ts`**: Rewrite the `runStreaming` function to use the `--output-format stream-json` flag and parse the resulting JSON objects.
+-   [x] **Update `src/tools/orchestrator.ts`**: Modify `executeStep` to call the new `runStreaming` function with the prompt as a command-line argument instead of `stdin`.
+-   [x] **Remove Conflicting Hook**: Ensure the `PostToolUse` hook in `src/dot-claude/settings.json` has been removed to prevent it from interfering with the output stream.
 -   [ ] **Update Documentation**: Revise the `README.md` to accurately describe the logging mechanism and the content of each log file.
 
 ---

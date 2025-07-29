@@ -7,122 +7,92 @@ export function runStreaming(
   cmd: string,
   args: string[],
   logPath: string,
+  thoughtsLogPath: string,
   cwd: string,
-  stdinData?: string,
-  thoughtsLogPath?: string
+  prompt: string
 ): Promise<{ code: number; output: string }> {
-  console.log(`[Proc] Spawning: ${cmd} ${args.join(" ")}`);
+  // Build final args with JSON streaming flags
+  const finalArgs = [...args, "-p", prompt, "--output-format", "stream-json"];
+  
+  console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
-  if (thoughtsLogPath) {
-    console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
-  }
+  console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
 
   // --- THIS IS THE NEWLY ADDED SECTION FOR CLI LOGGING ---
-  // Log the prompt context being sent to stdin directly to the console.
-  if (stdinData) {
-    console.log(pc.gray("\n--- Sending Prompt Context to Claude ---"));
-    // Use a dim color so it's readable but distinct from the AI's output
-    console.log(pc.dim(stdinData.trim()));
-    console.log(pc.gray("----------------------------------------\n"));
-  }
+  // Log the prompt context being sent to Claude directly to the console.
+  console.log(pc.gray("\n--- Sending Prompt Context to Claude ---"));
+  // Use a dim color so it's readable but distinct from the AI's output
+  console.log(pc.dim(prompt.trim()));
+  console.log(pc.gray("----------------------------------------\n"));
   // --- END OF NEW SECTION ---
 
 
   mkdirSync(dirname(logPath), { recursive: true });
   const logStream = createWriteStream(logPath, { flags: "w" });
   
-  // Create thoughts log stream if path provided
-  let thoughtsStream: NodeJS.WritableStream | null = null;
-  if (thoughtsLogPath) {
-    mkdirSync(dirname(thoughtsLogPath), { recursive: true });
-    thoughtsStream = createWriteStream(thoughtsLogPath, { flags: "w" });
-  }
+  // Create thoughts log stream - now required
+  mkdirSync(dirname(thoughtsLogPath), { recursive: true });
+  const thoughtsStream = createWriteStream(thoughtsLogPath, { flags: "w" });
 
   // Write detailed headers to the log files for later debugging
   const startTime = new Date();
-  const headerInfo = `--- Log started at: ${startTime.toISOString()} ---\n--- Working directory: ${cwd} ---\n--- Command: ${cmd} ${args.join(" ")} ---\n`;
+  const headerInfo = `--- Log started at: ${startTime.toISOString()} ---\n--- Working directory: ${cwd} ---\n--- Command: ${cmd} ${finalArgs.join(" ")} ---\n`;
   
   logStream.write(headerInfo);
-  if (thoughtsStream) {
-    thoughtsStream.write(headerInfo);
-    thoughtsStream.write(`--- This file contains Claude's chain of thought (thinking process) ---\n`);
-  }
+  thoughtsStream.write(headerInfo);
+  thoughtsStream.write(`--- This file contains Claude's chain of thought (thinking process) ---\n`);
 
-  if (stdinData) {
-    logStream.write(`\n--- STDIN DATA ---\n`);
-    logStream.write(stdinData);
-    logStream.write(`--- END STDIN DATA ---\n\n`);
-  }
+  logStream.write(`\n--- PROMPT DATA ---\n`);
+  logStream.write(prompt);
+  logStream.write(`--- END PROMPT DATA ---\n\n`);
   logStream.write(`-------------------------------------------------\n\n`);
 
   let fullOutput = "";
-  let buffer = ""; // Buffer for parsing thinking tags across chunks
-  let insideThinking = false;
-  let currentThinking = "";
-
-  function parseAndWriteChunk(chunk: string) {
-    buffer += chunk;
-    let cleanOutput = "";
-    
-    while (true) {
-      if (!insideThinking) {
-        // Look for opening thinking tag
-        const openMatch = buffer.match(/<claude>/);
-        if (openMatch) {
-          // Add content before the tag to clean output
-          cleanOutput += buffer.substring(0, openMatch.index);
-          buffer = buffer.substring(openMatch.index! + 8); // Remove "<claude>" from buffer
-          insideThinking = true;
-          currentThinking = "";
-        } else {
-          // No opening tag found, add all buffer content to clean output
-          cleanOutput += buffer;
-          buffer = "";
-          break;
-        }
-      } else {
-        // Look for closing thinking tag
-        const closeMatch = buffer.match(/<\/claude>/);
-        if (closeMatch) {
-          // Add thinking content to thoughts log
-          currentThinking += buffer.substring(0, closeMatch.index);
-          if (thoughtsStream) {
-            thoughtsStream.write(currentThinking + "\n\n");
-          }
-          buffer = buffer.substring(closeMatch.index! + 9); // Remove "</claude>" from buffer
-          insideThinking = false;
-          currentThinking = "";
-        } else {
-          // No closing tag yet, add all buffer content to current thinking
-          currentThinking += buffer;
-          buffer = "";
-          break;
-        }
-      }
-    }
-    
-    return cleanOutput;
-  }
+  let buffer = ""; // Buffer for parsing JSON lines across chunks
 
   return new Promise((resolve) => {
-    const p = spawn(cmd, args, { shell: false, stdio: "pipe", cwd: cwd });
-    
-    if (stdinData) {
-        p.stdin.write(stdinData);
-    }
-    p.stdin.end();
+    const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
 
     p.stdout.on("data", (chunk) => {
       const chunkStr = chunk.toString();
+      buffer += chunkStr;
       
-      // Always show full output to console (including thinking)
-      process.stdout.write(chunk);
-      fullOutput += chunkStr;
+      // Process complete lines
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
       
-      // Parse and separate thinking from clean output
-      const cleanOutput = parseAndWriteChunk(chunkStr);
-      if (cleanOutput) {
-        logStream.write(cleanOutput);
+      for (const line of lines) {
+        if (line.trim() === '') continue;
+        
+        try {
+          const json = JSON.parse(line);
+          switch (json.type) {
+            case "thinking":
+              // Write thinking content to thoughts log
+              thoughtsStream.write(json.content + "\n");
+              break;
+            case "tool_code":
+            case "final_answer":
+              // Write to main log and console
+              process.stdout.write(json.content);
+              logStream.write(json.content);
+              fullOutput += json.content;
+              break;
+            default:
+              // Handle other types by writing to main log
+              if (json.content) {
+                process.stdout.write(json.content);
+                logStream.write(json.content);
+                fullOutput += json.content;
+              }
+              break;
+          }
+        } catch (e) {
+          // If JSON parsing fails, treat as regular output
+          process.stdout.write(line + "\n");
+          logStream.write(line + "\n");
+          fullOutput += line + "\n";
+        }
       }
     });
 
@@ -143,11 +113,9 @@ export function runStreaming(
       logStream.write(footer + footer2 + footer3);
       logStream.end();
       
-      // Close thoughts stream if it exists
-      if (thoughtsStream) {
-        thoughtsStream.write(footer + footer2 + footer3);
-        (thoughtsStream as any).end();
-      }
+      // Close thoughts stream
+      thoughtsStream.write(footer + footer2 + footer3);
+      thoughtsStream.end();
       
       resolve({ code: code ?? 1, output: fullOutput });
     });
