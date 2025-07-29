@@ -295,13 +295,13 @@ This feature ensures that each step of your pipeline only modifies the files it 
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, two log files are created in the `.claude/logs/` directory:
 
 - **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see.
-- **`XX-step-name.thoughts.log`**: Contains the AI's detailed reasoning process (its "chain of thought"). This shows the internal thinking that led to the final output.
+- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output.
 
 **When to use each log:**
 - Use the standard `.log` file to see what the AI produced and any errors that occurred.
-- Use the `.thoughts.log` file to understand *why* the AI made specific decisions, especially when debugging unexpected outputs or behaviors.
+- Use the `.reasoning.log` file to understand *why* the AI made specific decisions, especially when debugging unexpected outputs or behaviors.
 
-The thoughts logs are particularly valuable when:
+The reasoning logs are particularly valuable when:
 - A step produces unexpected results
 - You want to understand the AI's decision-making process
 - You're fine-tuning your prompts or pipeline configuration

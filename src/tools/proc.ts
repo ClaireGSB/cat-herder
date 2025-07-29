@@ -7,43 +7,45 @@ export function runStreaming(
   cmd: string,
   args: string[],
   logPath: string,
-  thoughtsLogPath: string,
+  reasoningLogPath: string,
   cwd: string,
-  prompt: string
+  stdinData?: string
 ): Promise<{ code: number; output: string }> {
   // Build final args with JSON streaming flags
-  const finalArgs = [...args, "-p", prompt, "--output-format", "stream-json"];
+  const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
   
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
-  console.log(`[Proc] Logging thoughts to: ${thoughtsLogPath}`);
+  console.log(`[Proc] Logging reasoning to: ${reasoningLogPath}`);
 
   // --- THIS IS THE NEWLY ADDED SECTION FOR CLI LOGGING ---
-  // Log the prompt context being sent to Claude directly to the console.
-  console.log(pc.gray("\n--- Sending Prompt Context to Claude ---"));
-  // Use a dim color so it's readable but distinct from the AI's output
-  console.log(pc.dim(prompt.trim()));
-  console.log(pc.gray("----------------------------------------\n"));
+  // Log the prompt context being sent to stdin directly to the console.
+  if (stdinData) {
+    console.log(pc.gray("\n--- Sending Prompt Context to Claude ---"));
+    // Use a dim color so it's readable but distinct from the AI's output
+    console.log(pc.dim(stdinData.trim()));
+    console.log(pc.gray("----------------------------------------\n"));
+  }
   // --- END OF NEW SECTION ---
 
 
   mkdirSync(dirname(logPath), { recursive: true });
   const logStream = createWriteStream(logPath, { flags: "w" });
   
-  // Create thoughts log stream - now required
-  mkdirSync(dirname(thoughtsLogPath), { recursive: true });
-  const thoughtsStream = createWriteStream(thoughtsLogPath, { flags: "w" });
+  // Create reasoning log stream - now required
+  mkdirSync(dirname(reasoningLogPath), { recursive: true });
+  const reasoningStream = createWriteStream(reasoningLogPath, { flags: "w" });
 
   // Write detailed headers to the log files for later debugging
   const startTime = new Date();
   const headerInfo = `--- Log started at: ${startTime.toISOString()} ---\n--- Working directory: ${cwd} ---\n--- Command: ${cmd} ${finalArgs.join(" ")} ---\n`;
   
   logStream.write(headerInfo);
-  thoughtsStream.write(headerInfo);
-  thoughtsStream.write(`--- This file contains Claude's chain of thought (thinking process) ---\n`);
+  reasoningStream.write(headerInfo);
+  reasoningStream.write(`--- This file contains Claude's step-by-step reasoning process ---\n`);
 
   logStream.write(`\n--- PROMPT DATA ---\n`);
-  logStream.write(prompt);
+  logStream.write(stdinData || "");
   logStream.write(`--- END PROMPT DATA ---\n\n`);
   logStream.write(`-------------------------------------------------\n\n`);
 
@@ -52,6 +54,12 @@ export function runStreaming(
 
   return new Promise((resolve) => {
     const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
+
+    // Write stdin data if provided
+    if (stdinData) {
+      p.stdin.write(stdinData);
+      p.stdin.end();
+    }
 
     p.stdout.on("data", (chunk) => {
       const chunkStr = chunk.toString();
@@ -67,24 +75,24 @@ export function runStreaming(
         try {
           const json = JSON.parse(line);
           switch (json.type) {
-            case "thinking":
-              // Write thinking content to thoughts log
-              thoughtsStream.write(json.content + "\n");
+            case "assistant":
+              // Write assistant reasoning to reasoning log
+              const reasoningText = json.message?.content?.[0]?.text;
+              if (reasoningText) {
+                reasoningStream.write(reasoningText + "\n");
+              }
               break;
-            case "tool_code":
-            case "final_answer":
-              // Write to main log and console
-              process.stdout.write(json.content);
-              logStream.write(json.content);
-              fullOutput += json.content;
+            case "result":
+              // Write final result to main log and console
+              const resultText = json.result;
+              if (resultText) {
+                process.stdout.write(resultText);
+                logStream.write(resultText);
+                fullOutput += resultText;
+              }
               break;
             default:
-              // Handle other types by writing to main log
-              if (json.content) {
-                process.stdout.write(json.content);
-                logStream.write(json.content);
-                fullOutput += json.content;
-              }
+              // Silently ignore other JSON types (system, etc.)
               break;
           }
         } catch (e) {
@@ -113,9 +121,9 @@ export function runStreaming(
       logStream.write(footer + footer2 + footer3);
       logStream.end();
       
-      // Close thoughts stream
-      thoughtsStream.write(footer + footer2 + footer3);
-      thoughtsStream.end();
+      // Close reasoning stream
+      reasoningStream.write(footer + footer2 + footer3);
+      reasoningStream.end();
       
       resolve({ code: code ?? 1, output: fullOutput });
     });
