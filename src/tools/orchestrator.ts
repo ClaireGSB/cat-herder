@@ -99,7 +99,7 @@ async function executeStep(
   const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt, thoughtsLogFile);
   if (code !== 0) {
     updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check log for details: ${logFile}`);
+    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the chain of thought log: ${thoughtsLogFile}`);
   }
 
   await runCheck(check, projectRoot);

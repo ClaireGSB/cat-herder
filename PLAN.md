@@ -20,7 +20,7 @@ This update will introduce a new logging mechanism. The tool will generate a sec
 
 -   [x] **Update `src/tools/proc.ts`**: Modify the `runStreaming` function to support a new `thoughtsLogPath` and pass a `--thinking-log` flag to the `claude` CLI.
 -   [x] **Modify `src/tools/orchestrator.ts`**: Update the `executeStep` and `runTask` functions to generate the path for the new thoughts log and pass it to the process runner.
--   [ ] **Enhance Error Messages**: Update error handling to reference both the output log and the new thoughts log to make debugging easier.
+-   [x] **Enhance Error Messages**: Update error handling to reference both the output log and the new thoughts log to make debugging easier.
 -   [ ] **Update Documentation**: Add a new section to `README.md` explaining the new logging feature and the purpose of the `.thoughts.log` files.
 
 ---
