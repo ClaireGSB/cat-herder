@@ -19,10 +19,16 @@ module.exports = {
   manageGitBranch: true,
 
   /**
-   * Defines the sequence of steps in the development workflow.
-   * The orchestrator will execute these steps in order.
+   * Default pipeline to use when none is specified.
    */
-  pipeline: [
+  defaultPipeline: 'default',
+
+  /**
+   * Multiple named pipelines for different types of tasks.
+   * Each pipeline defines a sequence of steps to execute.
+   */
+  pipelines: {
+    default: [
     {
       name: "plan",
       command: "plan-task",
@@ -65,5 +71,16 @@ module.exports = {
       check: { type: "none" },
       // No fileAccess restriction for review step - allows any necessary fixes
     },
-  ],
+    ],
+    "docs-only": [
+       {
+        name: "docs",
+        command: "docs-update",
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["README.md", "docs/**/*", "*.md"]
+        }
+      }
+    ]
+  },
 };

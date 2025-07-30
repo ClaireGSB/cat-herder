@@ -37,9 +37,10 @@ program
 program
   .command("run <taskPath>")
   .description("Runs the automated workflow for a specific task file.")
-  .action(async (taskPath) => {
+  .option("-p, --pipeline <name>", "Specify the pipeline to run, overriding config and task defaults.")
+  .action(async (taskPath, options) => {
     try {
-      await runTask(taskPath);
+      await runTask(taskPath, options.pipeline);
     } catch (error: any) {
       console.error(pc.red(`\nWorkflow failed: ${error.message}`));
       process.exit(1);
@@ -63,7 +64,10 @@ program
 
       if (isValid) {
         console.log(pc.green("✔ Pipeline configuration is valid."));
-        console.log(pc.gray(`  › Found ${config.pipeline.length} steps.`));
+        const stepCount = config.pipelines 
+          ? Object.values(config.pipelines).reduce((total, pipeline) => total + pipeline.length, 0)
+          : config.pipeline?.length || 0;
+        console.log(pc.gray(`  › Found ${stepCount} steps.`));
         return;
       }
 
