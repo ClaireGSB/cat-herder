@@ -21,7 +21,7 @@ This change will introduce a new `pipelines` object in the configuration, where 
 ## Summary Checklist
 
 -   [x] **Configuration:** Update the config schema and template to support a `pipelines` object and a `defaultPipeline` key.
--   [ ] **CLI:** Add a `--pipeline <name>` option to the `run` command.
+-   [x] **CLI:** Add a `--pipeline <name>` option to the `run` command.
 -   [ ] **Task Parsing:** Add logic to parse a `pipeline` key from a task file's YAML frontmatter.
 -   [ ] **Orchestrator:** Implement the core logic to select and execute the correct pipeline based on the new priority rules.
 -   [ ] **State:** Update the task status file to record which pipeline was used.

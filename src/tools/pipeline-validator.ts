@@ -127,7 +127,18 @@ async function main() {
   const status: TaskStatus = JSON.parse(fs.readFileSync(latestStateFile, "utf8"));
   
   // 4. Find the current step's rules in the pipeline
-  const currentStepConfig = config.pipeline.find(step => step.name === status.currentStep);
+  let currentStepConfig;
+  if (config.pipelines) {
+    // Multi-pipeline format - need to determine which pipeline is active
+    // For now, check all pipelines for the step (this could be improved)
+    for (const pipeline of Object.values(config.pipelines)) {
+      currentStepConfig = pipeline.find(step => step.name === status.currentStep);
+      if (currentStepConfig) break;
+    }
+  } else if (config.pipeline) {
+    // Legacy single pipeline format
+    currentStepConfig = config.pipeline.find(step => step.name === status.currentStep);
+  }
   if (!currentStepConfig) {
     block(`Error: Could not find step "${status.currentStep}" in claude.config.js pipeline.`);
     return;

@@ -21,12 +21,14 @@ export interface ClaudeProjectConfig {
   logsPath: string;
   structureIgnore: string[];
   manageGitBranch?: boolean;
-  pipelines: PipelinesMap;
+  pipelines?: PipelinesMap;
   defaultPipeline?: string;
+  // Backward compatibility - will be removed in future versions
+  pipeline?: PipelineStep[];
 }
 
 // Default configuration if the user's file is missing parts
-const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline"> = {
+const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" | "pipeline"> = {
   taskFolder: "claude-Tasks",
   statePath: ".claude/state",
   logsPath: ".claude/logs",

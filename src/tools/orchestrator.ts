@@ -161,7 +161,7 @@ async function executeStep(
   updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
 }
 
-export async function runTask(taskRelativePath: string) {
+export async function runTask(taskRelativePath: string, pipelineOption?: string) {
   const config = await getConfig();
   if (!config) {
     throw new Error("Failed to load configuration.");
@@ -193,7 +193,27 @@ export async function runTask(taskRelativePath: string) {
   // 3. Ensure we are on the correct Git branch (now respects the user's config).
   const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
 
-  // 4. Proceed with execution.
+  // 4. Determine which pipeline to use
+  let selectedPipeline: PipelineStep[];
+  if (config.pipelines) {
+    // New multi-pipeline format
+    const pipelineName = pipelineOption || config.defaultPipeline || Object.keys(config.pipelines)[0];
+    if (!pipelineName || !config.pipelines[pipelineName]) {
+      throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
+    }
+    selectedPipeline = config.pipelines[pipelineName];
+    
+    if (pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from --pipeline option: "${pipelineName}"`));
+    else console.log(pc.cyan(`[Orchestrator] Using default pipeline: "${pipelineName}"`));
+  } else {
+    // Backward compatibility: old single pipeline format
+    selectedPipeline = (config as any).pipeline;
+    if (pipelineOption) {
+      console.log(pc.yellow(`[Orchestrator] Warning: --pipeline option ignored. Configuration uses legacy single pipeline format.`));
+    }
+  }
+
+  // 5. Proceed with execution.
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') s.taskId = taskId;
     s.branch = branchName;
@@ -203,7 +223,7 @@ export async function runTask(taskRelativePath: string) {
   mkdirSync(logsDir, { recursive: true });
   const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
 
-  for (const [index, stepConfig] of config.pipeline.entries()) {
+  for (const [index, stepConfig] of selectedPipeline.entries()) {
     const { name, command, check } = stepConfig;
     const currentStepStatus = readStatus(statusFile);
     if (currentStepStatus.steps[name] === 'done') {
@@ -218,7 +238,7 @@ export async function runTask(taskRelativePath: string) {
     context.taskDefinition = contextProviders.taskDefinition(projectRoot, taskContent);
     
     // Include plan content for any step after "plan"
-    const planStepIndex = config.pipeline.findIndex(step => step.name === 'plan');
+    const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
     if (planStepIndex !== -1 && index > planStepIndex) {
       try {
         context.planContent = contextProviders.planContent(projectRoot, taskContent);
@@ -233,7 +253,7 @@ export async function runTask(taskRelativePath: string) {
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
     
     // **REFACTORED PART**: Assemble the full prompt using the new function
-    const fullPrompt = assemblePrompt(config.pipeline, name, context, commandInstructions);
+    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
