@@ -16,16 +16,16 @@ This change modifies the `init` command's behavior. Now, if `settings.json` exis
 
 ## Summary Checklist
 
-- [ ] Modify the `init` command to inspect `settings.json` if it exists.
-- [ ] Implement logic to parse the `settings.json` and check for the validation hook.
-- [ ] Add a user prompt using Node's `readline` module to ask for permission.
-- [ ] Implement a non-destructive merge function to add the hook to the JSON object.
-- [ ] Write the updated configuration back to the file if the user agrees.
+- [x] Modify the `init` command to inspect `settings.json` if it exists.
+- [x] Implement logic to parse the `settings.json` and check for the validation hook.
+- [x] Add a user prompt using Node's `readline` module to ask for permission.
+- [x] Implement a non-destructive merge function to add the hook to the JSON object.
+- [x] Write the updated configuration back to the file if the user agrees.
 - [ ] Update the `README.md` to document this new, safer behavior.
 
 ## Detailed Implementation Steps
 
-### 1. Update `init.ts` to Check Existing `settings.json`
+### 1. Update `init.ts` to Check Existing `settings.json` ✅ DONE
 
 *   **Objective:** Change the `init` command to intelligently handle an existing `.claude/settings.json` file instead of simply skipping it.
 *   **Task:** Modify the `init` function in `src/init.ts`. After copying the template files, add a new function call that specifically processes the `settings.json` file.
