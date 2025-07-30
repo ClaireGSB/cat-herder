@@ -2,12 +2,32 @@ import { execSync } from "node:child_process";
 import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
+import yaml from 'js-yaml';
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
+
+/**
+ * Parses YAML frontmatter from a task file to extract pipeline configuration.
+ * @param content The raw content of the task file.
+ * @returns An object containing the pipeline name (if specified) and the task body without frontmatter.
+ */
+function parseTaskFrontmatter(content: string): { pipeline?: string; body: string } {
+  const match = content.match(/^---\s*([\s\S]+?)\s*---/);
+  if (match) {
+    try {
+      const frontmatter = yaml.load(match[1]) as Record<string, any> | undefined;
+      const body = content.substring(match[0].length).trim();
+      return { pipeline: frontmatter?.pipeline, body };
+    } catch {
+      return { body: content };
+    }
+  }
+  return { body: content };
+}
 
 /**
  * Assembles the complete prompt for Claude for a given pipeline step.
@@ -193,35 +213,43 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   // 3. Ensure we are on the correct Git branch (now respects the user's config).
   const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
 
-  // 4. Determine which pipeline to use
+  // 4. Parse the task file to extract frontmatter
+  const rawTaskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
+  const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
+
+  // 5. Determine which pipeline to use (priority: CLI option > task frontmatter > config default > first available)
   let selectedPipeline: PipelineStep[];
+  let pipelineName: string;
   if (config.pipelines) {
     // New multi-pipeline format
-    const pipelineName = pipelineOption || config.defaultPipeline || Object.keys(config.pipelines)[0];
+    pipelineName = pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
     if (!pipelineName || !config.pipelines[pipelineName]) {
       throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
     }
     selectedPipeline = config.pipelines[pipelineName];
     
+    // Log which source determined the pipeline selection
     if (pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from --pipeline option: "${pipelineName}"`));
+    else if (taskPipelineName) console.log(pc.cyan(`[Orchestrator] Using pipeline from task frontmatter: "${pipelineName}"`));
     else console.log(pc.cyan(`[Orchestrator] Using default pipeline: "${pipelineName}"`));
   } else {
     // Backward compatibility: old single pipeline format
     selectedPipeline = (config as any).pipeline;
+    pipelineName = 'default'; // fallback name for legacy format
     if (pipelineOption) {
       console.log(pc.yellow(`[Orchestrator] Warning: --pipeline option ignored. Configuration uses legacy single pipeline format.`));
     }
   }
 
-  // 5. Proceed with execution.
+  // 6. Proceed with execution.
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') s.taskId = taskId;
     s.branch = branchName;
+    s.pipeline = pipelineName;
   });
 
   const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
   mkdirSync(logsDir, { recursive: true });
-  const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
 
   for (const [index, stepConfig] of selectedPipeline.entries()) {
     const { name, command, check } = stepConfig;

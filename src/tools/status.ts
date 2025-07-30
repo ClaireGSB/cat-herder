@@ -6,6 +6,7 @@ export type TaskStatus = {
   version: number;
   taskId: string;
   branch: string;
+  pipeline?: string;
   currentStep: string;
   phase: Phase;
   steps: Record<string, Phase>;
