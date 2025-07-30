@@ -233,7 +233,11 @@ The orchestrator selects a pipeline to run based on the following priority order
 
 1. **CLI Flag:** Use the `--pipeline <name>` option when running a task:
    ```bash
+   # Direct command
    claude-project run claude-Tasks/my-task.md --pipeline docs-only
+   
+   # Via npm script (note the -- to pass arguments through)
+   npm run claude:run -- claude-Tasks/my-task.md --pipeline docs-only
    ```
 
 2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
@@ -400,7 +404,7 @@ All commands are available directly via the `claude-project` executable.
 
 The `init` command adds these helpful scripts to your project's `package.json`:
 
--   `npm run claude:run <path>`: The recommended way to run a task.
+-   `npm run claude:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
 -   `npm run claude:watch`: Watches for new tasks.
 -   `npm run claude:status`: Shows the latest task status.
 -   `npm run claude:tui`: Launches the terminal UI.
