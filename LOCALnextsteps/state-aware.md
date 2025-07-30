@@ -62,7 +62,7 @@ Now, let's update the main `runTask` function in `src/files/tools/orchestrator.t
 // Make sure to import readStatus
 import { readStatus, updateStatus } from "./status.js";
 
-// ... (getProjectStructure, createPrompt, step, testsShouldFail/Pass functions are all the same) ...
+// ... (createPrompt, step, testsShouldFail/Pass functions are all the same) ...
 
 export async function runTask(taskPath: string) {
   execSync("mkdir -p state logs", { stdio: "ignore" });

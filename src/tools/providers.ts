@@ -7,15 +7,6 @@ import { glob } from "glob";
  * This allows the orchestrator to dynamically build the context for each step.
  */
 export const contextProviders: Record<string, (projectRoot: string, taskContent: string) => string> = {
-  projectStructure: (projectRoot) => {
-    const files = glob.sync("**/*", { 
-      cwd: projectRoot, 
-      ignore: ["node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock"], 
-      nodir: true, 
-      dot: true 
-    });
-    return files.join("\n");
-  },
   taskDefinition: (_projectRoot, taskContent) => taskContent,
   planContent: (projectRoot) => {
     const planPath = path.join(projectRoot, "PLAN.md");

@@ -99,12 +99,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       }
     }
 
-    // --- Context Validation ---
-    for (const contextKey of step.context) {
-      if (!knownContextKeys.includes(contextKey)) {
-        errors.push(`Step ${stepNum} ('${step.name}'): Unknown context provider '${contextKey}'. Available: ${knownContextKeys.join(", ")}`);
-      }
-    }
+    // --- Context validation removed - context is now handled automatically by the orchestrator ---
     
     // --- Check Validation ---
     if (!validCheckTypes.includes(step.check.type)) {
