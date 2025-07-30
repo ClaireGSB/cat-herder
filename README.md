@@ -172,7 +172,7 @@ module.exports = {
     {
       name: "plan",
       command: "plan-task",
-      context: ["projectStructure", "taskDefinition"],
+      context: ["taskDefinition"],
       check: { type: "fileExists", path: "PLAN.md" },
       fileAccess: {
         allowWrite: ["PLAN.md"]
@@ -199,7 +199,7 @@ module.exports = {
     {
       name: "docs",
       command: "docs-update",
-      context: ["planContent", "projectStructure"],
+      context: ["planContent"],
       check: { type: "none" },
       fileAccess: {
         allowWrite: ["README.md", "docs/**/*", "*.md"]
@@ -217,7 +217,6 @@ module.exports = {
 ```
 
 **Available Context Providers:**
-- `projectStructure`: A list of all files in your project
 - `taskDefinition`: The content of the task markdown file
 - `planContent`: The content of the generated PLAN.md file
 

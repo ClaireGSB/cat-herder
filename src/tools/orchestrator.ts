@@ -1,13 +1,64 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync, createWriteStream } from "node:fs";
+import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
-import { getConfig, getProjectRoot, ClaudeProjectConfig } from "../config.js";
+import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
+
+/**
+ * Assembles the complete prompt for Claude for a given pipeline step.
+ * It provides context about the entire workflow and the current step.
+ *
+ * @param pipeline - The entire pipeline configuration array.
+ * @param currentStepName - The `name` of the step Claude is currently executing.
+ * @param context - A record of contextual information (e.g., task definition, plan content).
+ * @param commandInstructions - The specific instructions loaded from the command markdown file.
+ * @returns The fully assembled prompt string to be sent to Claude.
+ */
+function assemblePrompt(
+  pipeline: PipelineStep[],
+  currentStepName: string,
+  context: Record<string, string>,
+  commandInstructions: string
+): string {
+  // 1. Explain that the task is part of a larger, multi-step process.
+  const intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
+
+  // 2. Provide the entire pipeline definition as a simple numbered list.
+  const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
+  const pipelineContext = `This is the full pipeline for your awareness:\n${pipelineStepsList}`;
+
+  // 3. Clearly state which step Claude is responsible for right now.
+  const responsibility = `You are responsible for executing step "${currentStepName}".`;
+
+  // 4. Assemble the specific context data required for this step.
+  let contextString = "";
+  for (const [title, content] of Object.entries(context)) {
+    contextString += `--- ${title.toUpperCase()} ---\n\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
+  }
+  
+  if (contextString) { // Check if there's any context left to display
+      contextString = contextString.trim();
+  }
+
+
+  // 5. Combine all parts into the final prompt.
+  return [
+    intro,
+    pipelineContext,
+    responsibility,
+    contextString,
+    `--- YOUR INSTRUCTIONS FOR THE "${currentStepName}" STEP ---`,
+    commandInstructions,
+  ]
+    .filter(Boolean) // Remove any empty strings
+    .join("\n\n");
+}
+
 
 /**
  * Converts a task file path into a Git-friendly branch name.
@@ -96,47 +147,10 @@ async function executeStep(
   console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  // Debug logging before Claude CLI execution
-  const timestamp = new Date().toISOString();
-  // console.log(pc.gray(`[${timestamp}] [DEBUG] About to execute: claude /project:${command}`));
-  // console.log(pc.gray(`[DEBUG] Working directory: ${projectRoot}`));
-  // console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
-  // console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
-
-  // Set up parent process stderr capture to catch hook output
-  const reasoningLogStream = createWriteStream(reasoningLogFile, { flags: "a" });
-  const originalStderrWrite = process.stderr.write;
-  const captureTimestamp = new Date().toISOString();
-  
-  reasoningLogStream.write(`[${captureTimestamp}] [PARENT-STDERR-CAPTURE] Starting parent stderr monitoring\n`);
-  
-  // Override stderr to capture hook output
-  process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
-    const hookTimestamp = new Date().toISOString();
-    reasoningLogStream.write(`[${hookTimestamp}] [PARENT-STDERR] ${chunk.toString()}`);
-    
-    // Call original stderr write
-    return originalStderrWrite.call(this, chunk, encoding, callback);
-  };
-
-  try {
-    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
-    
-    // Restore original stderr
-    process.stderr.write = originalStderrWrite;
-    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Ending parent stderr monitoring\n`);
-    reasoningLogStream.end();
-    
-    if (code !== 0) {
-      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
-    }
-  } catch (error) {
-    // Ensure stderr is restored even on error
-    process.stderr.write = originalStderrWrite;
-    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Error occurred, ending monitoring\n`);
-    reasoningLogStream.end();
-    throw error;
+  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
+  if (code !== 0) {
+    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
   }
 
   await runCheck(check, projectRoot);
@@ -193,27 +207,29 @@ export async function runTask(taskRelativePath: string) {
     const { name, command, context: contextKeys, check } = stepConfig;
     const currentStepStatus = readStatus(statusFile);
     if (currentStepStatus.steps[name] === 'done') {
-      console.log(pc.cyan(`[Orchestrator] Skipping '${name}' (already done).`));
+      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
+    
+    // Gather context from providers
     const context: Record<string, string> = {};
     for (const key of contextKeys) {
       context[key] = contextProviders[key](projectRoot, taskContent);
     }
-
+    
+    // Read the specific command instructions for the current step
     const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
-    let fullPrompt = "";
-    for (const [title, content] of Object.entries(context)) {
-      fullPrompt += `--- ${title.toUpperCase()} ---\n\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
-    }
-    fullPrompt += `--- YOUR INSTRUCTIONS ---\n${commandInstructions}`;
+    
+    // **REFACTORED PART**: Assemble the full prompt using the new function
+    const fullPrompt = assemblePrompt(config.pipeline, name, context, commandInstructions);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
+    
     await executeStep(name, command, fullPrompt, statusFile, logFile, reasoningLogFile, check);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
-  console.log(pc.cyan("\n[Orchestrator] All steps completed successfully!"));
+  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
 }

@@ -26,7 +26,7 @@ module.exports = {
     {
       name: "plan",
       command: "plan-task",
-      context: ["projectStructure", "taskDefinition"],
+      context: ["taskDefinition"],
       // Check that the PLAN.md file was created.
       check: { type: "fileExists", path: "PLAN.md" },
       fileAccess: {
