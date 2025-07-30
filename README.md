@@ -137,11 +137,10 @@ echo "\n✅ Fresh test environment is ready!"
 
 ### The Configurable Pipeline (`claude.config.js`)
 
-This tool is driven by a `pipeline` array in your `claude.config.js` file. You have full control to reorder, remove, or even add new steps to this pipeline. Each step is an object with four key properties:
+This tool is driven by a `pipeline` array in your `claude.config.js` file. You have full control to reorder, remove, or even add new steps to this pipeline. Each step is an object with these key properties:
 
 -   `name`: A unique identifier for the step.
 -   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
--   `context`: An array of data "providers" to build the prompt for the AI.
 -   `check`: A validation object to confirm the step was successful.
 
 ```javascript
@@ -172,7 +171,6 @@ module.exports = {
     {
       name: "plan",
       command: "plan-task",
-      context: ["taskDefinition"],
       check: { type: "fileExists", path: "PLAN.md" },
       fileAccess: {
         allowWrite: ["PLAN.md"]
@@ -181,7 +179,6 @@ module.exports = {
     {
       name: "write_tests",
       command: "write-tests",
-      context: ["planContent", "taskDefinition"],
       check: { type: "shell", command: "npm test", expect: "fail" },
       fileAccess: {
         allowWrite: ["test/**/*", "tests/**/*"]
@@ -190,7 +187,6 @@ module.exports = {
     {
       name: "implement",
       command: "implement",
-      context: ["planContent"],
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
         allowWrite: ["src/**/*"]
@@ -199,7 +195,6 @@ module.exports = {
     {
       name: "docs",
       command: "docs-update",
-      context: ["planContent"],
       check: { type: "none" },
       fileAccess: {
         allowWrite: ["README.md", "docs/**/*", "*.md"]
@@ -208,7 +203,6 @@ module.exports = {
     {
       name: "review",
       command: "self-review",
-      context: [],
       check: { type: "none" },
       // No fileAccess restriction for review step - allows any necessary fixes
     },
@@ -216,9 +210,8 @@ module.exports = {
 };
 ```
 
-**Available Context Providers:**
-- `taskDefinition`: The content of the task markdown file
-- `planContent`: The content of the generated PLAN.md file
+**Automatic Context Assembly:**
+The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition and any generated plans. No manual configuration of context providers is required.
 
 **Check Types:**
 ```javascript
@@ -246,7 +239,6 @@ Add the `fileAccess` property to any pipeline step:
 {
   name: "implement",
   command: "implement",
-  context: ["planContent"],
   check: { type: "shell", command: "npm test", expect: "pass" },
   fileAccess: {
     allowWrite: ["src/**/*", "lib/**/*"]

@@ -18,7 +18,7 @@ This change will refactor the system to build a standardized, more intelligent p
 -   [x] **Providers**: Simplify `src/tools/providers.ts` by removing the `projectStructure` provider. *(Already completed)*
 -   [x] **Templates**: Update `src/templates/claude.config.js` to remove all `context` arrays from the default pipeline steps.
 -   [x] **Prompts**: Update the `src/dot-claude/commands/plan-task.md` prompt to reflect the removal of the `projectStructure` context.
--   [ ] **Documentation**: Update the main `README.md` to reflect the simplified configuration and new prompt logic.
+-   [x] **Documentation**: Update the main `README.md` to reflect the simplified configuration and new prompt logic.
 
 ### **Detailed Implementation Steps**
 
