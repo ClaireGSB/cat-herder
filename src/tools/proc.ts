@@ -91,11 +91,12 @@ export function runStreaming(
           const json = JSON.parse(line);
           switch (json.type) {
             case "assistant":
-              // Write assistant reasoning to reasoning log with timestamp
+              // Write assistant reasoning with content type
               const reasoningText = json.message?.content?.[0]?.text;
               if (reasoningText) {
                 const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                reasoningStream.write(`[${timestamp}] ${reasoningText}\n`);
+                const contentType = json.message?.content?.[0]?.type || 'unknown';
+                reasoningStream.write(`[${timestamp}] [ASSISTANT] [${contentType.toUpperCase()}] ${reasoningText}\n`);
               }
               break;
             case "result":
@@ -111,11 +112,23 @@ export function runStreaming(
                 reasoningStream.write(`[${timestamp}] [FINAL OUTPUT] ${resultText}\n`);
               }
               break;
+            case "user":
+              // Write user messages with content type (captures hook output)
+              {
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+                const contentItem = json.message?.content?.[0];
+                const contentType = contentItem?.type || 'unknown';
+                const userContent = contentItem?.content || JSON.stringify(contentItem);
+                reasoningStream.write(`[${timestamp}] [USER] [${contentType.toUpperCase()}] ${userContent}\n`);
+              }
+              break;
             default:
               // Log unknown JSON types to reasoning log for debugging
-              const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-              reasoningStream.write(`[${timestamp}] [DEBUG] Unknown JSON type: ${json.type}\n`);
-              reasoningStream.write(`[${timestamp}] [DEBUG] Content: ${JSON.stringify(json, null, 2)}\n\n`);
+              {
+                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+                reasoningStream.write(`[${timestamp}] [DEBUG] Unknown JSON type: ${json.type}\n`);
+                reasoningStream.write(`[${timestamp}] [DEBUG] Content: ${JSON.stringify(json, null, 2)}\n\n`);
+              }
               break;
           }
         } catch (e) {
