@@ -21,7 +21,7 @@ This change modifies the `init` command's behavior. Now, if `settings.json` exis
 - [x] Add a user prompt using Node's `readline` module to ask for permission.
 - [x] Implement a non-destructive merge function to add the hook to the JSON object.
 - [x] Write the updated configuration back to the file if the user agrees.
-- [ ] Update the `README.md` to document this new, safer behavior.
+- [x] Update the `README.md` to document this new, safer behavior.
 
 ## Detailed Implementation Steps
 
