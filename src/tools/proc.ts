@@ -84,8 +84,6 @@ export function runStreaming(
       for (const line of lines) {
         if (line.trim() === '') continue;
         
-        // Log raw line before JSON parsing attempt
-        reasoningStream.write(`[DEBUG-RAW] ${line}\n`);
         
         try {
           const json = JSON.parse(line);
@@ -94,7 +92,15 @@ export function runStreaming(
           const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
           const contentItem = json.message?.content?.[0];
           const contentType = contentItem?.type || json.subtype || 'data';
-          const content = contentItem?.text || contentItem?.content || json.result || JSON.stringify(json, null, 2);
+          
+          let content;
+          if (contentItem?.type === 'tool_use') {
+            // For tool use, show just tool name and input
+            content = `${contentItem.name}(${JSON.stringify(contentItem.input)})`;
+          } else {
+            // For other content, use existing logic
+            content = contentItem?.text || contentItem?.content || json.result || JSON.stringify(json, null, 2);
+          }
           
           reasoningStream.write(`[${timestamp}] [${json.type.toUpperCase()}] [${contentType.toUpperCase()}] ${content}\n`);
           
@@ -108,11 +114,6 @@ export function runStreaming(
             }
           }
         } catch (e) {
-          // Log JSON parsing failures to reasoning log for debugging
-          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-          reasoningStream.write(`[${timestamp}] [DEBUG] JSON Parse Failed: ${line}\n`);
-          reasoningStream.write(`[${timestamp}] [DEBUG] Error: ${e instanceof Error ? e.message : String(e)}\n\n`);
-          
           // If JSON parsing fails, treat as regular output
           process.stdout.write(line + "\n");
           logStream.write(line + "\n");
