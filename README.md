@@ -38,7 +38,7 @@ npm install
 4.  **Run the automated workflow:**
 Use the npm script to execute the sample task.
 ```bash
-npm run claude:run claude-Tasks/task-001-sample.md
+npm run claude:run -- claude-Tasks/task-001-sample.md
 ```
 
 The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
@@ -104,7 +104,7 @@ rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
 # In your my-test-app directory
-npm run claude:run claude-Tasks/task-001-sample.md
+npm run claude:run -- claude-Tasks/task-001-sample.md
 ```
 
 4. **Removing old test repo and creating fresh one** 
@@ -232,34 +232,34 @@ module.exports = {
 The orchestrator selects a pipeline to run based on the following priority order:
 
 1. **CLI Flag:** Use the `--pipeline <name>` option when running a task:
-   ```bash
-   # Direct command
-   claude-project run claude-Tasks/my-task.md --pipeline docs-only
-   
-   # Via npm script (note the -- to pass arguments through)
-   npm run claude:run -- claude-Tasks/my-task.md --pipeline docs-only
-   ```
+```bash
+# Direct command
+claude-project run claude-Tasks/my-task.md --pipeline docs-only
+
+# Via npm script (note the -- to pass arguments through)
+npm run claude:run -- claude-Tasks/my-task.md --pipeline docs-only
+```
 
 2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
-   ```markdown
-   ---
-   pipeline: docs-only
-   ---
-   # My Documentation Task
-   
-   Update the API documentation to reflect recent changes.
-   ```
+```markdown
+---
+pipeline: docs-only
+---
+# My Documentation Task
+
+Update the API documentation to reflect recent changes.
+```
 
 3. **Configuration Default:** The `defaultPipeline` property in your `claude.config.js`:
-   ```javascript
-   module.exports = {
-     defaultPipeline: "default",
-     pipelines: {
-       default: [...],
-       "docs-only": [...]
-     }
-   };
-   ```
+```javascript
+module.exports = {
+  defaultPipeline: "default",
+  pipelines: {
+    default: [...],
+    "docs-only": [...]
+  }
+};
+```
 
 4. **First Available:** If no default is specified, the first pipeline defined in the `pipelines` object is used.
 
