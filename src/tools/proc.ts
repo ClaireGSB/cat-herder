@@ -55,13 +55,7 @@ export function runStreaming(
   return new Promise((resolve) => {
     const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
 
-    // Debug logging immediately after spawn
     const spawnTimestamp = new Date().toISOString();
-    console.log(pc.gray(`[${spawnTimestamp}] [DEBUG] Process spawned, PID: ${p.pid}`));
-    reasoningStream.write(`[${spawnTimestamp}] [PROCESS-DEBUG] Claude CLI process spawned, PID: ${p.pid}\n`);
-    reasoningStream.write(`[${spawnTimestamp}] [PROCESS-DEBUG] Command: ${cmd} ${finalArgs.join(" ")}\n`);
-    reasoningStream.write(`[${spawnTimestamp}] [PROCESS-DEBUG] Working directory: ${cwd}\n\n`);
-
     // Write stdin data if provided
     if (stdinData) {
       p.stdin.write(stdinData);
@@ -72,11 +66,7 @@ export function runStreaming(
     p.stdout.on("data", (chunk) => {
       const chunkStr = chunk.toString();
       buffer += chunkStr;
-      
-      // Debug: Log when first stdout data arrives
-      const dataTimestamp = new Date().toISOString();
-      reasoningStream.write(`[${dataTimestamp}] [STREAM-DEBUG] Received ${chunkStr.length} bytes on stdout\n`);
-      
+            
       // Process complete lines
       const lines = buffer.split('\n');
       buffer = lines.pop() || ''; // Keep incomplete line in buffer

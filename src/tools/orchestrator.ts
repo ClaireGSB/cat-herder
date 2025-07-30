@@ -98,10 +98,10 @@ async function executeStep(
 
   // Debug logging before Claude CLI execution
   const timestamp = new Date().toISOString();
-  console.log(pc.gray(`[${timestamp}] [DEBUG] About to execute: claude /project:${command}`));
-  console.log(pc.gray(`[DEBUG] Working directory: ${projectRoot}`));
-  console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
-  console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
+  // console.log(pc.gray(`[${timestamp}] [DEBUG] About to execute: claude /project:${command}`));
+  // console.log(pc.gray(`[DEBUG] Working directory: ${projectRoot}`));
+  // console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
+  // console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
 
   // Set up parent process stderr capture to catch hook output
   const reasoningLogStream = createWriteStream(reasoningLogFile, { flags: "a" });
