@@ -53,57 +53,81 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     errors.push(".claude/settings.json not found. Please run `claude-project init` to create a default one.");
   }
 
-  if (!config.pipeline || !Array.isArray(config.pipeline)) {
-    errors.push("Configuration is missing a valid 'pipeline' array.");
+  // 2. Validate pipelines structure
+  let pipelines: { [key: string]: any[] };
+  
+  if (config.pipelines && typeof config.pipelines === 'object' && Object.keys(config.pipelines).length > 0) {
+    // New multi-pipeline format
+    pipelines = config.pipelines;
+    
+    // Validate defaultPipeline if specified
+    if (config.defaultPipeline && !config.pipelines[config.defaultPipeline]) {
+      errors.push(`The defaultPipeline "${config.defaultPipeline}" is not defined in the 'pipelines' object.`);
+    }
+  } else if ((config as any).pipeline && Array.isArray((config as any).pipeline)) {
+    // Backward compatibility: old single pipeline format
+    pipelines = { default: (config as any).pipeline };
+  } else {
+    errors.push("Configuration is missing a 'pipelines' object with at least one defined pipeline, or a legacy 'pipeline' array.");
     return { isValid: false, errors, missingPermissions: [] };
   }
 
-  // 2. Loop through each step in the pipeline
-  for (const [index, step] of config.pipeline.entries()) {
-    const stepNum = index + 1;
-
-    // --- Basic Step Structure Validation ---
-    if (!step.command) {
-        errors.push(`Step ${stepNum} ('${step.name}'): is missing the 'command' property.`);
-        continue;
-    }
-    if (!step.check || !step.check.type) {
-        errors.push(`Step ${stepNum} ('${step.name}'): is missing a valid 'check' object with a 'type' property.`);
-        continue;
+  // 3. Loop through each pipeline and validate its steps
+  for (const [pipelineName, pipeline] of Object.entries(pipelines)) {
+    if (!Array.isArray(pipeline)) {
+      errors.push(`Pipeline "${pipelineName}" is not a valid array of steps.`);
+      continue;
     }
 
-    // --- Command File and Permission Validation ---
-    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-    if (!fs.existsSync(commandFilePath)) {
-      errors.push(`Step ${stepNum} ('${step.name}'): Command file not found at .claude/commands/${step.command}.md`);
-    } else {
-      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
-      const frontmatter = parseFrontmatter(commandContent);
-      const toolsValue = frontmatter?.['allowed-tools'];
-      
-      let requiredTools: string[] = [];
+    for (const [index, step] of pipeline.entries()) {
+      const stepId = `Pipeline '${pipelineName}', Step ${index + 1} ('${step.name || 'unnamed'}')`;
 
-       if (typeof toolsValue === 'string') {
-        requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean); // filter(Boolean) removes empty strings
-      } else if (Array.isArray(toolsValue)) {
-        requiredTools = toolsValue;
+      // --- Basic Step Structure Validation ---
+      if (!step.name) {
+        errors.push(`${stepId}: is missing the 'name' property.`);
       }
-      
-      for (const tool of requiredTools) {
-        if (tool && !allowedPermissions.includes(tool)) {
-          // Instead of just a generic error, we add to both arrays
-          const errorMessage = `Step ${stepNum} ('${step.name}'): Requires missing permission "${tool}"`;
-          errors.push(errorMessage);
-          missingPermissions.push(tool); // Add to the structured list
+      if (!step.command) {
+        errors.push(`${stepId}: is missing the 'command' property.`);
+        continue;
+      }
+      if (!step.check || !step.check.type) {
+        errors.push(`${stepId}: is missing a valid 'check' object with a 'type' property.`);
+        continue;
+      }
+
+      // --- Command File and Permission Validation ---
+      const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+      if (!fs.existsSync(commandFilePath)) {
+        errors.push(`${stepId}: Command file not found at .claude/commands/${step.command}.md`);
+      } else {
+        const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
+        const frontmatter = parseFrontmatter(commandContent);
+        const toolsValue = frontmatter?.['allowed-tools'];
+        
+        let requiredTools: string[] = [];
+
+        if (typeof toolsValue === 'string') {
+          requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean); // filter(Boolean) removes empty strings
+        } else if (Array.isArray(toolsValue)) {
+          requiredTools = toolsValue;
+        }
+        
+        for (const tool of requiredTools) {
+          if (tool && !allowedPermissions.includes(tool)) {
+            // Instead of just a generic error, we add to both arrays
+            const errorMessage = `${stepId}: Requires missing permission "${tool}"`;
+            errors.push(errorMessage);
+            missingPermissions.push(tool); // Add to the structured list
+          }
         }
       }
-    }
 
-    // --- Context validation removed - context is now handled automatically by the orchestrator ---
-    
-    // --- Check Validation ---
-    if (!validCheckTypes.includes(step.check.type)) {
-      errors.push(`Step ${stepNum} ('${step.name}'): Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
+      // --- Context validation removed - context is now handled automatically by the orchestrator ---
+      
+      // --- Check Validation ---
+      if (!validCheckTypes.includes(step.check.type)) {
+        errors.push(`${stepId}: Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
+      }
     }
   }
 
