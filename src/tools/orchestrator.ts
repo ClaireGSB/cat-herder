@@ -204,17 +204,28 @@ export async function runTask(taskRelativePath: string) {
   const taskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
 
   for (const [index, stepConfig] of config.pipeline.entries()) {
-    const { name, command, context: contextKeys, check } = stepConfig;
+    const { name, command, check } = stepConfig;
     const currentStepStatus = readStatus(statusFile);
     if (currentStepStatus.steps[name] === 'done') {
       console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
     
-    // Gather context from providers
+    // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
-    for (const key of contextKeys) {
-      context[key] = contextProviders[key](projectRoot, taskContent);
+    
+    // Always include task definition
+    context.taskDefinition = contextProviders.taskDefinition(projectRoot, taskContent);
+    
+    // Include plan content for any step after "plan"
+    const planStepIndex = config.pipeline.findIndex(step => step.name === 'plan');
+    if (planStepIndex !== -1 && index > planStepIndex) {
+      try {
+        context.planContent = contextProviders.planContent(projectRoot, taskContent);
+      } catch (error) {
+        // If PLAN.md doesn't exist, skip including plan content
+        console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
+      }
     }
     
     // Read the specific command instructions for the current step

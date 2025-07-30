@@ -1,80 +1,170 @@
 
-
 # PLAN.md
 
-### **Title & Goal**
+### **Title**: Refactor Prompt Assembly and Simplify Configuration
 
-**Title:** Enhance Hook Logging to Include Reasoning Files
-
-**Goal:** Capture and log `stderr` output from `PreToolUse` hooks into the corresponding step's `.reasoning.log` file to provide a complete debugging trail.
+### **Goal**
+To simplify the prompt generation logic by removing the `context` array from the `claude.config.js` and assembling a more structured, consistent prompt in the orchestrator, while also deprecating the `projectStructure` context provider.
 
 ### **Description**
+The current implementation requires users to manually specify which context (like the task definition or plan content) should be included for each step in the `claude.config.js` file. This is repetitive, prone to error, and adds unnecessary complexity. Furthermore, the `projectStructure` provider can create overly large and inefficient prompts.
 
-Currently, when a `PreToolUse` hook (like the file access guardrail) blocks a tool, its error message is printed to the console and the main `.log` file, but it's missing from the `.reasoning.log`. This creates a gap in the AI's "thought process," making it difficult to understand precisely why it retried a command.
-
-This change will pipe the `stderr` from the `claude` CLI process (which includes hook output) into the reasoning log. The new behavior will ensure a single, chronological log file contains both the AI's reasoning *and* the system's automated feedback, streamlining the debugging process.
+This change will refactor the system to build a standardized, more intelligent prompt for every step. This new prompt will automatically include the most critical information—such as the overall pipeline, the current step's role, and the task definition—without requiring any user configuration. This will result in a simpler `claude.config.js`, a more robust workflow, and a better experience for the AI agent.
 
 ### **Summary Checklist**
 
--   [x] **`proc.ts`:** Update the `stderr` handler in the `runStreaming` function to also write to the reasoning log stream.
--   [ ] **Manual Test:** Verify the new logging behavior by intentionally triggering a hook failure.
--   [ ] **Documentation:** Update the `README.md` to reflect that reasoning logs now include hook output.
+-   [x] **Configuration**: Update `src/config.ts` to remove the `context` property from the `PipelineStep` interface.
+-   [x] **Orchestration**: Refactor `src/tools/orchestrator.ts` to implement the new, standardized prompt assembly logic.
+-   [x] **Providers**: Simplify `src/tools/providers.ts` by removing the `projectStructure` provider. *(Already completed)*
+-   [x] **Templates**: Update `src/templates/claude.config.js` to remove all `context` arrays from the default pipeline steps.
+-   [x] **Prompts**: Update the `src/dot-claude/commands/plan-task.md` prompt to reflect the removal of the `projectStructure` context.
+-   [ ] **Documentation**: Update the main `README.md` to reflect the simplified configuration and new prompt logic.
 
 ### **Detailed Implementation Steps**
 
-#### 1. Update `proc.ts` to Capture Hook Output
+#### 1. Update `src/config.ts`
+*   **Objective**: Remove the now-redundant `context` property from the user-facing configuration to simplify the `claude.config.js` file.
+*   **Task**:
+    1.  Open the `src/config.ts` file.
+    2.  Locate the `PipelineStep` interface.
+    3.  Delete the `context: string[];` line from the interface.
 
-*   **Objective:** Modify the core process runner to pipe any `stderr` data from the child process to the reasoning log file, in addition to its current destinations.
-*   **Task:**
-    1.  Open the file `src/tools/proc.ts`.
-    2.  Locate the `runStreaming` function.
-    3.  Find the `p.stderr.on('data', ...)` event handler within that function.
-    4.  Add a single line to write the incoming `chunk` to the `reasoningStream` if it has been created.
-
-*   **Code Snippet (`src/tools/proc.ts`):**
-
+*   **Code Snippet** (Before):
     ```typescript
-    // ... inside the runStreaming function's Promise ...
-
-    p.stderr.on("data", (chunk) => {
-      process.stderr.write(chunk);
-      logStream.write(chunk);
-      
-      // ADD THIS LINE
-      if (reasoningStream) {
-        reasoningStream.write(chunk);
-      }
-      
-      fullOutput += chunk.toString();
-    });
-
-    // ... rest of the function
+    export interface PipelineStep {
+      name: string;
+      command: string;
+      context: string[]; // <-- DELETE THIS LINE
+      check: CheckConfig;
+      fileAccess?: {
+        allowWrite?: string[];
+      };
+    }
+    ```
+*   **Code Snippet** (After):
+    ```typescript
+    export interface PipelineStep {
+      name: string;
+      command: string;
+      check: CheckConfig;
+      fileAccess?: {
+        allowWrite?: string[];
+      };
+    }
     ```
 
-#### 2. Manually Verify the Change
+#### 2. Update `src/tools/orchestrator.ts`
+*   **Objective**: Implement a centralized function that assembles a complete and informative prompt for the AI, independent of user configuration.
+*   **Task**:
+    1.  Open `src/tools/orchestrator.ts`.
+    2.  Create a new function called `assemblePrompt` that takes the entire pipeline, the current step's name, the context data, and the command instructions as arguments. This function will build a detailed prompt string.
+    3.  In the `runTask` function, modify the main loop to use this new `assemblePrompt` function. The logic for gathering context will now be handled inside the orchestrator instead of being driven by the config file.
 
-*   **Objective:** Confirm that the hook's error message is now correctly appearing in the `.reasoning.log` file.
-*   **Task:**
-    1.  Ensure you have a pipeline step that uses the `fileAccess` guardrail, like the default `plan` step which only allows writing to `PLAN.md`.
-    2.  Temporarily modify the `src/dot-claude/commands/plan-task.md` prompt to explicitly instruct Claude to write to a disallowed file (e.g., `PLAN_test.md`).
-    3.  Run a task, for example: `npm run claude:run claude-Tasks/task-001-sample.md`.
-    4.  The first attempt should fail and be blocked by the hook.
-    5.  Inspect the generated log file at `.claude/logs/<your-task-id>/01-plan.reasoning.log`.
-    6.  **Verification:** The log should now contain the `[Guardrail] Blocked:` error message, followed by Claude's next reasoning step where it acknowledges the error.
-    7.  Remember to revert the changes to `plan-task.md` after verification.
+*   **Code Snippet** (New Function):
+    ```typescript
+    function assemblePrompt(
+      pipeline: PipelineStep[],
+      currentStepName: string,
+      context: Record<string, string>,
+      commandInstructions: string
+    ): string {
+      const intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
+      const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
+      const pipelineContext = `This is the full pipeline for your awareness:\n${pipelineStepsList}`;
+      const responsibility = `You are responsible for executing step "${currentStepName}".`;
+      
+      let contextString = "";
+      for (const [title, content] of Object.entries(context)) {
+        contextString += `--- ${title.toUpperCase()} ---\n\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
+      }
+      if (contextString) {
+          contextString = contextString.trim();
+      }
 
-#### 3. Update Project Documentation
+      return [
+        intro,
+        pipelineContext,
+        responsibility,
+        contextString,
+        `--- YOUR INSTRUCTIONS FOR THE "${currentStepName}" STEP ---`,
+        commandInstructions,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    ```
 
-*   **Objective:** Clearly document the new, enhanced logging behavior in the main `README.md` file so users know where to look for debugging information.
-*   **Task:**
-    1.  Open `README.md`.
-    2.  Navigate to the "### Debugging and Logs" section.
-    3.  Update the description for the `.reasoning.log` file.
-*   **Text Changes (`README.md`):**
-    *   **Current Text:** "Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output."
-    *   **New Text:** "Contains the AI's detailed reasoning process (its "chain of thought"). This shows the internal thinking that led to the final output. **Crucially, it also includes the output from any configured command hooks, such as error messages from file access guardrails.** This provides a complete, chronological record of the AI's attempts and the system's feedback, making it the best place to start debugging."
+#### 3. Update `src/tools/providers.ts`
+*   **Objective**: Remove the `projectStructure` provider to streamline prompts and encourage the AI to use its built-in filesystem tools.
+*   **Task**:
+    1.  Open `src/tools/providers.ts`.
+    2.  Delete the `projectStructure` property and its associated function from the `contextProviders` object.
+
+*   **Code Snippet** (Before):
+    ```typescript
+    export const contextProviders: Record<string, (projectRoot: string, taskContent: string) => string> = {
+      projectStructure: (projectRoot) => { /* ... implementation ... */ }, // <-- DELETE THIS
+      taskDefinition: (_projectRoot, taskContent) => taskContent,
+      planContent: (projectRoot) => { /* ... implementation ... */ },
+    };
+    ```
+*   **Code Snippet** (After):
+    ```typescript
+    export const contextProviders: Record<string, (projectRoot: string, taskContent: string) => string> = {
+      taskDefinition: (_projectRoot, taskContent) => taskContent,
+      planContent: (projectRoot) => { /* ... implementation ... */ },
+    };
+    ```
+
+#### 4. Update `src/templates/claude.config.js`
+*   **Objective**: Align the default configuration template with the new, simplified structure.
+*   **Task**:
+    1.  Open `src/templates/claude.config.js`.
+    2.  For each step defined in the `pipeline` array, remove the `context` property.
+
+*   **Code Snippet** (Example for the "plan" step, Before):
+    ```javascript
+    {
+      name: "plan",
+      command: "plan-task",
+      context: ["projectStructure", "taskDefinition"], // <-- DELETE THIS LINE
+      check: { type: "fileExists", path: "PLAN.md" },
+      fileAccess: {
+        allowWrite: ["PLAN.md"]
+      }
+    },
+    ```*   **Code Snippet** (Example for the "plan" step, After):
+    ```javascript
+    {
+      name: "plan",
+      command: "plan-task",
+      check: { type: "fileExists", path: "PLAN.md" },
+      fileAccess: {
+        allowWrite: ["PLAN.md"]
+      }
+    },
+    ```
+
+#### 5. Update `src/dot-claude/commands/plan-task.md`
+*   **Objective**: Update the AI's instructions to reflect the removal of the `projectStructure` context, guiding it to use its tools for discovery.
+*   **Task**:
+    1.  Open `src/dot-claude/commands/plan-task.md`.
+    2.  Modify the main instruction to ask the AI to explore the project structure using its available tools if necessary.
+
+*   **Code Snippet** (New Instruction):
+    ```markdown
+    Based on the task definition provided, and by exploring the project files if needed, create a clear, step-by-step implementation plan.
+    ```
 
 ### **Error Handling & Warnings**
+*   **Backward Compatibility**: The new orchestrator will simply ignore the `context` property if it exists in a user's old `claude.config.js` file. This prevents the tool from breaking for existing users, though they will benefit from updating their configuration to the new, cleaner format.
+*   **Validation**: The existing `validate` command will no longer check for the `context` property. Ensure that any logic related to `context` validation in `src/tools/validator.ts` is removed.
 
-*   The implementation should be defensive. The code change in `proc.ts` must check if `reasoningStream` exists before attempting to write to it. This prevents crashes in any scenario where a reasoning log is not configured.
-*   No new CLI warnings or user-facing errors are expected from this change. The primary effect is a richer and more informative log file.
+### **Documentation Changes**
+*   **Objective**: Update the `README.md` to reflect the simplified configuration and provide a clear explanation of how the new prompt system works.
+*   **Task**:
+    1.  Open `README.md`.
+    2.  In the "How It Works" section, update the example of `claude.config.js` to remove the `context` property from all pipeline steps.
+    3.  Remove the "Available Context Providers" section entirely.
+    4.  Add a brief explanation stating that the orchestrator now automatically assembles the necessary context for each step, ensuring the AI always has the information it needs.
+    5.  Search for any other mentions of the `context` property or the `projectStructure` provider and remove or update them to align with the new design.
