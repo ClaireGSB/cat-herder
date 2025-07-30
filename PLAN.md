@@ -4,441 +4,178 @@
 
 ## Title & Goal
 
-**Title:** Implement Multi-Pipeline Support
+**Title:** Safely Merge Hooks into Existing `.claude/settings.json`
 
-**Goal:** Allow users to define multiple, named pipelines in their configuration file and select which one to use for a given task.
-
----
+**Goal:** To ensure the pipeline validation hook is present in `settings.json` after running `init`, even if the file already exists, by prompting the user for permission to merge it.
 
 ## Description
 
-Currently, the `claude.config.js` file only supports a single `pipeline` array. This is inflexible for projects that might need different workflows, such as a full TDD-style pipeline for new features versus a simpler, docs-only pipeline for documentation changes.
+Currently, the `claude-project init` command completely skips writing to `.claude/settings.json` if it already exists. This can cause problems for users with older or custom configurations who might be missing the critical `PreToolUse` hook. Without this hook, the `fileAccess` guardrails defined in `claude.config.js` will not be enforced, defeating a key safety feature of the tool.
 
-This change will introduce a new `pipelines` object in the configuration, where users can define multiple named workflows. The system will use a clear priority system to select which pipeline to run for a given task: a CLI flag will have the highest priority, followed by a specification in the task file's frontmatter, then a configured default, and finally, the first pipeline available.
-
----
+This change modifies the `init` command's behavior. Now, if `settings.json` exists, the command will read and parse it. If the required validation hook is missing, it will inform the user why the hook is needed and interactively ask for permission to add it. This ensures functionality without destructively overwriting the user's custom settings.
 
 ## Summary Checklist
 
--   [x] **Configuration:** Update the config schema and template to support a `pipelines` object and a `defaultPipeline` key.
--   [x] **CLI:** Add a `--pipeline <name>` option to the `run` command.
--   [x] **Task Parsing:** Add logic to parse a `pipeline` key from a task file's YAML frontmatter.
--   [x] **Orchestrator:** Implement the core logic to select and execute the correct pipeline based on the new priority rules.
--   [x] **State:** Update the task status file to record which pipeline was used.
--   [x] **Validation:** Upgrade the validator to check all defined pipelines for correctness.
--   [x] **Dependencies:** Add `js-yaml` as a direct dependency for parsing frontmatter.
--   [x] **Documentation:** Update `README.md` to explain the new multi-pipeline feature.
-
----
+- [ ] Modify the `init` command to inspect `settings.json` if it exists.
+- [ ] Implement logic to parse the `settings.json` and check for the validation hook.
+- [ ] Add a user prompt using Node's `readline` module to ask for permission.
+- [ ] Implement a non-destructive merge function to add the hook to the JSON object.
+- [ ] Write the updated configuration back to the file if the user agrees.
+- [ ] Update the `README.md` to document this new, safer behavior.
 
 ## Detailed Implementation Steps
 
-### 1. Update Configuration Schema and Template
+### 1. Update `init.ts` to Check Existing `settings.json`
 
-*   **Objective:** Modify the configuration structure to support multiple named pipelines.
-*   **Tasks:**
-    1.  In `src/config.ts`, update the `ClaudeProjectConfig` interface and the `getConfig` function to handle the new structure.
-    2.  In `src/templates/claude.config.js`, replace the old `pipeline` array with the new `pipelines` object structure.
-
-*   **Code Snippet (`src/config.ts`):**
+*   **Objective:** Change the `init` command to intelligently handle an existing `.claude/settings.json` file instead of simply skipping it.
+*   **Task:** Modify the `init` function in `src/init.ts`. After copying the template files, add a new function call that specifically processes the `settings.json` file.
 
     ```typescript
-    import { cosmiconfig } from "cosmiconfig";
-    import path from "node:path";
-    import { CheckConfig } from "./tools/check-runner.js";
+    // src/init.ts
 
-    // Define the structure of a pipeline step
-    export interface PipelineStep {
-      name: string;
-      command: string;
-      check: CheckConfig;
-      fileAccess?: {
-        allowWrite?: string[];
-      };
-    }
+    // ... after fs.copy for the .claude directory ...
+    
+    // Add this new function call
+    await handleExistingSettings(targetDotClaudePath, dotClaudeTemplatePath);
+    
+    console.log(pc.green("Created .claude/ directory with default commands and settings."));
+    // ... rest of the init function ...
+    ```
 
-    type PipelinesMap = { [key: string]: PipelineStep[] };
+### 2. Implement Hook Checking and Merging Logic
 
-    // This is the type definition for the user's claude.config.js file
-    export interface ClaudeProjectConfig {
-      taskFolder: string;
-      statePath: string;
-      logsPath: string;
-      structureIgnore: string[];
-      manageGitBranch?: boolean;
-      pipelines: PipelinesMap;
-      defaultPipeline?: string;
-    }
+*   **Objective:** Create functions to check if the hook exists and to merge it into the configuration without overwriting existing user settings.
+*   **Task:** In `src/init.ts`, create the `handleExistingSettings` function and its helpers. This function will read both the template `settings.json` and the user's existing `settings.json` to perform the check and merge.
 
-    // Default configuration if the user's file is missing parts
-    const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline"> = {
-      taskFolder: "claude-Tasks",
-      statePath: ".claude/state",
-      logsPath: ".claude/logs",
-      structureIgnore: [
-        "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
-      ],
-      manageGitBranch: true,
+*   **Code Snippets (New Functions in `src/init.ts`):**
+
+    ```typescript
+    // src/init.ts
+    import readline from "readline"; // Add this import at the top
+
+    // Define the hook we need to ensure exists
+    const requiredHook = {
+      type: "command",
+      command: "node ./node_modules/@your-scope/claude-project/dist/tools/pipeline-validator.js < /dev/stdin",
     };
+    
+    const requiredMatcher = "Edit|Write|MultiEdit";
 
-    let loadedConfig: ClaudeProjectConfig | null = null;
-    let projectRoot: string | null = null;
-
-    export async function getConfig(): Promise<ClaudeProjectConfig> {
-      if (loadedConfig) return loadedConfig;
-
-      const explorer = cosmiconfig("claude");
-      const result = await explorer.search();
-
-      if (!result) {
-        console.error("Error: Configuration file (claude.config.js) not found.");
-        console.error("Please run `claude-project init` in your project root.");
-        process.exit(1);
-      }
-
-      projectRoot = path.dirname(result.filepath);
-      const userConfig = result.config as any;
-
-      let pipelines: PipelinesMap = userConfig.pipelines || {};
-
-      // Handle backward compatibility for the old `pipeline` array format
-      if (userConfig.pipeline && Object.keys(pipelines).length === 0) {
-        pipelines = { default: userConfig.pipeline };
-      }
+    /**
+     * Checks if the validation hook exists and adds it if missing.
+     */
+    async function handleExistingSettings(targetDir: string, templateDir: string) {
+      const targetSettingsPath = path.join(targetDir, 'settings.json');
       
-      let defaultPipeline = userConfig.defaultPipeline;
-      // If no default is set, use the first pipeline as the default
-      if (!defaultPipeline && Object.keys(pipelines).length > 0) {
-        defaultPipeline = Object.keys(pipelines)[0];
+      // If the user doesn't have a settings.json, copy the default one and finish.
+      if (!fs.existsSync(targetSettingsPath)) {
+        const templateSettingsPath = path.join(templateDir, 'settings.json');
+        await fs.copy(templateSettingsPath, targetSettingsPath);
+        return;
       }
-      
-      const finalConfig: ClaudeProjectConfig = { 
-        ...defaultConfig, 
-        ...userConfig,
-        pipelines,
-        defaultPipeline,
-      };
 
-      // Clean up the old property if it exists
-      delete (finalConfig as any).pipeline;
+      // If the file exists, read and check it.
+      const userSettings = await fs.readJson(targetSettingsPath);
 
-      loadedConfig = finalConfig;
-      return loadedConfig;
+      if (doesHookExist(userSettings)) {
+        console.log(pc.gray("Validation hook already present in .claude/settings.json."));
+        return;
+      }
+
+      // If hook is missing, call the interactive prompt function
+      await promptToAddHook(targetSettingsPath, userSettings);
     }
 
-    // Utility to get the project root after config is loaded
-    export function getProjectRoot() {
-      if (!projectRoot) {
-        throw new Error("Project root not determined. Call getConfig() first.");
-      }
-      return projectRoot;
-    }
+    /**
+     * Checks if the required hook is present in the settings object.
+     */
+    function doesHookExist(settings: any): boolean {
+      const preToolUseHooks = settings?.hooks?.PreToolUse;
+      if (!Array.isArray(preToolUseHooks)) return false;
 
-    // Utility to get a path to a command template inside the global package
-    export function getCommandTemplatePath(commandName: string): string {
-        return path.resolve(new URL(`./dot-claude/commands/${commandName}.md`, import.meta.url).pathname);
+      const matcherEntry = preToolUseHooks.find(h => h.matcher === requiredMatcher);
+      if (!matcherEntry || !Array.isArray(matcherEntry.hooks)) return false;
+      
+      return matcherEntry.hooks.some((h: any) => h.command === requiredHook.command);
+    }
+    
+    /**
+     * Merges the required hook into the settings object non-destructively.
+     */
+    function mergeHook(settings: any): any {
+      const newSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
+
+      if (!newSettings.hooks) newSettings.hooks = {};
+      if (!newSettings.hooks.PreToolUse) newSettings.hooks.PreToolUse = [];
+      
+      let matcherEntry = newSettings.hooks.PreToolUse.find((h: any) => h.matcher === requiredMatcher);
+
+      if (matcherEntry) {
+        if (!matcherEntry.hooks) matcherEntry.hooks = [];
+        matcherEntry.hooks.push(requiredHook);
+      } else {
+        newSettings.hooks.PreToolUse.push({
+          matcher: requiredMatcher,
+          hooks: [requiredHook],
+        });
+      }
+      return newSettings;
     }
     ```
 
-*   **Code Snippet (`src/templates/claude.config.js`):**
+### 3. Implement the Interactive User Prompt
 
-    ```javascript
-    // claude.config.js
-    /** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
-    module.exports = {
-      taskFolder: "claude-Tasks",
-      statePath: ".claude/state",
-      logsPath: ".claude/logs",
-      structureIgnore: [
-        "node_modules/**",
-        ".git/**",
-        "dist/**",
-        ".claude/**",
-        "*.lock",
-      ],
-      manageGitBranch: true,
-      defaultPipeline: 'default',
-      pipelines: {
-        default: [
-          {
-            name: "plan",
-            command: "plan-task",
-            check: { type: "fileExists", path: "PLAN.md" },
-            fileAccess: { allowWrite: ["PLAN.md"] }
-          },
-          {
-            name: "write_tests",
-            command: "write-tests",
-            check: { type: "shell", command: "npm test", expect: "fail" },
-            fileAccess: { allowWrite: ["test/**/*", "tests/**/*"] }
-          },
-          {
-            name: "implement",
-            command: "implement",
-            check: { type: "shell", command: "npm test", expect: "pass" },
-            fileAccess: { allowWrite: ["src/**/*"] }
-          },
-          {
-            name: "docs",
-            command: "docs-update",
-            check: { type: "none" },
-            fileAccess: { allowWrite: ["README.md", "docs/**/*", "*.md"] }
-          },
-          {
-            name: "review",
-            command: "self-review",
-            check: { type: "none" },
-          },
-        ],
-        /*
-        "docs-only": [
-           {
-            name: "docs",
-            command: "docs-update",
-            check: { type: "none" },
-            fileAccess: { allowWrite: ["README.md", "docs/**/*", "*.md"] }
+*   **Objective:** Ask for the user's consent before modifying their configuration file, clearly explaining the reason.
+*   **Task:** Create a `promptToAddHook` function in `src/init.ts` that uses Node's `readline` module.
+
+*   **Code Snippet (New Function in `src/init.ts`):**
+
+    ```typescript
+    // src/init.ts
+
+    /**
+     * Prompts the user to add the missing hook.
+     */
+    function promptToAddHook(settingsPath: string, userSettings: any): Promise<void> {
+      return new Promise((resolve) => {
+        console.log(pc.yellow("\nWarning: Your .claude/settings.json is missing a required validation hook."));
+        console.log(pc.gray("This hook enables the file access guardrails defined in your pipeline."));
+        console.log(pc.gray(`It will be added to the 'PreToolUse' section.`));
+
+        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        
+        rl.question(pc.cyan("Do you want to add it automatically? (Y/n) "), async (answer) => {
+          rl.close();
+          if (answer.toLowerCase() === 'y' || answer === '') {
+            const updatedSettings = mergeHook(userSettings);
+            await fs.writeJson(settingsPath, updatedSettings, { spaces: 2 });
+            console.log(pc.green("✔ Hook successfully added to .claude/settings.json."));
+          } else {
+            console.log(pc.yellow("Skipping hook addition. File access guardrails will be disabled."));
           }
-        ]
-        */
-      },
-    };
-    ```
-
-### 2. Enhance the CLI
-
-*   **Objective:** Allow users to specify a pipeline from the command line.
-*   **Code Snippet (`src/index.ts`):**
-
-    ```typescript
-    // ... imports
-
-    // `run` command
-    program
-      .command("run <taskPath>")
-      .description("Runs the automated workflow for a specific task file.")
-      .option("-p, --pipeline <name>", "Specify the pipeline to run, overriding config and task defaults.")
-      .action(async (taskPath, options) => {
-        try {
-          await runTask(taskPath, options.pipeline);
-        } catch (error: any) {
-          console.error(pc.red(`\nWorkflow failed: ${error.message}`));
-          process.exit(1);
-        }
+          resolve();
+        });
       });
-
-    // ... other commands
-    ```
-
-### 3. Parse Pipeline from Task Frontmatter
-
-*   **Objective:** Read the `pipeline` key from a task file.
-*   **Code Snippet (add to `src/tools/orchestrator.ts`):**
-
-    ```typescript
-    import yaml from 'js-yaml';
-
-    function parseTaskFrontmatter(content: string): { pipeline?: string; body: string } {
-      const match = content.match(/^---\s*([\s\S]+?)\s*---/);
-      if (match) {
-        try {
-          const frontmatter = yaml.load(match[1]) as Record<string, any> | undefined;
-          const body = content.substring(match[0].length).trim();
-          return { pipeline: frontmatter?.pipeline, body };
-        } catch {
-          return { body: content };
-        }
-      }
-      return { body: content };
     }
     ```
-
-### 4. Implement Pipeline Selection in Orchestrator
-
-*   **Objective:** Choose the correct pipeline to execute.
-*   **Code Snippet (update `runTask` in `src/tools/orchestrator.ts`):**
-
-    ```typescript
-    export async function runTask(taskRelativePath: string, pipelineOption?: string) {
-      const config = await getConfig();
-      // ...
-      const rawTaskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
-      const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
-
-      const pipelineName = pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
-      
-      if (!pipelineName || !config.pipelines[pipelineName]) {
-        throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
-      }
-      const selectedPipeline = config.pipelines[pipelineName];
-      
-      if (pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from --pipeline option: "${pipelineName}"`));
-      else if (taskPipelineName) console.log(pc.cyan(`[Orchestrator] Using pipeline from task frontmatter: "${pipelineName}"`));
-      else console.log(pc.cyan(`[Orchestrator] Using default pipeline: "${pipelineName}"`));
-      
-      // ... rest of the function using selectedPipeline
-    }
-    ```
-
-### 5. Update Task Status
-
-*   **Objective:** Record the active pipeline in the state file.
-*   **Code Snippet (`src/tools/status.ts`):**
-
-    ```typescript
-    export type TaskStatus = {
-      version: number;
-      taskId: string;
-      branch: string;
-      pipeline?: string; // Add this line
-      currentStep: string;
-      phase: Phase;
-      steps: Record<string, Phase>;
-      lastUpdate: string;
-      prUrl?: string;
-      lastCommit?: string;
-    };
-    ```
-*   **Code Snippet (update `runTask` in `src/tools/orchestrator.ts`):**
-    ```typescript
-    //...
-    updateStatus(statusFile, s => {
-      s.taskId = taskId;
-      s.branch = branchName;
-      s.pipeline = pipelineName; // Add this line
-    });
-    //...
-    ```
-
-### 6. Upgrade the Validator
-
-*   **Objective:** Validate all pipelines defined in the configuration.
-*   **Code Snippet (`src/tools/validator.ts`):**
-
-    ```typescript
-    // ... imports and helper functions
-
-    export function validateConfig(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
-      const errors: string[] = [];
-      const missingPermissions: string[] = [];
-      const validCheckTypes = ["none", "fileExists", "shell"];
-
-      // ... (permission loading logic remains the same) ...
-
-      if (!config.pipelines || typeof config.pipelines !== 'object' || Object.keys(config.pipelines).length === 0) {
-        errors.push("Configuration is missing a 'pipelines' object with at least one defined pipeline.");
-        return { isValid: false, errors, missingPermissions };
-      }
     
-      if (config.defaultPipeline && !config.pipelines[config.defaultPipeline]) {
-        errors.push(`The defaultPipeline "${config.defaultPipeline}" is not defined in the 'pipelines' object.`);
-      }
-    
-      for (const [pipelineName, pipeline] of Object.entries(config.pipelines)) {
-        if (!Array.isArray(pipeline)) {
-          errors.push(`Pipeline "${pipelineName}" is not a valid array of steps.`);
-          continue;
-        }
-    
-        for (const [index, step] of pipeline.entries()) {
-          const stepId = `Pipeline '${pipelineName}', Step ${index + 1} ('${step.name || `unnamed`}')`;
-    
-          if (!step.name) errors.push(`Pipeline '${pipelineName}', Step ${index + 1}: is missing the 'name' property.`);
-          if (!step.command) {
-            errors.push(`${stepId}: is missing the 'command' property.`);
-            continue; 
-          }
-          // ... (rest of the step validation logic for command files, permissions, etc.)
-        }
-      }
+## Error Handling & Warnings
 
-      return { 
-        isValid: errors.length === 0, 
-        errors,
-        missingPermissions: [...new Set(missingPermissions)],
-      };
-    }
-    ```
+*   **Invalid `settings.json`:** If `.claude/settings.json` exists but contains invalid JSON, `fs.readJson` will throw an error. The `init` command should catch this and display a helpful message:
+    > `Error: Could not parse .claude/settings.json. Please fix or remove the file and run 'init' again.`
 
-### 7. Add `js-yaml` Dependency
+*   **User Declines:** If the user chooses "n", the tool should print a clear warning:
+    > `Skipping hook addition. File access guardrails will be disabled.`
 
-*   **Objective:** Ensure the project has the necessary library to parse YAML frontmatter.
-*   **Code Snippet (`package.json`):**
+*   **File Permissions:** If writing the updated `settings.json` fails (e.g., due to file permissions), the `fs.writeJson` error should be caught and reported to the user.
 
-    ```json
-    "dependencies": {
-      "chokidar": "^4.0.3",
-      "commander": "^14.0.0",
-      "cosmiconfig": "^9.0.0",
-      "fs-extra": "^11.3.0",
-      "js-yaml": "^4.1.0",
-      "minimatch": "^10.0.3",
-      "picocolors": "^1.1.1"
-    },
-    "devDependencies": {
-      // ...
-      "@types/js-yaml": "^4.0.9",
-      // ...
-    },
-    ```
+## Documentation Changes
 
-### 8. Update Documentation
+The final step is to update the documentation to reflect this new, safer behavior.
 
-*   **Objective:** Explain the new multi-pipeline feature in the `README.md`.
-*   **Code Snippet (for `README.md`):**
+*   **Objective:** Ensure the `README.md` accurately describes how `init` handles an existing `settings.json`.
+*   **Task:** In `README.md`, find the section "Permissions and Security (`.claude/settings.json`)".
+*   **Change:**
+    *   **FROM:** `**Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**, preserving your custom configuration.`
+    *   **TO (suggestion):** `**Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.`
 
-    ```markdown
-    ## How It Works
-
-    ### Configurable Pipelines (`claude.config.js`)
-
-    This tool is driven by a `pipelines` object in your `claude.config.js` file. You can define multiple workflows for different kinds of tasks.
-
-    ```javascript
-    // claude.config.js
-    module.exports = {
-      // ... other settings
-      defaultPipeline: 'default',
-
-      pipelines: {
-        default: [
-          {
-            name: "plan",
-            command: "plan-task",
-            check: { type: "fileExists", path: "PLAN.md" },
-          },
-          // ... more steps
-        ],
-        "docs-only": [
-           {
-            name: "docs",
-            command: "docs-update",
-            check: { type: "none" },
-          }
-        ]
-      },
-    };
-    ```
-
-    **Pipeline Selection:**
-
-    The orchestrator selects a pipeline in the following order of priority:
-    1.  **CLI Flag:** `claude-project run <task> --pipeline <name>`
-    2.  **Task Frontmatter:** Add a `pipeline:` key to your task's YAML frontmatter.
-        ```markdown
-        ---
-        pipeline: docs-only
-        ---
-        # My Documentation Task
-        ...
-        ```
-    3.  **Configuration Default:** The `defaultPipeline` property in `claude.config.js`.
-    4.  **First Available:** The first pipeline defined in the `pipelines` object if no default is specified.
-
-    ## Commands Reference
-    
-    ### CLI Commands
-    
-    -   `claude-project run <path-to-task.md>`: Runs the full workflow for a specific task.
-        -   `--pipeline <name>`: Specifies which pipeline to use.
-
-    ```
