@@ -93,7 +93,7 @@ async function executeStep(
   check: CheckConfig
 ) {
   const projectRoot = getProjectRoot();
-  console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
+  console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
   // Debug logging before Claude CLI execution
@@ -193,7 +193,7 @@ export async function runTask(taskRelativePath: string) {
     const { name, command, context: contextKeys, check } = stepConfig;
     const currentStepStatus = readStatus(statusFile);
     if (currentStepStatus.steps[name] === 'done') {
-      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
+      console.log(pc.cyan(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
     const context: Record<string, string> = {};
@@ -215,5 +215,5 @@ export async function runTask(taskRelativePath: string) {
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
-  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
+  console.log(pc.cyan("\n[Orchestrator] All steps completed successfully!"));
 }
