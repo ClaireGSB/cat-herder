@@ -89,47 +89,23 @@ export function runStreaming(
         
         try {
           const json = JSON.parse(line);
-          switch (json.type) {
-            case "assistant":
-              // Write assistant reasoning with content type
-              const reasoningText = json.message?.content?.[0]?.text;
-              if (reasoningText) {
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                const contentType = json.message?.content?.[0]?.type || 'unknown';
-                reasoningStream.write(`[${timestamp}] [ASSISTANT] [${contentType.toUpperCase()}] ${reasoningText}\n`);
-              }
-              break;
-            case "result":
-              // Write final result to main log and console
-              const resultText = json.result;
-              if (resultText) {
-                process.stdout.write(resultText);
-                logStream.write(resultText);
-                fullOutput += resultText;
-                
-                // Also write to reasoning log with timestamp and prefix
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                reasoningStream.write(`[${timestamp}] [FINAL OUTPUT] ${resultText}\n`);
-              }
-              break;
-            case "user":
-              // Write user messages with content type (captures hook output)
-              {
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                const contentItem = json.message?.content?.[0];
-                const contentType = contentItem?.type || 'unknown';
-                const userContent = contentItem?.content || JSON.stringify(contentItem);
-                reasoningStream.write(`[${timestamp}] [USER] [${contentType.toUpperCase()}] ${userContent}\n`);
-              }
-              break;
-            default:
-              // Log unknown JSON types to reasoning log for debugging
-              {
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                reasoningStream.write(`[${timestamp}] [DEBUG] Unknown JSON type: ${json.type}\n`);
-                reasoningStream.write(`[${timestamp}] [DEBUG] Content: ${JSON.stringify(json, null, 2)}\n\n`);
-              }
-              break;
+          
+          // Log ALL JSON entries to reasoning log
+          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+          const contentItem = json.message?.content?.[0];
+          const contentType = contentItem?.type || json.subtype || 'data';
+          const content = contentItem?.text || contentItem?.content || json.result || JSON.stringify(json, null, 2);
+          
+          reasoningStream.write(`[${timestamp}] [${json.type.toUpperCase()}] [${contentType.toUpperCase()}] ${content}\n`);
+          
+          // Special case: also output "result" to CLI with [CLAUDE] prefix
+          if (json.type === "result") {
+            const resultText = json.result;
+            if (resultText) {
+              process.stdout.write(`[CLAUDE] ${resultText}`);
+              logStream.write(resultText);
+              fullOutput += resultText;
+            }
           }
         } catch (e) {
           // Log JSON parsing failures to reasoning log for debugging
