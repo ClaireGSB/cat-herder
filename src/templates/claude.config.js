@@ -72,7 +72,6 @@ module.exports = {
       // No fileAccess restriction for review step - allows any necessary fixes
     },
     ],
-    /*
     "docs-only": [
        {
         name: "docs",
@@ -83,6 +82,5 @@ module.exports = {
         }
       }
     ]
-    */
   },
 };
