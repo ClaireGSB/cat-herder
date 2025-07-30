@@ -27,7 +27,7 @@ This change will introduce a new `pipelines` object in the configuration, where 
 -   [x] **State:** Update the task status file to record which pipeline was used.
 -   [x] **Validation:** Upgrade the validator to check all defined pipelines for correctness.
 -   [x] **Dependencies:** Add `js-yaml` as a direct dependency for parsing frontmatter.
--   [ ] **Documentation:** Update `README.md` to explain the new multi-pipeline feature.
+-   [x] **Documentation:** Update `README.md` to explain the new multi-pipeline feature.
 
 ---
 

@@ -135,9 +135,9 @@ echo "\n✅ Fresh test environment is ready!"
 
 ## How It Works
 
-### The Configurable Pipeline (`claude.config.js`)
+### Configurable Pipelines (`claude.config.js`)
 
-This tool is driven by a `pipeline` array in your `claude.config.js` file. You have full control to reorder, remove, or even add new steps to this pipeline. Each step is an object with these key properties:
+This tool is driven by a `pipelines` object in your `claude.config.js` file. You can define multiple workflows for different kinds of tasks. Each pipeline is an array of steps, and each step is an object with these key properties:
 
 -   `name`: A unique identifier for the step.
 -   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
@@ -164,51 +164,100 @@ module.exports = {
   manageGitBranch: true,
 
   /**
-   * Defines the sequence of steps in the development workflow.
-   * The orchestrator will execute these steps in order.
+   * The default pipeline to use when none is specified.
    */
-  pipeline: [
-    {
-      name: "plan",
-      command: "plan-task",
-      check: { type: "fileExists", path: "PLAN.md" },
-      fileAccess: {
-        allowWrite: ["PLAN.md"]
+  defaultPipeline: "default",
+
+  /**
+   * Define multiple named pipelines for different workflows.
+   * The orchestrator will execute the selected pipeline's steps in order.
+   */
+  pipelines: {
+    default: [
+      {
+        name: "plan",
+        command: "plan-task",
+        check: { type: "fileExists", path: "PLAN.md" },
+        fileAccess: {
+          allowWrite: ["PLAN.md"]
+        }
+      },
+      {
+        name: "write_tests",
+        command: "write-tests",
+        check: { type: "shell", command: "npm test", expect: "fail" },
+        fileAccess: {
+          allowWrite: ["test/**/*", "tests/**/*"]
+        }
+      },
+      {
+        name: "implement",
+        command: "implement",
+        check: { type: "shell", command: "npm test", expect: "pass" },
+        fileAccess: {
+          allowWrite: ["src/**/*"]
+        }
+      },
+      {
+        name: "docs",
+        command: "docs-update",
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["README.md", "docs/**/*", "*.md"]
+        }
+      },
+      {
+        name: "review",
+        command: "self-review",
+        check: { type: "none" },
+        // No fileAccess restriction for review step - allows any necessary fixes
+      },
+    ],
+    "docs-only": [
+      {
+        name: "docs",
+        command: "docs-update",
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["README.md", "docs/**/*", "*.md"]
+        }
       }
-    },
-    {
-      name: "write_tests",
-      command: "write-tests",
-      check: { type: "shell", command: "npm test", expect: "fail" },
-      fileAccess: {
-        allowWrite: ["test/**/*", "tests/**/*"]
-      }
-    },
-    {
-      name: "implement",
-      command: "implement",
-      check: { type: "shell", command: "npm test", expect: "pass" },
-      fileAccess: {
-        allowWrite: ["src/**/*"]
-      }
-    },
-    {
-      name: "docs",
-      command: "docs-update",
-      check: { type: "none" },
-      fileAccess: {
-        allowWrite: ["README.md", "docs/**/*", "*.md"]
-      }
-    },
-    {
-      name: "review",
-      command: "self-review",
-      check: { type: "none" },
-      // No fileAccess restriction for review step - allows any necessary fixes
-    },
-  ],
+    ]
+  },
 };
 ```
+
+**Pipeline Selection:**
+
+The orchestrator selects a pipeline to run based on the following priority order:
+
+1. **CLI Flag:** Use the `--pipeline <name>` option when running a task:
+   ```bash
+   claude-project run claude-Tasks/my-task.md --pipeline docs-only
+   ```
+
+2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
+   ```markdown
+   ---
+   pipeline: docs-only
+   ---
+   # My Documentation Task
+   
+   Update the API documentation to reflect recent changes.
+   ```
+
+3. **Configuration Default:** The `defaultPipeline` property in your `claude.config.js`:
+   ```javascript
+   module.exports = {
+     defaultPipeline: "default",
+     pipelines: {
+       default: [...],
+       "docs-only": [...]
+     }
+   };
+   ```
+
+4. **First Available:** If no default is specified, the first pipeline defined in the `pipelines` object is used.
 
 **Automatic Context Assembly:**
 The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition and any generated plans. No manual configuration of context providers is required.
@@ -340,6 +389,7 @@ All commands are available directly via the `claude-project` executable.
 
 -   `claude-project init`: Scaffolds the workflow in the current repository.
 -   `claude-project run <path-to-task.md>`: Runs the full workflow for a specific task.
+    -   `--pipeline <name>`: Specifies which pipeline to use, overriding config and task defaults.
 -   `claude-project validate`: Validates your `claude.config.js` pipeline configuration.
 -   `claude-project watch`: Watches the tasks directory and runs new tasks automatically.
 -   `claude-project status`: Displays the status of the most recent task as JSON.
