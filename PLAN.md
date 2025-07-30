@@ -42,7 +42,7 @@ This change modifies the `init` command's behavior. Now, if `settings.json` exis
     // ... rest of the init function ...
     ```
 
-### 2. Implement Hook Checking and Merging Logic
+### 2. Implement Hook Checking and Merging Logic ✅ DONE
 
 *   **Objective:** Create functions to check if the hook exists and to merge it into the configuration without overwriting existing user settings.
 *   **Task:** In `src/init.ts`, create the `handleExistingSettings` function and its helpers. This function will read both the template `settings.json` and the user's existing `settings.json` to perform the check and merge.
@@ -123,7 +123,7 @@ This change modifies the `init` command's behavior. Now, if `settings.json` exis
     }
     ```
 
-### 3. Implement the Interactive User Prompt
+### 3. Implement the Interactive User Prompt ✅ DONE
 
 *   **Objective:** Ask for the user's consent before modifying their configuration file, clearly explaining the reason.
 *   **Task:** Create a `promptToAddHook` function in `src/init.ts` that uses Node's `readline` module.
