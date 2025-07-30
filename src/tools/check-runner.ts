@@ -15,7 +15,7 @@ export type CheckConfig = {
  * Executes a validation check based on a configuration object.
  */
 export async function runCheck(checkConfig: CheckConfig, projectRoot: string) {
-  console.log(`[Orchestrator] Running check: ${pc.yellow(checkConfig.type)}`);
+  console.log(`\n[Orchestrator] Running check: ${pc.yellow(checkConfig.type)}`);
 
   switch (checkConfig.type) {
     case "none":

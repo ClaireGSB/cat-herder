@@ -12,6 +12,82 @@ function block(message: string) {
   process.exit(2); // Exit with a non-zero code to signal failure
 }
 
+// Convert glob patterns to human-readable descriptions
+function explainPattern(pattern: string): string {
+  if (pattern === "**/*") return "any file in any directory";
+  if (pattern.startsWith("src/**/*.")) return `${pattern.split('.').pop()?.toUpperCase()} files in the src directory`;
+  if (pattern.startsWith("**/*.")) return `${pattern.split('.').pop()?.toUpperCase()} files anywhere`;
+  if (pattern.startsWith("*/") && pattern.endsWith("/*")) return `files in any subdirectory of ${pattern.slice(2, -2)}`;
+  if (pattern.includes("**")) return `files matching pattern: ${pattern}`;
+  return `files matching: ${pattern}`;
+}
+
+// Find suggested alternative paths based on the attempted file path
+function suggestAlternatives(attemptedPath: string, allowedPatterns: string[]): string[] {
+  const suggestions: string[] = [];
+  const fileExt = path.extname(attemptedPath);
+  const fileName = path.basename(attemptedPath);
+  const dirName = path.dirname(attemptedPath);
+
+  for (const pattern of allowedPatterns) {
+    // If same file extension is allowed elsewhere
+    if (fileExt && pattern.includes(`*${fileExt}`)) {
+      const suggestedDir = pattern.replace(/\/\*\*\/\*.*$/, '').replace(/\*.*$/, '');
+      if (suggestedDir && suggestedDir !== dirName) {
+        suggestions.push(`${suggestedDir}/${fileName}`);
+      }
+    }
+    
+    // If the pattern allows files in a specific directory
+    if (pattern.includes('**/*') && !pattern.includes('.')) {
+      const allowedDir = pattern.replace('/**/*', '');
+      suggestions.push(`${allowedDir}/${fileName}`);
+    }
+  }
+
+  return [...new Set(suggestions)].slice(0, 3); // Return up to 3 unique suggestions
+}
+
+// Create a comprehensive error message with helpful guidance
+function createHelpfulErrorMessage(
+  attemptedPath: string,
+  currentStep: string,
+  allowedPatterns: string[],
+  projectRoot: string
+): string {
+  const relativePath = path.isAbsolute(attemptedPath) 
+    ? path.relative(projectRoot, attemptedPath)
+    : attemptedPath;
+
+  let message = `🚫 File Access Denied\n\n`;
+  message += `Attempted to write: ${relativePath}\n`;
+  message += `Current pipeline step: "${currentStep}"\n\n`;
+  
+  message += `📋 This step only allows writing to:\n`;
+  allowedPatterns.forEach(pattern => {
+    message += `  • ${explainPattern(pattern)} (${pattern})\n`;
+  });
+
+  const suggestions = suggestAlternatives(relativePath, allowedPatterns);
+  if (suggestions.length > 0) {
+    message += `\n💡 Suggested alternatives:\n`;
+    suggestions.forEach(suggestion => {
+      message += `  • ${suggestion}\n`;
+    });
+  }
+
+  if (path.isAbsolute(attemptedPath)) {
+    message += `\n⚠️  You used an absolute path. Try using a relative path from the project root instead.\n`;
+  }
+
+  message += `\n🔧 Next steps:\n`;
+  message += `  • Move to the appropriate pipeline step that allows this file access\n`;
+  message += `  • Modify your approach to work within the current step's constraints\n`;
+  message += `  • Update the pipeline configuration if this restriction is too limiting\n`;
+
+  return message;
+}
+
 // Main validation logic
 async function main() {
   // 1. Read the tool input payload from stdin
@@ -66,7 +142,13 @@ async function main() {
   const isAllowed = allowedPatterns.some(pattern => minimatch(filePathToEdit, pattern, { dot: true }));
 
   if (!isAllowed) {
-    block(`Blocked: The '${status.currentStep}' step only allows writing to paths matching: [${allowedPatterns.join(", ")}]. Action on '${filePathToEdit}' denied.`);
+    const helpfulMessage = createHelpfulErrorMessage(
+      filePathToEdit,
+      status.currentStep,
+      allowedPatterns,
+      projectRoot
+    );
+    block(helpfulMessage);
   }
 
   // If we reach here, the path is allowed

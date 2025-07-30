@@ -2,143 +2,79 @@
 
 # PLAN.md
 
-### **Title: Fix Chain of Thought (CoT) Logging via JSON Streaming**
+### **Title & Goal**
 
-**Goal:** To correctly capture Claude's "thinking" output by switching from raw text parsing to the official JSON streaming format provided by the `claude` CLI.
+**Title:** Enhance Hook Logging to Include Reasoning Files
 
----
+**Goal:** Capture and log `stderr` output from `PreToolUse` hooks into the corresponding step's `.reasoning.log` file to provide a complete debugging trail.
 
 ### **Description**
 
-The previous implementation for CoT logging resulted in empty `.thoughts.log` files. The root cause was twofold:
+Currently, when a `PreToolUse` hook (like the file access guardrail) blocks a tool, its error message is printed to the console and the main `.log` file, but it's missing from the `.reasoning.log`. This creates a gap in the AI's "thought process," making it difficult to understand precisely why it retried a command.
 
-1.  **Incorrect CLI Invocation:** Piping the prompt to the `claude` command via `stdin` causes it to return only the final, clean output, stripping away the `<claude>` thinking tags.
-2.  **Conflicting Hook (Now Removed):** A `PostToolUse` hook in `settings.json` was consuming and discarding all of Claude's output before it could be processed.
-
-This plan corrects the issue by using the documented `claude` CLI flags (`-p` and `--output-format stream-json`) to get a structured data stream. This is a more robust and reliable method than parsing XML tags from raw text.
-
----
+This change will pipe the `stderr` from the `claude` CLI process (which includes hook output) into the reasoning log. The new behavior will ensure a single, chronological log file contains both the AI's reasoning *and* the system's automated feedback, streamlining the debugging process.
 
 ### **Summary Checklist**
 
--   [x] **Refactor `src/tools/proc.ts`**: Rewrite the `runStreaming` function to use the `--output-format stream-json` flag and parse the resulting JSON objects.
--   [x] **Update `src/tools/orchestrator.ts`**: Modify `executeStep` to call the new `runStreaming` function with the prompt as a command-line argument instead of `stdin`.
--   [x] **Remove Conflicting Hook**: Ensure the `PostToolUse` hook in `src/dot-claude/settings.json` has been removed to prevent it from interfering with the output stream.
--   [x] **Update Documentation**: Revise the `README.md` to accurately describe the logging mechanism and the content of each log file.
-
----
+-   [x] **`proc.ts`:** Update the `stderr` handler in the `runStreaming` function to also write to the reasoning log stream.
+-   [ ] **Manual Test:** Verify the new logging behavior by intentionally triggering a hook failure.
+-   [ ] **Documentation:** Update the `README.md` to reflect that reasoning logs now include hook output.
 
 ### **Detailed Implementation Steps**
 
-#### 1. Refactor `runStreaming` to Handle JSON Output (`src/tools/proc.ts`)
+#### 1. Update `proc.ts` to Capture Hook Output
 
-*   **Objective:** To switch from parsing raw text to reliably parsing a stream of JSON objects from the `claude` CLI, routing content to the appropriate log files.
+*   **Objective:** Modify the core process runner to pipe any `stderr` data from the child process to the reasoning log file, in addition to its current destinations.
 *   **Task:**
-    1.  Modify the signature of the `runStreaming` function. It should now require a `thoughtsLogPath` and take the prompt content as a `prompt: string` argument instead of the optional `stdinData`.
-    2.  Change the arguments passed to the `spawn` command to include `-p` and `--output-format stream-json`.
-    3.  Implement a streaming JSON parser inside `p.stdout.on("data", ...)`:
-        *   Use a buffer to handle JSON objects that may be split across multiple data chunks.
-        *   Process each complete line, parse it as a JSON object, and use a `switch` statement on the `type` property.
-        *   If `type` is `"thinking"`, write the `content` to the `thoughtsStream`.
-        *   If `type` is `"tool_code"` or `"final_answer"`, write the `content` to the main `logStream` and to the console (`process.stdout`).
+    1.  Open the file `src/tools/proc.ts`.
+    2.  Locate the `runStreaming` function.
+    3.  Find the `p.stderr.on('data', ...)` event handler within that function.
+    4.  Add a single line to write the incoming `chunk` to the `reasoningStream` if it has been created.
 
-*   **Code Snippet (New `runStreaming` logic):**
+*   **Code Snippet (`src/tools/proc.ts`):**
+
     ```typescript
-    // In src/tools/proc.ts
+    // ... inside the runStreaming function's Promise ...
 
-    export function runStreaming(
-      cmd: string,
-      args: string[],
-      logPath: string,
-      thoughtsLogPath: string, // Now required
-      cwd: string,
-      prompt: string // Prompt is now a direct argument
-    ): Promise<{ code: number; output: string }> {
+    p.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      logStream.write(chunk);
       
-      const finalArgs = [...args, "-p", prompt, "--output-format", "stream-json"];
+      // ADD THIS LINE
+      if (reasoningStream) {
+        reasoningStream.write(chunk);
+      }
       
-      // ... create logStream and thoughtsStream ...
+      fullOutput += chunk.toString();
+    });
 
-      p.stdout.on("data", (chunk) => {
-        // ... buffer and line splitting logic ...
-
-        for (const line of lines) {
-          try {
-            const json = JSON.parse(line);
-            switch (json.type) {
-              case "thinking":
-                thoughtsStream.write(json.content + "\n");
-                break;
-              case "tool_code":
-              case "final_answer":
-                process.stdout.write(json.content);
-                logStream.write(json.content);
-                finalOutput += json.content;
-                break;
-            }
-          } catch (e) { /* handle parse error */ }
-        }
-      });
-      // ...
-    }
+    // ... rest of the function
     ```
 
-#### 2. Update `orchestrator.ts` to Pass Prompt as an Argument
+#### 2. Manually Verify the Change
 
-*   **Objective:** To adapt the `executeStep` function to use the new, more reliable `runStreaming` function signature.
+*   **Objective:** Confirm that the hook's error message is now correctly appearing in the `.reasoning.log` file.
 *   **Task:**
-    1.  Open `src/tools/orchestrator.ts`.
-    2.  Update the `executeStep` function signature to require `thoughtsLogFile: string`.
-    3.  Modify the call to `runStreaming`. Pass `fullPrompt` as the final argument instead of the `stdinData` parameter.
+    1.  Ensure you have a pipeline step that uses the `fileAccess` guardrail, like the default `plan` step which only allows writing to `PLAN.md`.
+    2.  Temporarily modify the `src/dot-claude/commands/plan-task.md` prompt to explicitly instruct Claude to write to a disallowed file (e.g., `PLAN_test.md`).
+    3.  Run a task, for example: `npm run claude:run claude-Tasks/task-001-sample.md`.
+    4.  The first attempt should fail and be blocked by the hook.
+    5.  Inspect the generated log file at `.claude/logs/<your-task-id>/01-plan.reasoning.log`.
+    6.  **Verification:** The log should now contain the `[Guardrail] Blocked:` error message, followed by Claude's next reasoning step where it acknowledges the error.
+    7.  Remember to revert the changes to `plan-task.md` after verification.
 
-*   **Code Snippet (Updated call in `executeStep`):**
-    ```typescript
-    // In src/tools/orchestrator.ts
+#### 3. Update Project Documentation
 
-    // Previous call:
-    // const { code } = await runStreaming("claude", [`/project:${command}`], logFile, projectRoot, fullPrompt);
-
-    // New call:
-    const { code } = await runStreaming(
-      "claude",
-      [`/project:${command}`],
-      logFile,
-      thoughtsLogFile, // Pass the new path
-      projectRoot,
-      fullPrompt // Pass the prompt as an argument
-    );
-    ```
-
-#### 3. Remove Conflicting `PostToolUse` Hook
-
-*   **Objective:** To permanently remove the hook that was incorrectly consuming and discarding Claude's output stream.
-*   **Task:**
-    1.  Open `src/dot-claude/settings.json`.
-    2.  Locate the `"PostToolUse"` key within the `"hooks"` object.
-    3.  Delete the entire `"PostToolUse"` array and key.
-
-*   **Code Snippet (What to remove from `settings.json`):**
-    ```diff
-    -    "PostToolUse": [
-    -      {
-    -        "matcher": "Edit|Write|MultiEdit",
-    -        "hooks": [
-    -          {
-    -            "type": "command",
-    -            "command": "node -e \"process.stdin.on('data',()=>{});\" >/dev/null 2>&1 || true"
-    -          }
-    -        ]
-    -      }
-    -    ]
-    ```
-
-#### 4. Update Documentation (`README.md`)
-
-*   **Objective:** To ensure the project's documentation accurately reflects the logging system for future users and developers.
+*   **Objective:** Clearly document the new, enhanced logging behavior in the main `README.md` file so users know where to look for debugging information.
 *   **Task:**
     1.  Open `README.md`.
-    2.  Add a new section called `### Debugging and Logs`.
-    3.  Clearly explain the purpose of the two log files generated for each step:
-        *   `XX-step-name.log`: This contains the final, clean output from the AI (e.g., the code it wrote).
-        *   `XX-step-name.thoughts.log`: This contains the detailed, step-by-step reasoning (Chain of Thought) from the AI.
-    4.  Advise users to check the `.thoughts.log` file when they need to understand *why* the AI produced a particular result.
+    2.  Navigate to the "### Debugging and Logs" section.
+    3.  Update the description for the `.reasoning.log` file.
+*   **Text Changes (`README.md`):**
+    *   **Current Text:** "Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output."
+    *   **New Text:** "Contains the AI's detailed reasoning process (its "chain of thought"). This shows the internal thinking that led to the final output. **Crucially, it also includes the output from any configured command hooks, such as error messages from file access guardrails.** This provides a complete, chronological record of the AI's attempts and the system's feedback, making it the best place to start debugging."
+
+### **Error Handling & Warnings**
+
+*   The implementation should be defensive. The code change in `proc.ts` must check if `reasoningStream` exists before attempting to write to it. This prevents crashes in any scenario where a reasoning log is not configured.
+*   No new CLI warnings or user-facing errors are expected from this change. The primary effect is a richer and more informative log file.

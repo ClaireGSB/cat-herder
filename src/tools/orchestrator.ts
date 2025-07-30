@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync, readFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, createWriteStream } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { runStreaming } from "./proc.js";
@@ -93,13 +93,50 @@ async function executeStep(
   check: CheckConfig
 ) {
   const projectRoot = getProjectRoot();
-  console.log(pc.blue(`\n[Orchestrator] Starting step: ${name}`));
+  console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
-  if (code !== 0) {
-    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+  // Debug logging before Claude CLI execution
+  const timestamp = new Date().toISOString();
+  // console.log(pc.gray(`[${timestamp}] [DEBUG] About to execute: claude /project:${command}`));
+  // console.log(pc.gray(`[DEBUG] Working directory: ${projectRoot}`));
+  // console.log(pc.gray(`[DEBUG] Log file: ${logFile}`));
+  // console.log(pc.gray(`[DEBUG] Reasoning log: ${reasoningLogFile}`));
+
+  // Set up parent process stderr capture to catch hook output
+  const reasoningLogStream = createWriteStream(reasoningLogFile, { flags: "a" });
+  const originalStderrWrite = process.stderr.write;
+  const captureTimestamp = new Date().toISOString();
+  
+  reasoningLogStream.write(`[${captureTimestamp}] [PARENT-STDERR-CAPTURE] Starting parent stderr monitoring\n`);
+  
+  // Override stderr to capture hook output
+  process.stderr.write = function(chunk: any, encoding?: any, callback?: any): boolean {
+    const hookTimestamp = new Date().toISOString();
+    reasoningLogStream.write(`[${hookTimestamp}] [PARENT-STDERR] ${chunk.toString()}`);
+    
+    // Call original stderr write
+    return originalStderrWrite.call(this, chunk, encoding, callback);
+  };
+
+  try {
+    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
+    
+    // Restore original stderr
+    process.stderr.write = originalStderrWrite;
+    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Ending parent stderr monitoring\n`);
+    reasoningLogStream.end();
+    
+    if (code !== 0) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+    }
+  } catch (error) {
+    // Ensure stderr is restored even on error
+    process.stderr.write = originalStderrWrite;
+    reasoningLogStream.write(`[${new Date().toISOString()}] [PARENT-STDERR-CAPTURE] Error occurred, ending monitoring\n`);
+    reasoningLogStream.end();
+    throw error;
   }
 
   await runCheck(check, projectRoot);
@@ -156,7 +193,7 @@ export async function runTask(taskRelativePath: string) {
     const { name, command, context: contextKeys, check } = stepConfig;
     const currentStepStatus = readStatus(statusFile);
     if (currentStepStatus.steps[name] === 'done') {
-      console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
+      console.log(pc.cyan(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
     const context: Record<string, string> = {};
@@ -178,5 +215,5 @@ export async function runTask(taskRelativePath: string) {
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
-  console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
+  console.log(pc.cyan("\n[Orchestrator] All steps completed successfully!"));
 }

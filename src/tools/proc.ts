@@ -11,7 +11,7 @@ export function runStreaming(
   cwd: string,
   stdinData?: string
 ): Promise<{ code: number; output: string }> {
-  // Build final args with JSON streaming flags
+  // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
   
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
@@ -55,16 +55,18 @@ export function runStreaming(
   return new Promise((resolve) => {
     const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
 
+    const spawnTimestamp = new Date().toISOString();
     // Write stdin data if provided
     if (stdinData) {
       p.stdin.write(stdinData);
       p.stdin.end();
+      reasoningStream.write(`[${spawnTimestamp}] [PROCESS-DEBUG] Stdin data written and closed\n\n`);
     }
 
     p.stdout.on("data", (chunk) => {
       const chunkStr = chunk.toString();
       buffer += chunkStr;
-      
+            
       // Process complete lines
       const lines = buffer.split('\n');
       buffer = lines.pop() || ''; // Keep incomplete line in buffer
@@ -72,33 +74,34 @@ export function runStreaming(
       for (const line of lines) {
         if (line.trim() === '') continue;
         
+        
         try {
           const json = JSON.parse(line);
-          switch (json.type) {
-            case "assistant":
-              // Write assistant reasoning to reasoning log with timestamp
-              const reasoningText = json.message?.content?.[0]?.text;
-              if (reasoningText) {
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                reasoningStream.write(`[${timestamp}] ${reasoningText}\n`);
-              }
-              break;
-            case "result":
-              // Write final result to main log and console
-              const resultText = json.result;
-              if (resultText) {
-                process.stdout.write(resultText);
-                logStream.write(resultText);
-                fullOutput += resultText;
-                
-                // Also write to reasoning log with timestamp and prefix
-                const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
-                reasoningStream.write(`[${timestamp}] [FINAL OUTPUT] ${resultText}\n`);
-              }
-              break;
-            default:
-              // Silently ignore other JSON types (system, etc.)
-              break;
+          
+          // Log ALL JSON entries to reasoning log
+          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
+          const contentItem = json.message?.content?.[0];
+          const contentType = contentItem?.type || json.subtype || 'data';
+          
+          let content;
+          if (contentItem?.type === 'tool_use') {
+            // For tool use, show just tool name and input
+            content = `${contentItem.name}(${JSON.stringify(contentItem.input)})`;
+          } else {
+            // For other content, use existing logic
+            content = contentItem?.text || contentItem?.content || json.result || JSON.stringify(json, null, 2);
+          }
+          
+          reasoningStream.write(`[${timestamp}] [${json.type.toUpperCase()}] [${contentType.toUpperCase()}] ${content}\n`);
+          
+          // Special case: also output "result" to CLI with [CLAUDE] prefix
+          if (json.type === "result") {
+            const resultText = json.result;
+            if (resultText) {
+              process.stdout.write(`[CLAUDE] ${resultText}`);
+              logStream.write(resultText);
+              fullOutput += resultText;
+            }
           }
         } catch (e) {
           // If JSON parsing fails, treat as regular output
@@ -112,6 +115,14 @@ export function runStreaming(
     p.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       logStream.write(chunk);
+      
+      // Write stderr to reasoning log with enhanced debugging
+      if (reasoningStream) {
+        const timestamp = new Date().toISOString();
+        reasoningStream.write(`[${timestamp}] [STDERR] Received ${chunk.toString().length} bytes\n`);
+        reasoningStream.write(`[${timestamp}] [STDERR] Content: ${chunk.toString()}`);
+      }
+      
       fullOutput += chunk.toString();
     });
 
