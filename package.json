@@ -20,14 +20,18 @@
     "@types/fs-extra": "^11.0.4",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.12.7",
+    "@vitest/coverage-v8": "^3.2.4",
     "blessed": "^0.1.81",
     "express": "^4.19.2",
     "glob": "^10.4.5",
     "tsx": "^4.20.3",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/dot-claude dist/ && cp -r src/tasks dist/ && cp -r src/templates dist/ && chmod +x dist/index.js",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }
