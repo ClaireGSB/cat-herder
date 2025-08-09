@@ -127,30 +127,30 @@ async function main() {
   const status: TaskStatus = JSON.parse(fs.readFileSync(latestStateFile, "utf8"));
   
   // 4. Find the current step's rules in the pipeline
-  let currentStepConfig;
-  if (config.pipelines) {
-    // Multi-pipeline format - need to determine which pipeline is active
-    // For now, check all pipelines for the step (this could be improved)
-    for (const pipeline of Object.values(config.pipelines)) {
-      currentStepConfig = pipeline.find(step => step.name === status.currentStep);
-      if (currentStepConfig) break;
-    }
-  } else if (config.pipeline) {
-    // Legacy single pipeline format
-    currentStepConfig = config.pipeline.find(step => step.name === status.currentStep);
+  // 4.1. Get the active pipeline name from the status file.
+  const activePipelineName = status.pipeline || config.defaultPipeline || 'default';
+  
+  // 4.2. Select the correct pipeline from the config.
+  const activePipeline = config.pipelines?.[activePipelineName] || (config as any).pipeline;
+  if (!activePipeline) {
+    block(`Error: Could not find active pipeline "${activePipelineName}" in config.`);
+    return;
   }
+  
+  // 4.3. Find the current step within THAT specific pipeline.
+  const currentStepConfig = activePipeline.find((step: PipelineStep) => step.name === status.currentStep);
+  
   if (!currentStepConfig) {
-    block(`Error: Could not find step "${status.currentStep}" in claude.config.js pipeline.`);
+    block(`Error: Could not find step "${status.currentStep}" in pipeline "${activePipelineName}".`);
     return;
   }
 
-  // 5. Enforce the rules
   const allowedPatterns = currentStepConfig.fileAccess?.allowWrite;
   if (!allowedPatterns || allowedPatterns.length === 0) {
-    process.exit(0); // No rules for this step, so allow the write
+    process.exit(0);
   }
 
-  const isAllowed = allowedPatterns.some(pattern => minimatch(filePathToEdit, pattern, { dot: true }));
+  const isAllowed: boolean = allowedPatterns.some((pattern: string): boolean => minimatch(filePathToEdit, pattern, { dot: true }));
 
   if (!isAllowed) {
     const helpfulMessage = createHelpfulErrorMessage(
@@ -162,10 +162,9 @@ async function main() {
     block(helpfulMessage);
   }
 
-  // If we reach here, the path is allowed
   process.exit(0);
 }
 
 main().catch(e => {
-  block(`An unexpected error occurred in the pipeline validator: ${e.message}`);
+  block(`An unexpected error occurred in the pipeline validator: ${e instanceof Error ? e.message : String(e)}`);
 });
