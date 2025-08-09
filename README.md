@@ -24,13 +24,13 @@ cd your-typescript-project
 ```
 
 2.  **Initialize the project:**
-This command sets up everything you need: it creates a `claude.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with necessary scripts and dependencies.
+This command sets up everything you need: it creates a `claude.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `claude:*` helper scripts and recommended dependencies.
 ```bash
 claude-project init
 ```
 
 3.  **Install dependencies:**
-The `init` command adds several development dependencies (like `vitest` and `prettier`) to your `package.json`. Run `npm install` to add them to your project.
+The `init` command recommends development dependencies (like `vitest` and `prettier`) by adding them to your `package.json`. Run `npm install` to add them to your project.
 ```bash
 npm install
 ```
@@ -281,6 +281,8 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 check: { type: "none" }
 ```
 
+**Important:** When using `shell` checks with npm commands, the referenced script must exist in your `package.json`. For example, `"npm test"` requires a `"test"` script. The validator will check this and provide clear error messages if scripts are missing.
+
 ### Customizable Guardrails (`fileAccess`)
 
 The `fileAccess` property allows you to control which files Claude can modify during each step of your pipeline. This provides fine-grained control over the development workflow and prevents accidental modifications to unintended files.
@@ -370,20 +372,24 @@ For the orchestrator to run non-interactively, it needs permission to execute `B
 
 This file pre-approves `Bash` commands that are essential for the default workflow (scoped to `npm`, `git`, and `vitest`) while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.
 
-Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command acts as a safety net and a helper. When you add a new step or command that requires a `Bash` permission not listed in your `settings.json`, the validator will detect it and offer to fix it for you.
+Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command acts as a safety net and a helper. It validates two things:
 
-For example, if you add a `lint` step that needs to run `npm run lint:fix`, the validator will show you:
+1. **Permissions**: When you add a step that requires a `Bash` permission not in your `settings.json`, the validator detects it and offers to add it
+2. **Package.json Scripts**: When your pipeline references npm scripts (e.g., `npm test`), the validator ensures those scripts exist in your `package.json`
+
+For example, if you add a `lint` step that needs to run `npm run lint:fix`, but don't have a `lint:fix` script, the validator will show:
 
 > ```
 > ✖ Pipeline configuration is invalid:
 > 
+>   - Step 4 ('lint'): The command "npm run lint:fix" requires a script named "lint:fix" in your package.json, but it was not found.
 >   - Step 4 ('lint'): Requires missing permission "Bash(npm run lint:fix)"
 > 
 > This command can automatically add the missing permissions for you.
 > Would you like to add these permissions to .claude/settings.json? (y/N)
 > ```
 
-If you press `y` and hit Enter, the tool will safely and automatically add the required permission to your `settings.json` file. This turns the validator into a powerful assistant, ensuring your security settings always stay in sync with your workflow.
+The validator ensures both your security settings and project configuration stay in sync with your workflow.
 
 ## Commands Reference
 
@@ -402,19 +408,19 @@ All commands are available directly via the `claude-project` executable.
 
 ### NPM Scripts
 
-The `init` command adds these helpful scripts to your project's `package.json`:
+The `init` command adds these `claude:*` scripts to your project's `package.json`:
 
 -   `npm run claude:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
 -   `npm run claude:watch`: Watches for new tasks.
 -   `npm run claude:status`: Shows the latest task status.
 -   `npm run claude:tui`: Launches the terminal UI.
 -   `npm run claude:web`: Starts the status web server.
--   `npm test`: Runs the test suite once.
--   `npm run test:watch`: Runs tests in interactive watch mode.
--   `npm run coverage`: Runs tests and generates a coverage report.
+
+**Note:** Test scripts (like `npm test`) are not automatically added. The default pipeline includes test steps that assume you have `test`, `test:watch`, and `coverage` scripts, but you can customize your pipeline to use any testing framework or remove testing steps entirely.
 
 ## System Requirements
 
 -   **Node.js**: Version 18.0 or higher.
 -   **Git**: Must be installed and configured.
 -   **Claude CLI**: The `claude` command-line tool must be installed and authenticated on your system.
+-   **Package.json Scripts**: Any npm scripts referenced in your pipeline's shell commands must be defined in your `package.json`.

@@ -161,10 +161,6 @@ export async function init(targetRoot: string) {
       "claude:status": "claude-project status",
       "claude:tui": "claude-project tui",
       "claude:web": "claude-project web",
-      // Add standard test scripts
-      "test": "vitest run",
-      "test:watch": "vitest",
-      "coverage": "vitest run --coverage",
     },
     devDependencies: {
       "@your-scope/claude-project": "0.1.0",
