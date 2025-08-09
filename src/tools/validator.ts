@@ -53,6 +53,20 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     errors.push(".claude/settings.json not found. Please run `claude-project init` to create a default one.");
   }
 
+  // 2. Load user-defined scripts from package.json
+  const pkgPath = path.join(projectRoot, "package.json");
+  let userScripts: Record<string, string> = {};
+  if (fs.existsSync(pkgPath)) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      userScripts = pkg.scripts || {};
+    } catch {
+      errors.push("Could not parse package.json. Please ensure it is valid JSON.");
+    }
+  } else {
+    errors.push("A package.json file was not found in the project root.");
+  }
+
   // 2. Validate pipelines structure
   let pipelines: { [key: string]: any[] };
   
@@ -93,6 +107,20 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       if (!step.check || !step.check.type) {
         errors.push(`${stepId}: is missing a valid 'check' object with a 'type' property.`);
         continue;
+      }
+
+      if (step.check?.type === "shell" && step.check.command) {
+        const command = step.check.command;
+        // We specifically look for npm script commands
+        if (command.startsWith("npm ")) {
+          // e.g., "npm test" -> "test", "npm run lint" -> "lint"
+          const scriptName = command.split(" ").pop();
+          if (scriptName && !userScripts[scriptName]) {
+            errors.push(
+              `${stepId}: The command "${command}" requires a script named "${scriptName}" in your package.json, but it was not found.`
+            );
+          }
+        }
       }
 
       // --- Command File and Permission Validation ---
