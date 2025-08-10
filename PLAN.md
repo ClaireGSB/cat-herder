@@ -18,7 +18,7 @@ This change introduces a more resilient approach. It will parse the rate limit e
 
 - [x] **Config:** Add a `waitForRateLimitReset` option to `claude.config.js` and the config type definitions.
 - [x] **Proc:** Update the process runner (`proc.ts`) to specifically detect and parse the rate limit error message.
-- [ ] **Status:** Add a new `waiting_for_reset` phase to the task status model.
+- [x] **Status:** Add a new `waiting_for_reset` phase to the task status model.
 - [ ] **Orchestrator:** Implement the core logic in `orchestrator.ts` to handle the parsed error, deciding whether to wait or fail based on the user's config.
 - [ ] **Tests:** Create new integration tests to verify both the "wait" and "graceful fail" scenarios.
 - [ ] **Documentation:** Update `README.md` to explain the new feature to users.
@@ -148,23 +148,27 @@ This change introduces a more resilient approach. It will parse the rate limit e
     export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
     ```
 
-### 4. Implement Core Orchestrator Logic
+#### **4. Implement Core Orchestrator Logic (Revised)**
 
-*   **Objective:** Modify the `executeStep` function in the orchestrator to handle the new `rateLimit` error from `runStreaming`.
+*   **Objective:** Modify the `executeStep` function to handle the `rateLimit` error by either pausing and retrying with a context-aware "Resume Prompt" or failing gracefully.
 *   **Tasks:**
     1.  In `src/tools/orchestrator.ts`, check the result of the `runStreaming` call for the `rateLimit` property.
     2.  If the error is present, check the `waitForRateLimitReset` config value.
-    3.  **Wait Logic:** If `true`, calculate the wait time, log a message, update the task status to `waiting_for_reset`, and use a `setTimeout` promise to pause execution. After the wait, loop back to retry the step without consuming a retry attempt.
-    4.  **Graceful Fail Logic:** If `false`, throw a new, more informative error that includes the human-readable reset time and instructions on how to resume.
+    3.  **Wait Logic:** If `true`:
+        a. **Read the `reasoningLogFile`** for the failed attempt.
+        b. Calculate wait time, log a message, and update the task status.
+        c. Use `setTimeout` to pause execution.
+        d. After the wait, **construct the new "Resume Prompt"** using the original instructions and the reasoning log content.
+        e. Use this new prompt for the next attempt.
+    4.  **Graceful Fail Logic:** If `false`, throw the informative error as previously planned.
 
 *   **Code Snippet:**
 
-    **File:** `src/tools/orchestrator.ts` (inside `executeStep`)
+    **File:** `src/tools/orchestrator.ts` (updated logic inside `executeStep`)
     ```typescript
-    // Replace the simple check for `code !== 0` with more detailed logic.
-    const result = await runStreaming(/*...args...*/);
+    // Inside the for-loop for attempts
+    const result = await runStreaming(/*...args...*/, currentPrompt /* This holds the prompt for the attempt */);
 
-    // Check for rate limit error FIRST
     if (result.rateLimit) {
         const config = await getConfig();
         const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
@@ -174,36 +178,38 @@ This change introduces a more resilient approach. It will parse the rate limit e
             if (waitMs > 0) {
                 console.log(pc.yellow(`[Orchestrator] Claude API usage limit reached.`));
                 console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
-                updateStatus(statusFile, s => {
-                    s.phase = "waiting_for_reset";
-                    s.steps[name] = "running"; // Keep the step as running
-                });
-
-                // This makes the process wait without blocking the event loop
+                updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
+                
                 await new Promise(resolve => setTimeout(resolve, waitMs));
 
                 console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
                 updateStatus(statusFile, s => { s.phase = "running"; });
-                // By continuing the loop, we re-run the same step.
-                // We decrement `attempt` so this doesn't count as a "retry".
-                attempt--; 
-                continue; // Skip the rest of the loop and try the step again
-            }
-        } else {
-            // Graceful failure
-            updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-            throw new Error(`Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleTimeString()}.
-To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
-You can re-run the command after the reset time to continue from this step.`);
-        }
-    }
-    
-    // Original failure check
-    if (result.code !== 0) {
-      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}`);
-    }
-    // ... rest of the function (check logic, commit, etc.)
+
+                // **NEW LOGIC: Construct the Resume Prompt**
+                const reasoningLogContent = readFileSync(reasoningLogFile, 'utf-8');
+                const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.
+
+                --- ORIGINAL INSTRUCTIONS ---
+                ${fullPrompt}
+                --- END ORIGINAL INSTRUCTIONS ---
+
+                --- PREVIOUS ACTIONS LOG ---
+                ${reasoningLogContent}
+                --- END PREVIOUS ACTIONS LOG ---
+
+                Please analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
+                                
+                                // Update the prompt for the next iteration of the loop.
+                                currentPrompt = resumePrompt; 
+
+                                attempt--; // Do not count this as a formal "retry"
+                                continue; // Re-run the step with the new resume prompt
+                            }
+                        } else {
+                            // ... graceful failure logic as before ...
+                        }
+                    }
+                    // ... rest of the function
     ```
 
 ### 5. Add Tests
