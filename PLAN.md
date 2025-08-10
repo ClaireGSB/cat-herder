@@ -21,7 +21,7 @@ This change introduces a `hooks` object that can be added to any pipeline step i
 -   [x] **3. Implement Orchestrator Retry Logic:** Refactor `executeStep` in `src/tools/orchestrator.ts` to manage a retry loop and execute the new hooks.
 -   [x] **4. Update Example Configuration:** Add a sample `onCheckFailure` hook to the default template in `src/templates/claude.config.js`.
 -   [x] **5. Add Unit Tests:** Create a new test file to verify the orchestrator's retry and hook-triggering behavior.
--   [ ] **6. Update Project Documentation:** Revise `README.md` to explain the new `hooks` feature with a clear example.
+-   [x] **6. Update Project Documentation:** Revise `README.md` to explain the new `hooks` feature with a clear example.
 
 ---
 

@@ -336,6 +336,102 @@ Blocked: The current step 'implement' only allows file modifications matching ["
 
 This feature ensures that each step of your pipeline only modifies the files it should, providing confidence in your automated workflow.
 
+### Advanced: Step Hooks and Self-Correction
+
+Traditional CI/CD pipelines are rigid—when a step fails, the entire process halts and requires manual intervention. The `hooks` feature transforms your pipeline into a resilient, self-healing workflow. When a check fails, hooks can automatically provide feedback to Claude, giving it a chance to analyze the error and fix its own work.
+
+**The Problem:** Without hooks, if your `implement` step's tests fail, the pipeline stops. You must manually examine the test output, understand what went wrong, and guide Claude to fix it.
+
+**The Solution:** With `onCheckFailure` hooks, the orchestrator automatically captures the error output and feeds it back to Claude with a tailored prompt, allowing it to self-correct and retry—up to 3 attempts.
+
+#### Basic Configuration
+
+Add a `hooks` object to any pipeline step. The most powerful hook is `onCheckFailure`, which triggers when the step's `check` validation fails:
+
+```javascript
+{
+  name: "implement",
+  command: "implement",
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  fileAccess: {
+    allowWrite: ["src/**/*"]
+  },
+  hooks: {
+    onCheckFailure: [
+      {
+        type: "shell",
+        command: "echo 'The test suite failed. The errors are provided below. Please analyze the output, fix the code in the src/ directory, and ensure all tests pass. Do not modify the test files themselves.\\n\\n---\\n\\n{check_output}'"
+      }
+    ]
+  }
+}
+```
+
+#### How It Works
+
+1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
+2. **Check Validation**: The orchestrator runs `npm test` to validate the implementation
+3. **On Failure**: If tests fail, instead of halting:
+   - The hook command executes, generating a feedback prompt
+   - `{check_output}` is replaced with the actual test failure output
+   - Claude receives this feedback and attempts to fix the issues
+   - The cycle repeats up to 3 times until tests pass or retries are exhausted
+
+#### Key Features
+
+- **Automatic Retry**: Failed steps automatically retry with context-aware feedback
+- **Error Context**: The `{check_output}` token passes actual error output to Claude
+- **Retry Limits**: Steps retry up to 3 times before failing permanently
+- **Hook Types**: 
+  - `onCheckFailure`: Triggers when the step's check validation fails
+  - `preCheck`: Runs before the main check validation (useful for setup commands)
+
+#### Common Use Cases
+
+**Test Failures During Implementation:**
+```javascript
+hooks: {
+  onCheckFailure: [
+    {
+      type: "shell", 
+      command: "echo 'Tests failed. Fix the implementation based on these errors:\\n{check_output}'"
+    }
+  ]
+}
+```
+
+**Build or Lint Errors:**
+```javascript
+hooks: {
+  onCheckFailure: [
+    {
+      type: "shell",
+      command: "echo 'Build failed. Please fix these compilation errors and ensure the code builds successfully:\\n{check_output}'"
+    }
+  ]
+}
+```
+
+**Pre-Check Setup:**
+```javascript
+hooks: {
+  preCheck: [
+    {
+      type: "shell",
+      command: "npm run build"  // Ensure code is built before testing
+    }
+  ]
+}
+```
+
+#### Error Handling
+
+- **Hook Command Failures**: If a hook command itself fails, the step fails immediately with a clear error message
+- **Retry Exhaustion**: After 3 failed attempts, the step fails permanently
+- **Missing Token**: If `{check_output}` is omitted from the hook command, it still works but without error context
+
+This self-correction capability makes your pipelines more autonomous and reduces the need for manual intervention during development workflows.
+
 ### Debugging and Logs
 
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, two log files are created in the `.claude/logs/` directory:
