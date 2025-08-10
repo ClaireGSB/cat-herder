@@ -29,8 +29,8 @@ This change significantly improves user experience by hiding implementation deta
 
 -   [x] **1. Update Configuration Types:** Replace the `hooks` object with a `retry?: number` property in the `PipelineStep` interface.
 -   [x] **2. Refactor Orchestrator Logic:** Modify `executeStep` to use the `retry` property and auto-generate the feedback prompt.
--   [ ] **3. Delete Obsolete Code:** Remove the `executeHooks` helper function, which is no longer needed.
--   [ ] **4. Update Example Configuration:** Revise the `claude.config.js` template to use the new `retry` property.
+-   [x] **3. Delete Obsolete Code:** Remove the `executeHooks` helper function, which is no longer needed.
+-   [x] **4. Update Example Configuration:** Revise the `claude.config.js` template to use the new `retry` property.
 -   [ ] **5. Refactor Unit Tests:** Update tests to validate the new `retry` logic instead of the old `hooks` mechanism.
 -   [ ] **6. Rewrite Documentation:** Overhaul the "Step Hooks" section in `README.md` to explain the new, simpler `retry` feature.
 
