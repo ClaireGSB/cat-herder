@@ -180,6 +180,23 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
           }
           break;
       }
+
+      // --- FileAccess Validation ---
+      if (step.fileAccess !== undefined) {
+        if (typeof step.fileAccess !== 'object' || step.fileAccess === null || Array.isArray(step.fileAccess)) {
+          errors.push(`${stepId}: The 'fileAccess' property must be an object.`);
+        } else if (step.fileAccess.allowWrite) {
+          if (!Array.isArray(step.fileAccess.allowWrite)) {
+            errors.push(`${stepId}: The 'fileAccess.allowWrite' property must be an array of strings.`);
+          } else {
+            step.fileAccess.allowWrite.forEach((pattern: any, i: number) => {
+              if (typeof pattern !== 'string' || !pattern) {
+                errors.push(`${stepId}: The 'fileAccess.allowWrite' array contains an invalid value at index ${i}. All values must be non-empty strings.`);
+              }
+            });
+          }
+        }
+      }
     }
   }
 
