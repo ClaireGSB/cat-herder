@@ -336,6 +336,77 @@ Blocked: The current step 'implement' only allows file modifications matching ["
 
 This feature ensures that each step of your pipeline only modifies the files it should, providing confidence in your automated workflow.
 
+### Automatic Retries on Failure
+
+Traditional CI/CD pipelines are rigid—when a step fails, the entire process halts and requires manual intervention. The automatic retry feature transforms your pipeline into a resilient, self-healing workflow. When a check fails, the orchestrator automatically provides feedback to Claude, giving it a chance to analyze the error and fix its own work.
+
+**The Problem:** Without retries, if your `implement` step's tests fail, the pipeline stops. You must manually examine the test output, understand what went wrong, and guide Claude to fix it.
+
+**The Solution:** With the `retry` property, the orchestrator automatically captures the error output and feeds it back to Claude with a clear prompt, allowing it to self-correct and retry—up to the specified number of attempts.
+
+#### Basic Configuration
+
+Add a simple `retry` property to any pipeline step to enable automatic retries when the step's `check` validation fails:
+
+```javascript
+{
+  name: "implement",
+  command: "implement",
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  fileAccess: {
+    allowWrite: ["src/**/*"]
+  },
+  retry: 3
+}
+```
+
+#### How It Works
+
+1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
+2. **Check Validation**: The orchestrator runs `npm test` to validate the implementation
+3. **On Failure**: If tests fail, instead of halting:
+   - The orchestrator automatically generates a feedback prompt with the error output
+   - Claude receives this feedback and attempts to fix the issues
+   - The cycle repeats up to the specified number of retries until tests pass or retries are exhausted
+
+#### Key Features
+
+- **Automatic Retry**: Failed steps automatically retry with context-aware feedback
+- **Error Context**: The actual error output is automatically included in the feedback
+- **Configurable Limits**: Set any number of retries with the `retry` property
+- **Zero Configuration**: No complex setup required—just add `retry: N` to any step
+
+#### Common Use Cases
+
+**Test Failures During Implementation:**
+```javascript
+{
+  name: "implement",
+  command: "implement",
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  fileAccess: { allowWrite: ["src/**/*"] },
+  retry: 3
+}
+```
+
+**Build or Lint Errors:**
+```javascript
+{
+  name: "build",
+  command: "build-code",
+  check: { type: "shell", command: "npm run build", expect: "pass" },
+  fileAccess: { allowWrite: ["src/**/*"] },
+  retry: 2
+}
+```
+
+#### Error Handling
+
+- **Retry Exhaustion**: After the specified number of failed attempts, the step fails permanently
+- **Automatic Feedback**: The orchestrator generates clear, actionable feedback prompts automatically
+
+This self-correction capability makes your pipelines more autonomous and reduces the need for manual intervention during development workflows.
+
 ### Debugging and Logs
 
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, two log files are created in the `.claude/logs/` directory:

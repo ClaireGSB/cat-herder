@@ -2,180 +2,166 @@
 
 # PLAN.md
 
-## Title & Goal
+## Title: Refactor Pipeline Hooks to a Simpler `retry` Configuration
 
-**Title:** Safely Merge Hooks into Existing `.claude/settings.json`
+**Goal:** To replace the verbose `hooks` object with a simple `retry: number` property in the step configuration, making the self-correction feature more intuitive and easier to use.
 
-**Goal:** To ensure the pipeline validation hook is present in `settings.json` after running `init`, even if the file already exists, by prompting the user for permission to merge it.
+### Description
 
-## Description
+The current `onCheckFailure` hook is powerful but requires users to write a shell command and understand a special `{check_output}` token. This is often more configuration than needed for the common goal of "retrying a step with the failure reason."
 
-Currently, the `claude-project init` command completely skips writing to `.claude/settings.json` if it already exists. This can cause problems for users with older or custom configurations who might be missing the critical `PreToolUse` hook. Without this hook, the `fileAccess` guardrails defined in `claude.config.js` will not be enforced, defeating a key safety feature of the tool.
+This refactor simplifies this entire feature. We will remove the `hooks` object and replace it with a single, optional `retry` property. If a step's check fails and `retry: 3` is set, the orchestrator will now *automatically* generate a generic but effective feedback prompt and trigger the retry loop.
 
-This change modifies the `init` command's behavior. Now, if `settings.json` exists, the command will read and parse it. If the required validation hook is missing, it will inform the user why the hook is needed and interactively ask for permission to add it. This ensures functionality without destructively overwriting the user's custom settings.
+**Before:**
+```javascript
+hooks: {
+  onCheckFailure: [{ type: "shell", command: "echo 'Tests failed... {check_output}'" }]
+}```
 
-## Summary Checklist
+**After:**
+```javascript
+retry: 3
+```
 
-- [x] Modify the `init` command to inspect `settings.json` if it exists.
-- [x] Implement logic to parse the `settings.json` and check for the validation hook.
-- [x] Add a user prompt using Node's `readline` module to ask for permission.
-- [x] Implement a non-destructive merge function to add the hook to the JSON object.
-- [x] Write the updated configuration back to the file if the user agrees.
-- [x] Update the `README.md` to document this new, safer behavior.
+This change significantly improves user experience by hiding implementation details and focusing the configuration on the user's intent: "How many times should this step retry on failure?"
 
-## Detailed Implementation Steps
+### Summary Checklist
 
-### 1. Update `init.ts` to Check Existing `settings.json` ✅ DONE
+-   [x] **1. Update Configuration Types:** Replace the `hooks` object with a `retry?: number` property in the `PipelineStep` interface.
+-   [x] **2. Refactor Orchestrator Logic:** Modify `executeStep` to use the `retry` property and auto-generate the feedback prompt.
+-   [x] **3. Delete Obsolete Code:** Remove the `executeHooks` helper function, which is no longer needed.
+-   [x] **4. Update Example Configuration:** Revise the `claude.config.js` template to use the new `retry` property.
+-   [x] **5. Refactor Unit Tests:** Update tests to validate the new `retry` logic instead of the old `hooks` mechanism.
+-   [x] **6. Rewrite Documentation:** Overhaul the "Step Hooks" section in `README.md` to explain the new, simpler `retry` feature.
 
-*   **Objective:** Change the `init` command to intelligently handle an existing `.claude/settings.json` file instead of simply skipping it.
-*   **Task:** Modify the `init` function in `src/init.ts`. After copying the template files, add a new function call that specifically processes the `settings.json` file.
+---
 
+### Detailed Implementation Steps
+
+#### 1. Update Configuration Types
+
+*   **Objective:** Modify the core data structure in `src/config.ts` to reflect the new design.
+*   **Task:**
+    1.  Navigate to `src/config.ts`.
+    2.  Delete the `HookConfig` interface, as it will no longer be used.
+    3.  In the `PipelineStep` interface, remove the `hooks?: { ... };` property.
+    4.  Add the new optional property: `retry?: number;`.
+*   **Code Snippet (`src/config.ts`):**
     ```typescript
-    // src/init.ts
-
-    // ... after fs.copy for the .claude directory ...
-    
-    // Add this new function call
-    await handleExistingSettings(targetDotClaudePath, dotClaudeTemplatePath);
-    
-    console.log(pc.green("Created .claude/ directory with default commands and settings."));
-    // ... rest of the init function ...
-    ```
-
-### 2. Implement Hook Checking and Merging Logic ✅ DONE
-
-*   **Objective:** Create functions to check if the hook exists and to merge it into the configuration without overwriting existing user settings.
-*   **Task:** In `src/init.ts`, create the `handleExistingSettings` function and its helpers. This function will read both the template `settings.json` and the user's existing `settings.json` to perform the check and merge.
-
-*   **Code Snippets (New Functions in `src/init.ts`):**
-
-    ```typescript
-    // src/init.ts
-    import readline from "readline"; // Add this import at the top
-
-    // Define the hook we need to ensure exists
-    const requiredHook = {
-      type: "command",
-      command: "node ./node_modules/@your-scope/claude-project/dist/tools/pipeline-validator.js < /dev/stdin",
-    };
-    
-    const requiredMatcher = "Edit|Write|MultiEdit";
-
-    /**
-     * Checks if the validation hook exists and adds it if missing.
-     */
-    async function handleExistingSettings(targetDir: string, templateDir: string) {
-      const targetSettingsPath = path.join(targetDir, 'settings.json');
-      
-      // If the user doesn't have a settings.json, copy the default one and finish.
-      if (!fs.existsSync(targetSettingsPath)) {
-        const templateSettingsPath = path.join(templateDir, 'settings.json');
-        await fs.copy(templateSettingsPath, targetSettingsPath);
-        return;
-      }
-
-      // If the file exists, read and check it.
-      const userSettings = await fs.readJson(targetSettingsPath);
-
-      if (doesHookExist(userSettings)) {
-        console.log(pc.gray("Validation hook already present in .claude/settings.json."));
-        return;
-      }
-
-      // If hook is missing, call the interactive prompt function
-      await promptToAddHook(targetSettingsPath, userSettings);
+    // BEFORE
+    export interface PipelineStep {
+      // ...
+      hooks?: { onCheckFailure?: HookConfig[] };
     }
 
-    /**
-     * Checks if the required hook is present in the settings object.
-     */
-    function doesHookExist(settings: any): boolean {
-      const preToolUseHooks = settings?.hooks?.PreToolUse;
-      if (!Array.isArray(preToolUseHooks)) return false;
-
-      const matcherEntry = preToolUseHooks.find(h => h.matcher === requiredMatcher);
-      if (!matcherEntry || !Array.isArray(matcherEntry.hooks)) return false;
-      
-      return matcherEntry.hooks.some((h: any) => h.command === requiredHook.command);
-    }
-    
-    /**
-     * Merges the required hook into the settings object non-destructively.
-     */
-    function mergeHook(settings: any): any {
-      const newSettings = JSON.parse(JSON.stringify(settings)); // Deep copy
-
-      if (!newSettings.hooks) newSettings.hooks = {};
-      if (!newSettings.hooks.PreToolUse) newSettings.hooks.PreToolUse = [];
-      
-      let matcherEntry = newSettings.hooks.PreToolUse.find((h: any) => h.matcher === requiredMatcher);
-
-      if (matcherEntry) {
-        if (!matcherEntry.hooks) matcherEntry.hooks = [];
-        matcherEntry.hooks.push(requiredHook);
-      } else {
-        newSettings.hooks.PreToolUse.push({
-          matcher: requiredMatcher,
-          hooks: [requiredHook],
-        });
-      }
-      return newSettings;
+    // AFTER
+    export interface PipelineStep {
+      // ...
+      retry?: number;
     }
     ```
 
-### 3. Implement the Interactive User Prompt ✅ DONE
+#### 2. Refactor Orchestrator Logic
 
-*   **Objective:** Ask for the user's consent before modifying their configuration file, clearly explaining the reason.
-*   **Task:** Create a `promptToAddHook` function in `src/init.ts` that uses Node's `readline` module.
-
-*   **Code Snippet (New Function in `src/init.ts`):**
-
+*   **Objective:** Update the step execution loop to use the `retry` count and generate its own feedback prompt.
+*   **Task:**
+    1.  Navigate to `src/tools/orchestrator.ts`.
+    2.  In the `executeStep` function, change the retry loop to be governed by `stepConfig.retry`. The `maxRetries` constant can be replaced by `stepConfig.retry ?? 0`.
+    3.  Inside the failure case (after `checkResult.success` is false), replace the call to `executeHooks` with new logic to construct a generic prompt.
+    4.  The new prompt should include the failed command from `check.command` and the error message from `checkResult.output`.
+*   **Code Snippet (New logic in `src/tools/orchestrator.ts`):**
     ```typescript
-    // src/init.ts
+    async function executeStep(stepConfig: PipelineStep, /* ... */) {
+      const { name, command, check, retry } = stepConfig;
+      const maxRetries = retry ?? 0;
 
-    /**
-     * Prompts the user to add the missing hook.
-     */
-    function promptToAddHook(settingsPath: string, userSettings: any): Promise<void> {
-      return new Promise((resolve) => {
-        console.log(pc.yellow("\nWarning: Your .claude/settings.json is missing a required validation hook."));
-        console.log(pc.gray("This hook enables the file access guardrails defined in your pipeline."));
-        console.log(pc.gray(`It will be added to the 'PreToolUse' section.`));
+      for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        // ... run Claude command ...
+        const checkResult = await runCheck(check, projectRoot);
 
-        const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+        if (checkResult.success) {
+          // ... commit and return
+          return;
+        }
+
+        // --- Failure Case ---
+        if (attempt > maxRetries) {
+          // If we've used all retries, fail permanently
+          throw new Error(`Step "${name}" failed after ${maxRetries} retries.`);
+        }
         
-        rl.question(pc.cyan("Do you want to add it automatically? (Y/n) "), async (answer) => {
-          rl.close();
-          if (answer.toLowerCase() === 'y' || answer === '') {
-            const updatedSettings = mergeHook(userSettings);
-            await fs.writeJson(settingsPath, updatedSettings, { spaces: 2 });
-            console.log(pc.green("✔ Hook successfully added to .claude/settings.json."));
-          } else {
-            console.log(pc.yellow("Skipping hook addition. File access guardrails will be disabled."));
-          }
-          resolve();
-        });
-      });
+        // V-- THIS IS THE NEW CORE LOGIC --V
+        console.log(pc.yellow(`[Orchestrator] Generating automatic feedback for step: ${name}`));
+        const feedbackPrompt = `The previous attempt failed.
+The validation check \`${check.command}\` failed with the following output:
+---
+${checkResult.output}
+---
+Please analyze this error, fix the underlying code, and try again. Do not modify the tests or checks.`;
+        
+        currentPrompt = feedbackPrompt; // Set prompt for the next loop iteration
+        // ^-- END OF NEW CORE LOGIC --^
+      }
     }
     ```
+
+#### 3. Delete Obsolete Code
+
+*   **Objective:** Remove dead code to keep the codebase clean.
+*   **Task:**
+    1.  Navigate to `src/tools/orchestrator.ts`.
+    2.  Delete the entire `executeHooks` helper function, as it is no longer called from anywhere.
+
+#### 4. Update Example Configuration
+
+*   **Objective:** Update the default template to reflect the new, simpler configuration.
+*   **Task:**
+    1.  Navigate to `src/templates/claude.config.js`.
+    2.  Find the `implement` step.
+    3.  Remove the entire `hooks` object.
+    4.  Add the `retry: 3` property.
+*   **Code Snippet (`src/templates/claude.config.js`):**
+    ```javascript
+    // In the 'implement' step object:
     
-## Error Handling & Warnings
+    // BEFORE
+    {
+      name: "implement",
+      // ...
+      hooks: { onCheckFailure: [ /* ... */ ] }
+    }
 
-*   **Invalid `settings.json`:** If `.claude/settings.json` exists but contains invalid JSON, `fs.readJson` will throw an error. The `init` command should catch this and display a helpful message:
-    > `Error: Could not parse .claude/settings.json. Please fix or remove the file and run 'init' again.`
+    // AFTER
+    {
+      name: "implement",
+      command: "implement",
+      check: { type: "shell", command: "npm test", expect: "pass" },
+      fileAccess: { allowWrite: ["src/**/*"] },
+      retry: 3
+    }
+    ```
 
-*   **User Declines:** If the user chooses "n", the tool should print a clear warning:
-    > `Skipping hook addition. File access guardrails will be disabled.`
+#### 5. Refactor Unit Tests
 
-*   **File Permissions:** If writing the updated `settings.json` fails (e.g., due to file permissions), the `fs.writeJson` error should be caught and reported to the user.
+*   **Objective:** Ensure the test suite validates the new `retry` behavior.
+*   **Task:**
+    1.  Navigate to `test/orchestrator-hooks.test.ts` and rename it to `test/orchestrator-retry.test.ts`.
+    2.  Update the tests to pass a `retry: 3` property in the mock `stepConfig`.
+    3.  Remove any mocks for `execSync` related to the old hook commands.
+    4.  Assert that the retry loop continues when `checkResult.success` is false.
+    5.  Assert that the `currentPrompt` variable for the next loop iteration matches the expected auto-generated feedback string.
 
-## Documentation Changes
+#### 6. Rewrite Documentation
 
-The final step is to update the documentation to reflect this new, safer behavior.
+*   **Objective:** Update the `README.md` to be accurate and reflect the simplicity of the final feature.
+*   **Task:**
+    1.  Navigate to `README.md`.
+    2.  Find the "Advanced: Step Hooks and Self-Correction" section and rename it to something like "Automatic Retries on Failure".
+    3.  Rewrite the entire section to explain the new `retry` property.
+    4.  Remove all mentions of `hooks`, `onCheckFailure`, and the `{check_output}` token.
+    5.  Provide a clear example showing a step with the `retry: 3` property.
 
-*   **Objective:** Ensure the `README.md` accurately describes how `init` handles an existing `settings.json`.
-*   **Task:** In `README.md`, find the section "Permissions and Security (`.claude/settings.json`)".
-*   **Change:**
-    *   **FROM:** `**Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**, preserving your custom configuration.`
-    *   **TO (suggestion):** `**Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.`
+### Error Handling & Warnings
 
+*   The existing error handling for the retry loop (exhausting all retries) remains valid and sufficient.
+*   If a user provides a non-numeric value for `retry`, it will be treated as `undefined`, resulting in 0 retries. This is acceptable default behavior.

@@ -6,7 +6,7 @@ import yaml from 'js-yaml';
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
-import { runCheck, CheckConfig } from "./check-runner.js";
+import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
 
@@ -78,6 +78,7 @@ function assemblePrompt(
     .filter(Boolean) // Remove any empty strings
     .join("\n\n");
 }
+
 
 
 /**
@@ -155,30 +156,64 @@ function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string
 }
 
 async function executeStep(
-  name: string,
-  command: string,
+  stepConfig: PipelineStep,
   fullPrompt: string,
   statusFile: string,
   logFile: string,
-  reasoningLogFile: string,
-  check: CheckConfig
+  reasoningLogFile: string
 ) {
+  const { name, command, check, retry } = stepConfig;
   const projectRoot = getProjectRoot();
+  const maxRetries = retry ?? 0;
+  let currentPrompt = fullPrompt;
+
   console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
-  if (code !== 0) {
-    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    if (attempt > 1) {
+      console.log(pc.yellow(`\n[Orchestrator] Retry attempt ${attempt}/${maxRetries} for step: ${name}`));
+    }
+
+    // Execute the main Claude command
+    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt);
+    if (code !== 0) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+    }
+
+    // Run the main check
+    const checkResult = await runCheck(check, projectRoot);
+    
+    if (checkResult.success) {
+      // Check passed - commit and return successfully
+      console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
+      execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
+      execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
+      updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
+      return;
+    }
+
+    // Check failed - handle failure
+    console.log(pc.red(`[Orchestrator] Check failed for step "${name}" (attempt ${attempt}/${maxRetries + 1})`));
+    
+    // If this is the final attempt, fail the step
+    if (attempt > maxRetries) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw new Error(`Step "${name}" failed after ${maxRetries} retries. Final check error: ${checkResult.output || 'Check validation failed'}`);
+    }
+
+    // Generate automatic feedback prompt for retry
+    console.log(pc.yellow(`[Orchestrator] Generating automatic feedback for step: ${name}`));
+    const feedbackPrompt = `The previous attempt failed.
+The validation check \`${check.command}\` failed with the following output:
+---
+${checkResult.output || 'No output captured'}
+---
+Please analyze this error, fix the underlying code, and try again. Do not modify the tests or checks.`;
+    
+    currentPrompt = feedbackPrompt;
   }
-
-  await runCheck(check, projectRoot);
-
-  console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
-  execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
-  execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
-  updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
 }
 
 export async function runTask(taskRelativePath: string, pipelineOption?: string) {
@@ -286,7 +321,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
     
-    await executeStep(name, command, fullPrompt, statusFile, logFile, reasoningLogFile, check);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });

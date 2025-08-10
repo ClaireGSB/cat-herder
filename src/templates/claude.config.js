@@ -54,7 +54,8 @@ module.exports = {
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
         allowWrite: ["src/**/*"]
-      }
+      },
+      retry: 3
     },
     {
       name: "docs",
