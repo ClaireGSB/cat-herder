@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, createWriteStream } from "node:fs";
+import { mkdirSync, createWriteStream, WriteStream } from "node:fs";
 import { dirname } from "node:path";
 import pc from "picocolors"; // Import the colors library
 
@@ -18,6 +18,9 @@ export function runStreaming(
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
   console.log(`[Proc] Logging reasoning to: ${reasoningLogPath}`);
+  if (rawJsonLogPath) {
+    console.log(`[Proc] Logging raw JSON to: ${rawJsonLogPath}`);
+  }
 
   // --- THIS IS THE NEWLY ADDED SECTION FOR CLI LOGGING ---
   // Log the prompt context being sent to stdin directly to the console.
@@ -36,6 +39,13 @@ export function runStreaming(
   // Create reasoning log stream - now required
   mkdirSync(dirname(reasoningLogPath), { recursive: true });
   const reasoningStream = createWriteStream(reasoningLogPath, { flags: "w" });
+
+  // Create raw JSON log stream if path is provided
+  let rawJsonStream: WriteStream | undefined;
+  if (rawJsonLogPath) {
+    mkdirSync(dirname(rawJsonLogPath), { recursive: true });
+    rawJsonStream = createWriteStream(rawJsonLogPath, { flags: 'w' });
+  }
 
   // Write detailed headers to the log files for later debugging
   const startTime = new Date();
@@ -75,6 +85,10 @@ export function runStreaming(
       for (const line of lines) {
         if (line.trim() === '') continue;
         
+        // Write raw line to JSON stream before any processing
+        if (rawJsonStream) {
+          rawJsonStream.write(line + '\n');
+        }
         
         try {
           const json = JSON.parse(line);
@@ -141,6 +155,12 @@ export function runStreaming(
       // Close reasoning stream
       reasoningStream.write(footer + footer2 + footer3);
       reasoningStream.end();
+      
+      // Close raw JSON stream if it exists
+      if (rawJsonStream) {
+        rawJsonStream.write(footer + footer2 + footer3);
+        rawJsonStream.end();
+      }
       
       resolve({ code: code ?? 1, output: fullOutput });
     });
