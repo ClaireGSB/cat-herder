@@ -966,3 +966,361 @@ describe('Validator - FileAccess Property Validation', () => {
     expect(result.errors.filter(err => err.includes('pipeline1'))).toHaveLength(0);
   });
 });
+
+describe('Validator - Top-Level Config Validation', () => {
+  const mockProjectRoot = '/test/project';
+  
+  beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Mock settings.json exists with basic permissions
+    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
+      if (filePath.includes('settings.json')) return true;
+      if (filePath.includes('package.json')) return true;
+      if (filePath.includes('commands')) return true; // Mock command files exist
+      return false;
+    });
+    
+    // Mock file reads
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
+      if (filePath.includes('settings.json')) {
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+      }
+      if (filePath.includes('package.json')) {
+        return JSON.stringify({ scripts: { test: 'vitest' } });
+      }
+      if (filePath.includes('commands')) {
+        return '---\nallowed-tools: []\n---\nTest command content';
+      }
+      return '';
+    });
+  });
+
+  it('should accept valid top-level config properties', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**', '.git/**'],
+      manageGitBranch: true,
+      defaultPipeline: 'default',
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors.filter(err => err.includes('Top-level config error'))).toHaveLength(0);
+  });
+
+  it('should accept config with undefined optional properties', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state', 
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      // manageGitBranch and defaultPipeline are undefined - should be valid
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors.filter(err => err.includes('Top-level config error'))).toHaveLength(0);
+  });
+
+  it('should reject invalid manageGitBranch (string instead of boolean)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: '.claude/logs', 
+      structureIgnore: ['node_modules/**'],
+      manageGitBranch: 'true' as any, // Invalid string value
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'manageGitBranch' must be a boolean (true or false)."
+    );
+  });
+
+  it('should reject invalid taskFolder (number instead of string)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 123 as any, // Invalid number value
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'taskFolder' must be a string."
+    );
+  });
+
+  it('should reject invalid statePath (object instead of string)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: { path: '.claude/state' } as any, // Invalid object value
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'statePath' must be a string."
+    );
+  });
+
+  it('should reject invalid logsPath (array instead of string)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: ['.claude/logs'] as any, // Invalid array value
+      structureIgnore: ['node_modules/**'],
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'logsPath' must be a string."
+    );
+  });
+
+  it('should reject invalid structureIgnore (string instead of array)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: 'node_modules/**' as any, // Invalid string value
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'structureIgnore' must be an array of strings."
+    );
+  });
+
+  it('should reject invalid defaultPipeline (number instead of string)', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      defaultPipeline: 42 as any, // Invalid number value
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Top-level config error: 'defaultPipeline' must be a string."
+    );
+  });
+
+  it('should handle multiple top-level config validation errors', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 123 as any, // Invalid number
+      statePath: null as any, // Invalid null
+      logsPath: '.claude/logs',
+      structureIgnore: 'node_modules/**' as any, // Invalid string
+      manageGitBranch: 'yes' as any, // Invalid string
+      defaultPipeline: [] as any, // Invalid array
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    
+    expect(result.errors).toContain(
+      "Top-level config error: 'taskFolder' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'statePath' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'structureIgnore' must be an array of strings."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'manageGitBranch' must be a boolean (true or false)."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'defaultPipeline' must be a string."
+    );
+  });
+
+  it('should handle mix of top-level and pipeline validation errors', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 456 as any, // Invalid top-level
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      manageGitBranch: 'false' as any, // Invalid top-level
+      pipelines: {
+        default: [
+          {
+            name: '', // Invalid pipeline step
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' },
+            retry: 'invalid' as any // Invalid pipeline step
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    
+    // Check for top-level errors
+    expect(result.errors).toContain(
+      "Top-level config error: 'taskFolder' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'manageGitBranch' must be a boolean (true or false)."
+    );
+    
+    // Check for pipeline errors
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('unnamed'): is missing the 'name' property."
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('unnamed'): The 'retry' property must be a non-negative integer, but found 'invalid'."
+    );
+  });
+
+  it('should accept manageGitBranch as false', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: 'claude-Tasks',
+      statePath: '.claude/state',
+      logsPath: '.claude/logs',
+      structureIgnore: ['node_modules/**'],
+      manageGitBranch: false, // Valid boolean value
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors.filter(err => err.includes('manageGitBranch'))).toHaveLength(0);
+  });
+
+  it('should reject null values for required properties', () => {
+    const config: ClaudeProjectConfig = {
+      taskFolder: null as any, // Invalid null
+      statePath: null as any, // Invalid null  
+      logsPath: null as any, // Invalid null
+      structureIgnore: null as any, // Invalid null
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    
+    expect(result.errors).toContain(
+      "Top-level config error: 'taskFolder' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'statePath' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'logsPath' must be a string."
+    );
+    expect(result.errors).toContain(
+      "Top-level config error: 'structureIgnore' must be an array of strings."
+    );
+  });
+});

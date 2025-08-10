@@ -39,6 +39,26 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
   const knownContextKeys = Object.keys(contextProviders);
   const validCheckTypes = ["none", "fileExists", "shell"];
 
+  // --- Top-Level Config Validation ---
+  if (config.manageGitBranch !== undefined && typeof config.manageGitBranch !== 'boolean') {
+    errors.push(`Top-level config error: 'manageGitBranch' must be a boolean (true or false).`);
+  }
+  if (config.taskFolder !== undefined && typeof config.taskFolder !== 'string') {
+    errors.push(`Top-level config error: 'taskFolder' must be a string.`);
+  }
+  if (config.statePath !== undefined && typeof config.statePath !== 'string') {
+    errors.push(`Top-level config error: 'statePath' must be a string.`);
+  }
+  if (config.logsPath !== undefined && typeof config.logsPath !== 'string') {
+    errors.push(`Top-level config error: 'logsPath' must be a string.`);
+  }
+  if (config.structureIgnore !== undefined && !Array.isArray(config.structureIgnore)) {
+    errors.push(`Top-level config error: 'structureIgnore' must be an array of strings.`);
+  }
+  if (config.defaultPipeline !== undefined && typeof config.defaultPipeline !== 'string') {
+    errors.push(`Top-level config error: 'defaultPipeline' must be a string.`);
+  }
+
   // 1. Load settings.json permissions
   const settingsPath = path.join(projectRoot, ".claude", "settings.json");
   let allowedPermissions: string[] = [];
