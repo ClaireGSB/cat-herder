@@ -365,7 +365,7 @@ Add a simple `retry` property to any pipeline step to enable automatic retries w
 1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
 2. **Check Validation**: The orchestrator runs `npm test` to validate the implementation
 3. **On Failure**: If tests fail, instead of halting:
-   - The orchestrator automatically generates a feedback prompt with the error output
+   - The orchestrator automatically generates a feedback prompt with the error output + the original prompt for the step
    - Claude receives this feedback and attempts to fix the issues
    - The cycle repeats up to the specified number of retries until tests pass or retries are exhausted
 

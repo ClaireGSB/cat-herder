@@ -60,9 +60,9 @@ function assemblePrompt(
   for (const [title, content] of Object.entries(context)) {
     contextString += `--- ${title.toUpperCase()} ---\n\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
   }
-  
+
   if (contextString) { // Check if there's any context left to display
-      contextString = contextString.trim();
+    contextString = contextString.trim();
   }
 
 
@@ -151,7 +151,7 @@ function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string
     console.log(pc.green(`  › Creating and checking out new branch: "${expectedBranch}"`));
     execSync(`git checkout -b ${expectedBranch}`, { cwd: projectRoot, stdio: 'pipe' });
   }
-  
+
   return expectedBranch;
 }
 
@@ -184,7 +184,7 @@ async function executeStep(
 
     // Run the main check
     const checkResult = await runCheck(check, projectRoot);
-    
+
     if (checkResult.success) {
       // Check passed - commit and return successfully
       console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
@@ -196,7 +196,7 @@ async function executeStep(
 
     // Check failed - handle failure
     console.log(pc.red(`[Orchestrator] Check failed for step "${name}" (attempt ${attempt}/${maxRetries + 1})`));
-    
+
     // If this is the final attempt, fail the step
     if (attempt > maxRetries) {
       updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
@@ -204,14 +204,21 @@ async function executeStep(
     }
 
     // Generate automatic feedback prompt for retry
-    console.log(pc.yellow(`[Orchestrator] Generating automatic feedback for step: ${name}`));
-    const feedbackPrompt = `The previous attempt failed.
-The validation check \`${check.command}\` failed with the following output:
----
+    console.log(pc.yellow(`[Orchestrator] Generating  feedback for step: ${name}`));
+    const feedbackPrompt = `Your previous attempt to complete the '${name}' step failed its validation check.
+
+Here are the original instructions you were given for this step:
+--- ORIGINAL INSTRUCTIONS ---
+${fullPrompt}
+--- END ORIGINAL INSTRUCTIONS ---
+
+The automated validation check (\`${check.command}\`) failed with the following error output:
+--- ERROR OUTPUT ---
 ${checkResult.output || 'No output captured'}
----
-Please analyze this error, fix the underlying code, and try again. Do not modify the tests or checks.`;
-    
+--- END ERROR OUTPUT ---
+
+Please re-attempt the task. Your goal is to satisfy the **original instructions** while also fixing the error reported above. Analyze both the original goal and the specific failure. Do not modify the tests or checks.`;
+
     currentPrompt = feedbackPrompt;
   }
 }
@@ -262,7 +269,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
       throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
     }
     selectedPipeline = config.pipelines[pipelineName];
-    
+
     // Log which source determined the pipeline selection
     if (pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from --pipeline option: "${pipelineName}"`));
     else if (taskPipelineName) console.log(pc.cyan(`[Orchestrator] Using pipeline from task frontmatter: "${pipelineName}"`));
@@ -293,13 +300,13 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
       console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
-    
+
     // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
-    
+
     // Always include task definition
     context.taskDefinition = contextProviders.taskDefinition(projectRoot, taskContent);
-    
+
     // Include plan content for any step after "plan"
     const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
     if (planStepIndex !== -1 && index > planStepIndex) {
@@ -310,17 +317,17 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
         console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
       }
     }
-    
+
     // Read the specific command instructions for the current step
     const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
-    
+
     // **REFACTORED PART**: Assemble the full prompt using the new function
     const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
-    
+
     await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile);
   }
 
