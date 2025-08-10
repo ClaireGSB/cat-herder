@@ -20,8 +20,7 @@ This change introduces a more resilient approach. It will parse the rate limit e
 - [x] **Proc:** Update the process runner (`proc.ts`) to specifically detect and parse the rate limit error message.
 - [x] **Status:** Add a new `waiting_for_reset` phase to the task status model.
 - [x] **Orchestrator:** Implement the core logic in `orchestrator.ts` to handle the parsed error, deciding whether to wait or fail based on the user's config.
-- [ ] **Tests:** Create new integration tests to verify both the "wait" and "graceful fail" scenarios.
-- [ ] **Documentation:** Update `README.md` to explain the new feature to users.
+- [x] **Documentation:** Update `README.md` to explain the new feature to users.
 
 ## Detailed Implementation Steps
 
@@ -212,23 +211,8 @@ This change introduces a more resilient approach. It will parse the rate limit e
                     // ... rest of the function
     ```
 
-### 5. Add Tests
 
-*   **Objective:** Ensure both the "wait" and "graceful fail" behaviors work as expected.
-*   **Tasks:**
-    1.  Create a new test file, `test/orchestrator-ratelimit.test.ts`.
-    2.  Use `vi.mock` to mock `src/tools/proc.ts`.
-    3.  **Test Case 1 (Wait & Resume):**
-        *   Set config `waitForRateLimitReset` to `true`.
-        *   Mock `runStreaming` to return the rate limit error on its first call, and a success result on its second.
-        *   Use `vi.useFakeTimers()` to control `setTimeout`.
-        *   Assert that the correct "waiting" log is produced and that after advancing timers, the step completes successfully.
-    4.  **Test Case 2 (Graceful Fail):**
-        *   Set config `waitForRateLimitReset` to `false`.
-        *   Mock `runStreaming` to return the rate limit error.
-        *   Assert that `runTask` throws an error and that the error message contains the expected human-readable text.
-
-### 6. Update Documentation
+### 5. Update Documentation
 
 *   **Objective:** Clearly document the new feature for all users.
 *   **Task:** Add a new section to `README.md`.
