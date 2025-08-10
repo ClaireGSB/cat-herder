@@ -5,7 +5,7 @@ import pc from "picocolors";
 import yaml from 'js-yaml';
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
-import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
+import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep, HookConfig } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
@@ -79,6 +79,32 @@ function assemblePrompt(
     .join("\n\n");
 }
 
+
+/**
+ * Executes an array of hooks sequentially.
+ * @param hooks Array of HookConfig objects to execute
+ * @param projectRoot The project root directory
+ * @param stepName The name of the current step (for error messages)
+ * @param hookType The type of hook being executed (for error messages)
+ * @returns The output from the last executed hook, or empty string if no hooks
+ */
+function executeHooks(hooks: HookConfig[] | undefined, projectRoot: string, stepName: string, hookType: string): string {
+  if (!hooks || hooks.length === 0) {
+    return '';
+  }
+
+  let lastOutput = '';
+  for (const hook of hooks) {
+    try {
+      console.log(pc.gray(`  › Executing ${hookType} hook: "${hook.command}"`));
+      lastOutput = execSync(hook.command, { encoding: 'utf-8', cwd: projectRoot });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`${hookType} hook "${hook.command}" failed for step "${stepName}": ${errorMsg}`);
+    }
+  }
+  return lastOutput;
+}
 
 /**
  * Converts a task file path into a Git-friendly branch name.
@@ -155,34 +181,77 @@ function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string
 }
 
 async function executeStep(
-  name: string,
-  command: string,
+  stepConfig: PipelineStep,
   fullPrompt: string,
   statusFile: string,
   logFile: string,
-  reasoningLogFile: string,
-  check: CheckConfig
+  reasoningLogFile: string
 ) {
+  const { name, command, check, hooks } = stepConfig;
   const projectRoot = getProjectRoot();
+  const maxRetries = 3;
+  let currentPrompt = fullPrompt;
+
   console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
-  const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, fullPrompt);
-  if (code !== 0) {
-    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
-  }
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    if (attempt > 1) {
+      console.log(pc.yellow(`\n[Orchestrator] Retry attempt ${attempt}/${maxRetries} for step: ${name}`));
+    }
 
-  const checkResult = await runCheck(check, projectRoot);
-  if (!checkResult.success) {
-    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-    throw new Error(`Step "${name}" check failed: ${checkResult.output || 'Check validation failed'}`);
-  }
+    // Execute the main Claude command
+    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt);
+    if (code !== 0) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
+    }
 
-  console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
-  execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
-  execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
-  updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
+    // Execute preCheck hooks
+    try {
+      executeHooks(hooks?.preCheck, projectRoot, name, "Pre-check");
+    } catch (error) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      throw error;
+    }
+
+    // Run the main check
+    const checkResult = await runCheck(check, projectRoot);
+    
+    if (checkResult.success) {
+      // Check passed - commit and return successfully
+      console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
+      execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
+      execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
+      updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
+      return;
+    }
+
+    // Check failed - handle failure
+    console.log(pc.red(`[Orchestrator] Check failed for step "${name}" (attempt ${attempt}/${maxRetries})`));
+    
+    // If this is the final attempt or no onCheckFailure hooks, fail the step
+    if (!hooks?.onCheckFailure || attempt === maxRetries) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      if (attempt === maxRetries) {
+        throw new Error(`Step "${name}" failed after ${maxRetries} attempts. Final check error: ${checkResult.output || 'Check validation failed'}`);
+      } else {
+        throw new Error(`Step "${name}" check failed: ${checkResult.output || 'Check validation failed'}`);
+      }
+    }
+
+    // Execute onCheckFailure hooks to generate retry prompt
+    try {
+      console.log(pc.yellow(`[Orchestrator] Executing onCheckFailure hooks for step: ${name}`));
+      const feedbackTemplate = executeHooks(hooks.onCheckFailure, projectRoot, name, "OnCheckFailure");
+      // Substitute {check_output} with the actual error output
+      currentPrompt = feedbackTemplate.replace(/{check_output}/g, checkResult.output || '');
+    } catch (error) {
+      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`The onCheckFailure hook for step "${name}" failed to execute. Cannot generate feedback for Claude: ${errorMsg}`);
+    }
+  }
 }
 
 export async function runTask(taskRelativePath: string, pipelineOption?: string) {
@@ -290,7 +359,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
     
-    await executeStep(name, command, fullPrompt, statusFile, logFile, reasoningLogFile, check);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
