@@ -34,22 +34,28 @@ export function runStreaming(
 
 
   mkdirSync(dirname(logPath), { recursive: true });
-  const logStream = createWriteStream(logPath, { flags: "w" });
+  const logStream = createWriteStream(logPath, { flags: "a" });
   
   // Create reasoning log stream - now required
   mkdirSync(dirname(reasoningLogPath), { recursive: true });
-  const reasoningStream = createWriteStream(reasoningLogPath, { flags: "w" });
+  const reasoningStream = createWriteStream(reasoningLogPath, { flags: "a" });
 
   // Create raw JSON log stream if path is provided
   let rawJsonStream: WriteStream | undefined;
   if (rawJsonLogPath) {
     mkdirSync(dirname(rawJsonLogPath), { recursive: true });
-    rawJsonStream = createWriteStream(rawJsonLogPath, { flags: 'w' });
+    rawJsonStream = createWriteStream(rawJsonLogPath, { flags: 'a' });
   }
 
   // Write detailed headers to the log files for later debugging
+  // --- Add a distinct header for each attempt to make logs readable ---
   const startTime = new Date();
-  const headerInfo = `--- Log started at: ${startTime.toISOString()} ---\n--- Working directory: ${cwd} ---\n--- Command: ${cmd} ${finalArgs.join(" ")} ---\n`;
+  const headerInfo = `
+=================================================
+  New Attempt Started at: ${startTime.toISOString()}
+  Command: ${cmd} ${finalArgs.join(" ")}
+=================================================
+`;
   
   logStream.write(headerInfo);
   reasoningStream.write(headerInfo);
