@@ -23,6 +23,7 @@ export interface ClaudeProjectConfig {
   logsPath: string;
   structureIgnore: string[];
   manageGitBranch?: boolean;
+  waitForRateLimitReset?: boolean;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
   // Backward compatibility - will be removed in future versions
@@ -38,6 +39,7 @@ const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" |
     "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
   ],
   manageGitBranch: true,
+  waitForRateLimitReset: false,
 };
 
 let loadedConfig: ClaudeProjectConfig | null = null;

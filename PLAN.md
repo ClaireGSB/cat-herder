@@ -16,7 +16,7 @@ This change introduces a more resilient approach. It will parse the rate limit e
 
 ## Summary Checklist
 
-- [ ] **Config:** Add a `waitForRateLimitReset` option to `claude.config.js` and the config type definitions.
+- [x] **Config:** Add a `waitForRateLimitReset` option to `claude.config.js` and the config type definitions.
 - [ ] **Proc:** Update the process runner (`proc.ts`) to specifically detect and parse the rate limit error message.
 - [ ] **Status:** Add a new `waiting_for_reset` phase to the task status model.
 - [ ] **Orchestrator:** Implement the core logic in `orchestrator.ts` to handle the parsed error, deciding whether to wait or fail based on the user's config.

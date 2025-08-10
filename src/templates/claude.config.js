@@ -19,6 +19,15 @@ module.exports = {
   manageGitBranch: true,
 
   /**
+   * If true, the orchestrator will pause and wait when it hits the Claude
+   * API usage limit, then automatically resume when the limit resets.
+   * If false (default), it will fail gracefully with a message explaining
+   * when you can resume manually. The task state is preserved so you can
+   * re-run the command and pick up exactly where you left off.
+   */
+  waitForRateLimitReset: false,
+
+  /**
    * Default pipeline to use when none is specified.
    */
   defaultPipeline: 'default',
