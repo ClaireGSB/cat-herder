@@ -336,17 +336,17 @@ Blocked: The current step 'implement' only allows file modifications matching ["
 
 This feature ensures that each step of your pipeline only modifies the files it should, providing confidence in your automated workflow.
 
-### Advanced: Step Hooks and Self-Correction
+### Automatic Retries on Failure
 
-Traditional CI/CD pipelines are rigid—when a step fails, the entire process halts and requires manual intervention. The `hooks` feature transforms your pipeline into a resilient, self-healing workflow. When a check fails, hooks can automatically provide feedback to Claude, giving it a chance to analyze the error and fix its own work.
+Traditional CI/CD pipelines are rigid—when a step fails, the entire process halts and requires manual intervention. The automatic retry feature transforms your pipeline into a resilient, self-healing workflow. When a check fails, the orchestrator automatically provides feedback to Claude, giving it a chance to analyze the error and fix its own work.
 
-**The Problem:** Without hooks, if your `implement` step's tests fail, the pipeline stops. You must manually examine the test output, understand what went wrong, and guide Claude to fix it.
+**The Problem:** Without retries, if your `implement` step's tests fail, the pipeline stops. You must manually examine the test output, understand what went wrong, and guide Claude to fix it.
 
-**The Solution:** With `onCheckFailure` hooks, the orchestrator automatically captures the error output and feeds it back to Claude with a tailored prompt, allowing it to self-correct and retry—up to 3 attempts.
+**The Solution:** With the `retry` property, the orchestrator automatically captures the error output and feeds it back to Claude with a clear prompt, allowing it to self-correct and retry—up to the specified number of attempts.
 
 #### Basic Configuration
 
-Add a `onCheckFailure` `hooks` object to any pipeline step, which triggers when the step's `check` validation fails:
+Add a simple `retry` property to any pipeline step to enable automatic retries when the step's `check` validation fails:
 
 ```javascript
 {
@@ -356,14 +356,7 @@ Add a `onCheckFailure` `hooks` object to any pipeline step, which triggers when 
   fileAccess: {
     allowWrite: ["src/**/*"]
   },
-  hooks: {
-    onCheckFailure: [
-      {
-        type: "shell",
-        command: "echo 'The test suite failed. The errors are provided below. Please analyze the output, fix the code in the src/ directory, and ensure all tests pass. Do not modify the test files themselves.\\n\\n---\\n\\n{check_output}'"
-      }
-    ]
-  }
+  retry: 3
 }
 ```
 
@@ -372,51 +365,45 @@ Add a `onCheckFailure` `hooks` object to any pipeline step, which triggers when 
 1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
 2. **Check Validation**: The orchestrator runs `npm test` to validate the implementation
 3. **On Failure**: If tests fail, instead of halting:
-   - The hook command executes, generating a feedback prompt
-   - `{check_output}` is replaced with the actual test failure output
+   - The orchestrator automatically generates a feedback prompt with the error output
    - Claude receives this feedback and attempts to fix the issues
-   - The cycle repeats up to 3 times until tests pass or retries are exhausted
+   - The cycle repeats up to the specified number of retries until tests pass or retries are exhausted
 
 #### Key Features
 
 - **Automatic Retry**: Failed steps automatically retry with context-aware feedback
-- **Error Context**: The `{check_output}` token passes actual error output to Claude
-- **Retry Limits**: Steps retry up to 3 times before failing permanently
-- **Hook Types**: 
-  - `onCheckFailure`: Triggers when the step's check validation fails
+- **Error Context**: The actual error output is automatically included in the feedback
+- **Configurable Limits**: Set any number of retries with the `retry` property
+- **Zero Configuration**: No complex setup required—just add `retry: N` to any step
 
 #### Common Use Cases
 
 **Test Failures During Implementation:**
 ```javascript
-hooks: {
-  onCheckFailure: [
-    {
-      type: "shell", 
-      command: "echo 'Tests failed. Fix the implementation based on these errors:\\n{check_output}'"
-    }
-  ]
+{
+  name: "implement",
+  command: "implement",
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  fileAccess: { allowWrite: ["src/**/*"] },
+  retry: 3
 }
 ```
 
 **Build or Lint Errors:**
 ```javascript
-hooks: {
-  onCheckFailure: [
-    {
-      type: "shell",
-      command: "echo 'Build failed. Please fix these compilation errors and ensure the code builds successfully:\\n{check_output}'"
-    }
-  ]
+{
+  name: "build",
+  command: "build-code",
+  check: { type: "shell", command: "npm run build", expect: "pass" },
+  fileAccess: { allowWrite: ["src/**/*"] },
+  retry: 2
 }
 ```
 
-
 #### Error Handling
 
-- **Hook Command Failures**: If a hook command itself fails, the step fails immediately with a clear error message
-- **Retry Exhaustion**: After 3 failed attempts, the step fails permanently
-- **Missing Token**: If `{check_output}` is omitted from the hook command, it still works but without error context
+- **Retry Exhaustion**: After the specified number of failed attempts, the step fails permanently
+- **Automatic Feedback**: The orchestrator generates clear, actionable feedback prompts automatically
 
 This self-correction capability makes your pipelines more autonomous and reduces the need for manual intervention during development workflows.
 
