@@ -385,6 +385,18 @@ Add a simple `retry` property to any pipeline step to enable automatic retries w
 }
 ```
 
+#### How Retries Work with Multiple Checks
+
+When you use the `retry` property on a step that has an array of checks, the retry logic applies to the **entire step** as a whole. The process is as follows:
+
+1.  **Sequential Execution**: The orchestrator runs each `check` in the array in order.
+2.  **First Failure Halts**: If any single check fails to meet its `expect` condition, the validation process halts immediately. Subsequent checks in the array are **not** run.
+3.  **Step Retry**: The entire step is considered failed, and a retry is triggered (if available).
+4.  **Targeted Feedback**: The feedback prompt provided to Claude for the retry attempt will contain the specific error output from the check that failed.
+5.  **Full Re-Validation**: After Claude attempts a fix, the entire sequence of checks is re-run from the beginning.
+
+This ensures that each retry attempt is focused on fixing the specific point of failure before re-validating the entire step from scratch.
+
 #### How It Works
 
 1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
