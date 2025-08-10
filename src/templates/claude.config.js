@@ -50,8 +50,11 @@ module.exports = {
     {
       name: "write_tests",
       command: "write-tests",
-      // Check that tests were written AND that they fail as expected.
-      check: { type: "shell", command: "npm test", expect: "fail" },
+      // Check that code passes type checking AND that tests fail as expected.
+      check: [
+        { type: "shell", command: "npx tsc --noEmit", expect: "pass" },
+        { type: "shell", command: "npm test", expect: "fail" }
+      ],
       fileAccess: {
         allowWrite: ["test/**/*", "tests/**/*"]
       }

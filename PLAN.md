@@ -20,7 +20,7 @@ This change will update the system to accept an array of `check` objects. The or
 -   [x] **Check Runner:** Modify `check-runner.ts` to process an array of checks sequentially.
 -   [x] **Orchestrator:** Adjust the retry feedback logic in `orchestrator.ts` to handle failures from a specific check within an array.
 -   [x] **Validator:** Update `validator.ts` to validate both single and array-based `check` configurations.
--   [ ] **Templates:** Update the default `claude.config.js` template to use a multi-check example.
+-   [x] **Templates:** Update the default `claude.config.js` template to use a multi-check example.
 -   [ ] **Documentation:** Update `README.md` to document the new feature and provide usage examples.
 
 ## Detailed Implementation Steps
