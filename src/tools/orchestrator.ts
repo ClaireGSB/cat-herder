@@ -207,14 +207,6 @@ async function executeStep(
       throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
     }
 
-    // Execute preCheck hooks
-    try {
-      executeHooks(hooks?.preCheck, projectRoot, name, "Pre-check");
-    } catch (error) {
-      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-      throw error;
-    }
-
     // Run the main check
     const checkResult = await runCheck(check, projectRoot);
     

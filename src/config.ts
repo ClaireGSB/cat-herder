@@ -17,7 +17,6 @@ export interface PipelineStep {
     allowWrite?: string[];
   };
   hooks?: {
-    preCheck?: HookConfig[];
     onCheckFailure?: HookConfig[];
   };
 }

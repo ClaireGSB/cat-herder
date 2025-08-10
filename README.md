@@ -384,7 +384,6 @@ Add a `hooks` object to any pipeline step. The most powerful hook is `onCheckFai
 - **Retry Limits**: Steps retry up to 3 times before failing permanently
 - **Hook Types**: 
   - `onCheckFailure`: Triggers when the step's check validation fails
-  - `preCheck`: Runs before the main check validation (useful for setup commands)
 
 #### Common Use Cases
 
@@ -412,17 +411,6 @@ hooks: {
 }
 ```
 
-**Pre-Check Setup:**
-```javascript
-hooks: {
-  preCheck: [
-    {
-      type: "shell",
-      command: "npm run build"  // Ensure code is built before testing
-    }
-  ]
-}
-```
 
 #### Error Handling
 
