@@ -6,7 +6,7 @@ import yaml from 'js-yaml';
 import { runStreaming } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
-import { runCheck, CheckConfig } from "./check-runner.js";
+import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
 
@@ -173,7 +173,11 @@ async function executeStep(
     throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
   }
 
-  await runCheck(check, projectRoot);
+  const checkResult = await runCheck(check, projectRoot);
+  if (!checkResult.success) {
+    updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+    throw new Error(`Step "${name}" check failed: ${checkResult.output || 'Check validation failed'}`);
+  }
 
   console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
   execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });

@@ -17,7 +17,7 @@ This change introduces a `hooks` object that can be added to any pipeline step i
 ### Summary Checklist
 
 -   [x] **1. Update Configuration Types:** Add the new `hooks` structure to the `PipelineStep` interface in `src/config.ts`.
--   [ ] **2. Modify the Check Runner:** Update `runCheck` to return a detailed result object instead of throwing an error on failure.
+-   [x] **2. Modify the Check Runner:** Update `runCheck` to return a detailed result object instead of throwing an error on failure.
 -   [ ] **3. Implement Orchestrator Retry Logic:** Refactor `executeStep` in `src/tools/orchestrator.ts` to manage a retry loop and execute the new hooks.
 -   [ ] **4. Update Example Configuration:** Add a sample `onCheckFailure` hook to the default template in `src/templates/claude.config.js`.
 -   [ ] **5. Add Unit Tests:** Create a new test file to verify the orchestrator's retry and hook-triggering behavior.
