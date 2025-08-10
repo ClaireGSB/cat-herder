@@ -112,7 +112,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       if (step.check?.type === "shell" && step.check.command) {
         const command = step.check.command;
         // We specifically look for npm script commands
-        if (command.startsWith("npm ")) {
+        if (typeof command === 'string' && command.startsWith("npm ")) {
           // e.g., "npm test" -> "test", "npm run lint" -> "lint"
           const scriptName = command.split(" ").pop();
           if (scriptName && !userScripts[scriptName]) {
@@ -162,6 +162,23 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       // --- Check Validation ---
       if (!validCheckTypes.includes(step.check.type)) {
         errors.push(`${stepId}: Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
+      }
+
+      // --- Deepen Check Object Validation ---
+      switch (step.check.type) {
+        case 'fileExists':
+          if (typeof step.check.path !== 'string' || !step.check.path) {
+            errors.push(`${stepId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
+          }
+          break;
+        case 'shell':
+          if (typeof step.check.command !== 'string' || !step.check.command) {
+            errors.push(`${stepId}: Check type 'shell' requires a non-empty 'command' string property.`);
+          }
+          if (step.check.expect && !['pass', 'fail'].includes(step.check.expect)) {
+            errors.push(`${stepId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
+          }
+          break;
       }
     }
   }
