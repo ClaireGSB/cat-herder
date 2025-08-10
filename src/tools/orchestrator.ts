@@ -267,7 +267,7 @@ Here are the original instructions you were given for this step:
 ${fullPrompt}
 --- END ORIGINAL INSTRUCTIONS ---
 
-The automated validation check (\`${check.command}\`) failed with the following error output:
+The automated validation check failed with the following error output:
 --- ERROR OUTPUT ---
 ${checkResult.output || 'No output captured'}
 --- END ERROR OUTPUT ---

@@ -17,7 +17,7 @@ This change will update the system to accept an array of `check` objects. The or
 ## Summary Checklist
 
 -   [x] **Interfaces:** Update `PipelineStep` interface to accept `CheckConfig | CheckConfig[]`.
--   [ ] **Check Runner:** Modify `check-runner.ts` to process an array of checks sequentially.
+-   [x] **Check Runner:** Modify `check-runner.ts` to process an array of checks sequentially.
 -   [ ] **Orchestrator:** Adjust the retry feedback logic in `orchestrator.ts` to handle failures from a specific check within an array.
 -   [ ] **Validator:** Update `validator.ts` to validate both single and array-based `check` configurations.
 -   [ ] **Templates:** Update the default `claude.config.js` template to use a multi-check example.

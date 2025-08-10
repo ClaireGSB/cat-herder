@@ -18,9 +18,9 @@ export interface CheckResult {
 }
 
 /**
- * Executes a validation check based on a configuration object.
+ * Executes a single validation check based on a configuration object.
  */
-export async function runCheck(checkConfig: CheckConfig, projectRoot: string): Promise<CheckResult> {
+async function runSingleCheck(checkConfig: CheckConfig, projectRoot: string): Promise<CheckResult> {
   console.log(`\n[Orchestrator] Running check: ${pc.yellow(checkConfig.type)}`);
 
   switch (checkConfig.type) {
@@ -69,5 +69,28 @@ export async function runCheck(checkConfig: CheckConfig, projectRoot: string): P
 
     default:
       throw new Error(`Unknown check type: ${(checkConfig as any).type}`);
+  }
+}
+
+/**
+ * Executes validation check(s) based on a configuration object or array of objects.
+ * If an array is provided, checks are executed sequentially and the process fails
+ * immediately if any single check fails.
+ */
+export async function runCheck(checkConfig: CheckConfig | CheckConfig[], projectRoot: string): Promise<CheckResult> {
+  if (Array.isArray(checkConfig)) {
+    for (const [index, singleCheck] of checkConfig.entries()) {
+      console.log(`[Orchestrator] Running check ${index + 1}/${checkConfig.length}...`);
+      const result = await runSingleCheck(singleCheck, projectRoot);
+      if (!result.success) {
+        // Immediately fail and return the result from the failing check
+        return result;
+      }
+    }
+    // All checks in the array passed
+    return { success: true };
+  } else {
+    // It's a single check object, run as before
+    return runSingleCheck(checkConfig, projectRoot);
   }
 }
