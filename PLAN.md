@@ -1,165 +1,260 @@
 # PLAN.md
 
-### **Title: Implement Raw JSON Logging for LLM Steps**
+## Title & Goal
 
-**Goal:** Introduce a new log file for each pipeline step that captures the complete, unfiltered JSON output from the Large Language Model to provide deeper debugging capabilities.
+**Title:** Graceful Handling and Auto-Resume for Claude API Usage Limits
 
----
+**Goal:** Implement a feature to intelligently handle Claude API usage limit errors by either pausing and automatically resuming the workflow or failing gracefully in a way that allows for easy manual continuation.
 
-### **Description**
+## Description
 
-Currently, debugging the interaction with the LLM is limited to the final, cleaned output (`.log`) and a high-level summary of the AI's thought process (`.reasoning.log`). This makes it difficult to inspect the raw, event-by-event stream from the LLM, which includes every tool-use attempt, content delta, and metadata.
+Currently, when the Claude API usage limit is reached, the tool receives a specific JSON error but treats it as a generic failure. This causes the workflow to halt abruptly with an unhelpful error message, forcing the user to manually restart the entire process later.
 
-This change will introduce a third log file, `XX-step-name.raw.json.log`, for each step. This file will contain the verbatim `stream-json` output, giving developers a powerful tool to diagnose complex issues by seeing the exact, low-level data exchange between the orchestrator and the LLM.
+This change introduces a more resilient approach. It will parse the rate limit error to identify the exact reset time. Based on a new configuration option, the tool will either:
+1.  **Wait & Resume (Opt-in):** Pause execution and automatically restart the failed step once the usage limit has been reset.
+2.  **Graceful Fail & Resume (Default):** Terminate the process with a clear, informative message explaining when the user can resume. The task's state is preserved, allowing the user to re-run the command and pick up exactly where they left off.
 
----
+## Summary Checklist
 
-### **Summary Checklist**
+- [x] **Config:** Add a `waitForRateLimitReset` option to `claude.config.js` and the config type definitions.
+- [x] **Proc:** Update the process runner (`proc.ts`) to specifically detect and parse the rate limit error message.
+- [x] **Status:** Add a new `waiting_for_reset` phase to the task status model.
+- [x] **Orchestrator:** Implement the core logic in `orchestrator.ts` to handle the parsed error, deciding whether to wait or fail based on the user's config.
+- [x] **Documentation:** Update `README.md` to explain the new feature to users.
 
--   [x] **Configuration:** Update the orchestrator to generate a path for the new raw JSON log file.
--   [x] **Implementation:** Modify the process runner to write the raw `stdout` stream from the LLM to the new log file.
--   [x] **Documentation:** Update `README.md` to document the new `*.raw.json.log` file and its purpose.
+## Detailed Implementation Steps
 
----
+### 1. Update Configuration
 
-### **Detailed Implementation Steps**
-
-#### **1. Update the Orchestrator (`src/tools/orchestrator.ts`)**
-
-*   **Objective:** Make the orchestrator responsible for defining the path to the new log file and passing it through the execution flow.
+*   **Objective:** Introduce a new configuration setting that allows users to opt into the auto-resume behavior.
 *   **Tasks:**
-    1.  In the `runTask` function, inside the `for` loop, define a new constant `rawJsonLogFile` that follows the existing naming convention (e.g., `01-plan.raw.json.log`).
-    2.  Update the `executeStep` function signature to accept the new `rawJsonLogFile: string` parameter.
-    3.  In `executeStep`, pass this new path along to the `runStreaming` function call.
+    1.  Modify the `ClaudeProjectConfig` interface in `src/config.ts`.
+    2.  Update the default configuration object.
+    3.  Add the new setting to the template file `src/templates/claude.config.js` with explanatory comments.
 
-*   **Code Snippet (for `runTask`):**
+*   **Code Snippets:**
 
+    **File:** `src/config.ts`
     ```typescript
-    // src/tools/orchestrator.ts in runTask()
-    const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
-    const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
-    const rawJsonLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.raw.json.log`); // <-- ADD THIS LINE
-
-    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile); // <-- ADD ARGUMENT
-    ```
-
-*   **Code Snippet (for `executeStep`):**
-    ```typescript
-    // src/tools/orchestrator.ts
-    async function executeStep(
-      stepConfig: PipelineStep,
-      fullPrompt: string,
-      statusFile: string,
-      logFile: string,
-      reasoningLogFile: string,
-      rawJsonLogFile: string // <-- ADD PARAMETER
-    ) {
-      // ...
-      const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile); // <-- PASS ARGUMENT
-      // ...
+    // Before:
+    export interface ClaudeProjectConfig {
+      // ... existing properties
+      defaultPipeline?: string;
+      pipeline?: PipelineStep[];
     }
-    ```
-
----
-
-#### **2. Modify the Process Runner (`src/tools/proc.ts`)**
-
-*   **Objective:** Intercept the raw `stdout` data from the spawned `claude` process and write it to the new log file before any parsing occurs.
-*   **Tasks:**
-    1.  Update the `runStreaming` function signature to accept a new optional parameter, `rawJsonLogPath?: string`.
-    2.  Inside the function, if `rawJsonLogPath` is provided, create a new `WriteStream` for it. Remember to create the directory if it doesn't exist.
-    3.  In the `p.stdout.on("data", ...)` event handler, take each complete line from the buffer and write it directly to the `rawJsonStream`.
-    4.  Ensure the `rawJsonStream` is properly closed in the `p.on("close", ...)` event handler.
-
-*   **Code Snippet (for `runStreaming`):**
-
-    ```typescript
-    // src/tools/proc.ts
-
-    import { /*...,*/ WriteStream } from "node:fs";
-
-    export function runStreaming(
-      cmd: string,
-      args: string[],
-      logPath: string,
-      reasoningLogPath: string,
-      cwd: string,
-      stdinData?: string,
-      rawJsonLogPath?: string // <-- ADD OPTIONAL PARAMETER
-    ): Promise<{ code: number; output: string }> {
-        
-      // ... inside the function
-      if (rawJsonLogPath) {
-        console.log(`[Proc] Logging raw JSON to: ${rawJsonLogPath}`);
-      }
-
-      // ... after creating other streams
-      let rawJsonStream: WriteStream | undefined;
-      if (rawJsonLogPath) {
-        mkdirSync(dirname(rawJsonLogPath), { recursive: true });
-        rawJsonStream = createWriteStream(rawJsonLogPath, { flags: 'w' });
-      }
-      
-      // ...
-      p.stdout.on("data", (chunk) => {
-        // ... inside the loop over lines
-        for (const line of lines) {
-            if (line.trim() === '') continue;
-            
-            if (rawJsonStream) {
-                rawJsonStream.write(line + '\n'); // <-- WRITE RAW LINE
-            }
-            
-            try {
-              // ... existing JSON parsing logic
-            } catch (e) {
-              // ... existing error handling
-            }
-        }
-      });
-      
-      // ...
-      p.on("close", (code) => {
-        // ...
-        if (rawJsonStream) {
-          rawJsonStream.write(footer + footer2 + footer3);
-          rawJsonStream.end(); // <-- CLOSE THE STREAM
-        }
-        
-        resolve({ code: code ?? 1, output: fullOutput });
-      });
-    }
-    ```
-
----
-
-### **Error Handling & Warnings**
-
-*   The implementation should be fault-tolerant. If `rawJsonLogPath` is not provided, the system must continue to function exactly as it did before.
-*   The `proc.ts` module should add a console log message indicating that it is creating the raw JSON log file, which helps with visibility during execution. For example: `[Proc] Logging raw JSON to: .claude/logs/task-id/01-step.raw.json.log`.
-*   Directory creation for the log file must use `mkdirSync(path, { recursive: true })` to prevent errors if the parent directories do not exist.
-
----
-
-### **3. Update Documentation (`README.md`)**
-
-*   **Objective:** Clearly explain the new logging feature to users.
-*   **Tasks:**
-    1.  Navigate to the `### Debugging and Logs` section in `README.md`.
-    2.  Add the new `XX-step-name.raw.json.log` file to the list of generated logs.
-    3.  Provide a clear explanation of what the raw JSON log contains and in what scenarios it is most useful (e.g., "deep debugging of the tool's behavior").
-*   **Content Snippet (for `README.md`):**
-    ```markdown
-    ### Debugging and Logs
-
-    The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `.claude/logs/` directory:
-
-    -   **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see.
-    -   **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output.
-    -   **`XX-step-name.raw.json.log`**: Contains the raw, line-by-line JSON objects streamed from the LLM. This is useful for deep debugging of the tool's behavior, as it shows every event, including tool use attempts and content chunks.
-
-    **When to use each log:**
-    -   Use the standard `.log` file to see what the AI produced.
-    -   Use the `.reasoning.log` file to understand *why* the AI made specific decisions.
-    -   Use the `.raw.json.log` file for in-depth analysis of the raw communication with the AI.
     
+    // After:
+    export interface ClaudeProjectConfig {
+      // ... existing properties
+      manageGitBranch?: boolean;
+      waitForRateLimitReset?: boolean; // Add this line
+      pipelines?: PipelinesMap;
+      defaultPipeline?: string;
+    }
+    ```
+
+    **File:** `src/templates/claude.config.js`
+    ```javascript
+    // Add this new section with comments
+    module.exports = {
+      //...
+      manageGitBranch: true,
+    
+      /**
+       * If true, the orchestrator will pause and wait when it hits the Claude
+       * API usage limit, then automatically resume when the limit resets.
+       * If false (default), it will fail gracefully with a message.
+       */
+      waitForRateLimitReset: false,
+    
+      defaultPipeline: 'default',
+      //...
+    };
+    ```
+
+### 2. Detect Rate Limit Error in Process Runner
+
+*   **Objective:** Enhance the `runStreaming` function to recognize the specific "usage limit reached" error from Claude's output and return a structured result.
+*   **Tasks:**
+    1.  Modify the return type of `runStreaming` in `src/tools/proc.ts` to include optional rate limit details.
+    2.  Inside the `stdout.on('data')` handler, parse the JSON output and check for the specific error string.
+    3.  If the error is found, extract the timestamp and store it.
+    4.  When the process closes, resolve the promise with the structured error data.
+
+*   **Code Snippets:**
+
+    **File:** `src/tools/proc.ts`
+    ```typescript
+    // Define a new, more descriptive return type
+    export interface StreamResult {
+        code: number;
+        output: string;
+        rateLimit?: {
+            resetTimestamp: number;
+        };
+    }
+
+    // Update the function signature
+    export function runStreaming(
+      //...
+    ): Promise<StreamResult> { // Changed return type
+        // ...
+        let rateLimitInfo: StreamResult['rateLimit'] | undefined;
+
+        // Inside the promise
+        p.stdout.on("data", (chunk) => {
+            //... inside the line processing loop
+            try {
+                const json = JSON.parse(line);
+
+                if (json.type === "result" && typeof json.result === 'string' && json.result.startsWith("Claude AI usage limit reached|")) {
+                    const parts = json.result.split('|');
+                    const timestamp = parseInt(parts[1], 10);
+                    if (!isNaN(timestamp)) {
+                        rateLimitInfo = { resetTimestamp: timestamp };
+                    }
+                }
+                
+                // ... rest of the stdout handler
+            } catch (e) {
+                // ...
+            }
+        });
+        
+        // ...
+        p.on("close", (code) => {
+            //...
+            // Resolve with the structured data
+            resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
+        });
+    }
+    ```
+
+### 3. Add New "Waiting" Task Status
+
+*   **Objective:** Create a new status phase to accurately reflect when the tool is paused and waiting for an API limit reset.
+*   **Tasks:**
+    1.  Edit the `Phase` type in `src/tools/status.ts`.
+
+*   **Code Snippet:**
+
+    **File:** `src/tools/status.ts`
+    ```typescript
+    // Before:
+    export type Phase = "pending" | "running" | "done" | "failed" | "interrupted";
+
+    // After:
+    export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
+    ```
+
+#### **4. Implement Core Orchestrator Logic (Revised)**
+
+*   **Objective:** Modify the `executeStep` function to handle the `rateLimit` error by either pausing and retrying with a context-aware "Resume Prompt" or failing gracefully.
+*   **Tasks:**
+    1.  In `src/tools/orchestrator.ts`, check the result of the `runStreaming` call for the `rateLimit` property.
+    2.  If the error is present, check the `waitForRateLimitReset` config value.
+    3.  **Wait Logic:** If `true`:
+        a. **Read the `reasoningLogFile`** for the failed attempt.
+        b. Calculate wait time, log a message, and update the task status.
+        c. Use `setTimeout` to pause execution.
+        d. After the wait, **construct the new "Resume Prompt"** using the original instructions and the reasoning log content.
+        e. Use this new prompt for the next attempt.
+    4.  **Graceful Fail Logic:** If `false`, throw the informative error as previously planned.
+
+*   **Code Snippet:**
+
+    **File:** `src/tools/orchestrator.ts` (updated logic inside `executeStep`)
+    ```typescript
+    // Inside the for-loop for attempts
+    const result = await runStreaming(/*...args...*/, currentPrompt /* This holds the prompt for the attempt */);
+
+    if (result.rateLimit) {
+        const config = await getConfig();
+        const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
+
+        if (config.waitForRateLimitReset) {
+            const waitMs = resetTime.getTime() - Date.now();
+            if (waitMs > 0) {
+                console.log(pc.yellow(`[Orchestrator] Claude API usage limit reached.`));
+                console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
+                updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
+                
+                await new Promise(resolve => setTimeout(resolve, waitMs));
+
+                console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
+                updateStatus(statusFile, s => { s.phase = "running"; });
+
+                // **NEW LOGIC: Construct the Resume Prompt**
+                const reasoningLogContent = readFileSync(reasoningLogFile, 'utf-8');
+                const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.
+
+                --- ORIGINAL INSTRUCTIONS ---
+                ${fullPrompt}
+                --- END ORIGINAL INSTRUCTIONS ---
+
+                --- PREVIOUS ACTIONS LOG ---
+                ${reasoningLogContent}
+                --- END PREVIOUS ACTIONS LOG ---
+
+                Please analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
+                                
+                                // Update the prompt for the next iteration of the loop.
+                                currentPrompt = resumePrompt; 
+
+                                attempt--; // Do not count this as a formal "retry"
+                                continue; // Re-run the step with the new resume prompt
+                            }
+                        } else {
+                            // ... graceful failure logic as before ...
+                        }
+                    }
+                    // ... rest of the function
+    ```
+
+
+### 5. Update Documentation
+
+*   **Objective:** Clearly document the new feature for all users.
+*   **Task:** Add a new section to `README.md`.
+
+*   **Code Snippet:**
+
+    **File:** `README.md` (add a new section)
+    ```markdown
+    ### Handling API Rate Limits
+
+    The orchestrator is designed to be resilient against Claude API usage limits. When a rate limit is hit, the tool detects it and handles it in one of two ways.
+
+    #### Graceful Failure (Default)
+
+    By default, if the API limit is reached, the workflow will stop and display a message like this:
+
+    ```
+    Workflow failed: Claude AI usage limit reached. Your limit will reset at 1:00:00 PM.
+    To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
+    You can re-run the command after the reset time to continue from this step.
+    ```
+    
+    Your progress is saved. Once your limit resets, simply run the exact same `claude-project run` command again, and the orchestrator will pick up right where it left off.
+
+    #### Automatic Wait & Resume (Opt-in)
+
+    For a fully autonomous workflow, you can enable the auto-resume feature. In your `claude.config.js`, set:
+
+    ```javascript
+    module.exports = {
+      // ...
+      waitForRateLimitReset: true,
+      // ...
+    };
+    ```
+
+    With this setting, instead of failing, the tool will pause execution and log a waiting message. It will automatically resume the task as soon as the API usage limit has reset.
+    ```
+
+## Error Handling & Warnings
+
+*   **Invalid Timestamp:** If the timestamp received from the Claude tool is malformed or non-numeric, the `parseInt` will result in `NaN`. The logic should treat this as a generic failure and not attempt to wait.
+*   **Long Wait Times:** If the calculated wait duration is excessively long (e.g., more than 8 hours), log a clear warning to the console so the user is aware of the extended pause.
+    *   Example: `[Orchestrator] WARNING: API reset is scheduled for tomorrow at 1:00 PM. The process will pause for over 8 hours. You can safely terminate with Ctrl+C and restart manually after the reset time.`
+*   **User Interruption:** If the user presses `Ctrl+C` while the process is waiting, the process should terminate cleanly. No special signal handling is required for the initial implementation. The task status will remain as `waiting_for_reset`, and on the next run, it will resume the step.

@@ -3,7 +3,7 @@ import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import yaml from 'js-yaml';
-import { runStreaming } from "./proc.js";
+import { runStreaming, StreamResult } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
@@ -177,8 +177,62 @@ async function executeStep(
     }
 
     // Execute the main Claude command
-    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile);
-    if (code !== 0) {
+    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile);
+    
+    // Check for rate limit error
+    if (result.rateLimit) {
+      const config = await getConfig();
+      const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
+      
+      if (config.waitForRateLimitReset) {
+        // Wait & Resume Logic
+        const waitMs = resetTime.getTime() - Date.now();
+        if (waitMs > 0) {
+          console.log(pc.yellow(`[Orchestrator] Claude API usage limit reached.`));
+          
+          // Check for excessively long wait times (8 hours = 28,800,000 ms)
+          if (waitMs > 28800000) {
+            console.log(pc.red(`[Orchestrator] WARNING: API reset is scheduled for ${resetTime.toLocaleString()}. The process will pause for over 8 hours.`));
+            console.log(pc.yellow(`[Orchestrator] You can safely terminate with Ctrl+C and restart manually after the reset time.`));
+          }
+          
+          console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
+          updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
+          
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+          
+          console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
+          updateStatus(statusFile, s => { s.phase = "running"; });
+          
+          // Construct the Resume Prompt
+          const reasoningLogContent = readFileSync(reasoningLogFile, 'utf-8');
+          const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.
+
+--- ORIGINAL INSTRUCTIONS ---
+${fullPrompt}
+--- END ORIGINAL INSTRUCTIONS ---
+
+--- PREVIOUS ACTIONS LOG ---
+${reasoningLogContent}
+--- END PREVIOUS ACTIONS LOG ---
+
+Please analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
+          
+          // Update the prompt for the next iteration of the loop
+          currentPrompt = resumePrompt;
+          attempt--; // Do not count this as a formal "retry"
+          continue; // Re-run the step with the new resume prompt
+        }
+      } else {
+        // Graceful Fail Logic
+        updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
+        throw new Error(`Workflow failed: Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleString()}.
+To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
+You can re-run the command after the reset time to continue from this step.`);
+      }
+    }
+    
+    if (result.code !== 0) {
       updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
       throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
     }

@@ -407,6 +407,36 @@ Add a simple `retry` property to any pipeline step to enable automatic retries w
 
 This self-correction capability makes your pipelines more autonomous and reduces the need for manual intervention during development workflows.
 
+### Handling API Rate Limits
+
+The orchestrator is designed to be resilient against Claude API usage limits. When a rate limit is hit, the tool detects it and handles it in one of two ways.
+
+#### Graceful Failure (Default)
+
+By default, if the API limit is reached, the workflow will stop and display a message like this:
+
+```
+Workflow failed: Claude AI usage limit reached. Your limit will reset at 1:00:00 PM.
+To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
+You can re-run the command after the reset time to continue from this step.
+```
+
+Your progress is saved. Once your limit resets, simply run the exact same `claude-project run` command again, and the orchestrator will pick up right where it left off.
+
+#### Automatic Wait & Resume (Opt-in)
+
+For a fully autonomous workflow, you can enable the auto-resume feature. In your `claude.config.js`, set:
+
+```javascript
+module.exports = {
+  // ...
+  waitForRateLimitReset: true,
+  // ...
+};
+```
+
+With this setting, instead of failing, the tool will pause execution and log a waiting message. It will automatically resume the task as soon as the API usage limit has reset.
+
 ### Debugging and Logs
 
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `.claude/logs/` directory:

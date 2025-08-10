@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type Phase = "pending" | "running" | "done" | "failed" | "interrupted";
+export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
 export type TaskStatus = {
   version: number;
   taskId: string;

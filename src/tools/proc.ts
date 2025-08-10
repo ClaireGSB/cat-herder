@@ -3,6 +3,15 @@ import { mkdirSync, createWriteStream, WriteStream } from "node:fs";
 import { dirname } from "node:path";
 import pc from "picocolors"; // Import the colors library
 
+// Define the enhanced return type for rate limit handling
+export interface StreamResult {
+  code: number;
+  output: string;
+  rateLimit?: {
+    resetTimestamp: number;
+  };
+}
+
 export function runStreaming(
   cmd: string,
   args: string[],
@@ -11,7 +20,7 @@ export function runStreaming(
   cwd: string,
   stdinData?: string,
   rawJsonLogPath?: string
-): Promise<{ code: number; output: string }> {
+): Promise<StreamResult> {
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
   
@@ -68,6 +77,7 @@ export function runStreaming(
 
   let fullOutput = "";
   let buffer = ""; // Buffer for parsing JSON lines across chunks
+  let rateLimitInfo: StreamResult['rateLimit'] | undefined;
 
   return new Promise((resolve) => {
     const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
@@ -119,6 +129,15 @@ export function runStreaming(
           if (json.type === "result") {
             const resultText = json.result;
             if (resultText) {
+              // Check for rate limit error before processing as normal output
+              if (typeof resultText === 'string' && resultText.startsWith("Claude AI usage limit reached|")) {
+                const parts = resultText.split('|');
+                const timestamp = parseInt(parts[1], 10);
+                if (!isNaN(timestamp)) {
+                  rateLimitInfo = { resetTimestamp: timestamp };
+                }
+              }
+              
               process.stdout.write(`[CLAUDE] ${resultText}`);
               logStream.write(resultText);
               fullOutput += resultText;
@@ -168,7 +187,7 @@ export function runStreaming(
         rawJsonStream.end();
       }
       
-      resolve({ code: code ?? 1, output: fullOutput });
+      resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
     });
   });
 }
