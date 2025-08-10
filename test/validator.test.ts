@@ -967,6 +967,295 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 });
 
+describe('Validator - Array Check Validation', () => {
+  const mockProjectRoot = '/test/project';
+  
+  beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Mock settings.json exists with basic permissions
+    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
+      if (filePath.includes('settings.json')) return true;
+      if (filePath.includes('package.json')) return true;
+      if (filePath.includes('commands')) return true; // Mock command files exist
+      return false;
+    });
+    
+    // Mock file reads
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
+      if (filePath.includes('settings.json')) {
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(npx tsc --noEmit)'] } });
+      }
+      if (filePath.includes('package.json')) {
+        return JSON.stringify({ scripts: { test: 'vitest' } });
+      }
+      if (filePath.includes('commands')) {
+        return '---\nallowed-tools: []\n---\nTest command content';
+      }
+      return '';
+    });
+  });
+
+  it('should accept valid array of checks', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npx tsc --noEmit', expect: 'pass' },
+              { type: 'shell', command: 'npm test', expect: 'fail' }
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should accept single check object (backward compatibility)', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should validate each check in array independently', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'fileExists', path: 'PLAN.md' },
+              { type: 'shell', command: 'npm test', expect: 'pass' },
+              { type: 'none' }
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should reject invalid check type in array with proper indexing', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' },
+              { type: 'invalid-type' as any }
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: Invalid check type 'invalid-type'. Available: none, fileExists, shell"
+    );
+  });
+
+  it('should reject missing required properties in array checks with proper indexing', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' },
+              { type: 'fileExists' } as any, // Missing path
+              { type: 'shell' } as any // Missing command
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: Check type 'fileExists' requires a non-empty 'path' string property."
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #3: Check type 'shell' requires a non-empty 'command' string property."
+    );
+  });
+
+  it('should reject invalid expect values in array checks with proper indexing', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' },
+              { type: 'shell', command: 'npm test', expect: 'invalid' as any }
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: The 'expect' property for a shell check must be either \"pass\" or \"fail\"."
+    );
+  });
+
+  it('should handle mixed valid and invalid checks in array', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' }, // Valid
+              { type: 'fileExists', path: '' }, // Invalid empty path
+              { type: 'none' }, // Valid
+              { type: 'shell', command: 'npm test', expect: 'invalid' as any } // Invalid expect
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: Check type 'fileExists' requires a non-empty 'path' string property."
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #4: The 'expect' property for a shell check must be either \"pass\" or \"fail\"."
+    );
+    // Should have exactly 2 errors
+    expect(result.errors.filter(err => err.includes('test-step'))).toHaveLength(2);
+  });
+
+  it('should validate npm script requirements for each check in array', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' }, // Valid - script exists
+              { type: 'shell', command: 'npm lint', expect: 'pass' } // Invalid - script doesn't exist
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: The command \"npm lint\" requires a script named \"lint\" in your package.json, but it was not found."
+    );
+  });
+
+  it('should handle empty array of checks', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [] as any // Empty array
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    // This should be valid as we treat empty arrays the same as having no checks
+    expect(result.isValid).toBe(true);
+  });
+
+  it('should handle checks with missing type in array', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' },
+              { path: 'PLAN.md' } as any // Missing type
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'), check #2: is missing a valid 'check' object with a 'type' property."
+    );
+  });
+
+  it('should validate array checks across multiple pipeline steps', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'step1',
+            command: 'test-command',
+            check: [
+              { type: 'shell', command: 'npm test', expect: 'pass' }
+            ]
+          },
+          {
+            name: 'step2',
+            command: 'test-command',
+            check: [
+              { type: 'fileExists', path: '' } // Invalid
+            ]
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 2 ('step2'), check #1: Check type 'fileExists' requires a non-empty 'path' string property."
+    );
+    // Should not have errors for step1
+    expect(result.errors.filter(err => err.includes('step1'))).toHaveLength(0);
+  });
+});
+
 describe('Validator - Top-Level Config Validation', () => {
   const mockProjectRoot = '/test/project';
   
