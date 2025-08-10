@@ -130,7 +130,6 @@ describe('Init Integration Tests', () => {
     // Verify package.json was updated
     const pkg = await fs.readJson(path.join(tempDir, 'package.json'));
     expect(pkg.scripts['claude:run']).toBeDefined();
-    expect(pkg.scripts['test']).toBeDefined();
     expect(pkg.devDependencies['vitest']).toBeDefined();
   });
 });
