@@ -2,11 +2,6 @@ import { cosmiconfig } from "cosmiconfig";
 import path from "node:path";
 import { CheckConfig } from "./tools/check-runner.js";
 
-// Define the structure of a hook configuration
-export interface HookConfig {
-  type: 'shell';
-  command: string;
-}
 
 // Define the structure of a pipeline step
 export interface PipelineStep {
@@ -16,9 +11,7 @@ export interface PipelineStep {
   fileAccess?: {
     allowWrite?: string[];
   };
-  hooks?: {
-    onCheckFailure?: HookConfig[];
-  };
+  retry?: number;
 }
 
 type PipelinesMap = { [key: string]: PipelineStep[] };
