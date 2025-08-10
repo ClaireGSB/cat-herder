@@ -443,10 +443,13 @@ For the orchestrator to run non-interactively, it needs permission to execute `B
 
 This file pre-approves `Bash` commands that are essential for the default workflow (scoped to `npm`, `git`, and `vitest`) while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.
 
-Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command acts as a safety net and a helper. It validates two things:
+Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command is an essential tool for ensuring your workflow is correctly configured *before* you run it. It performs a comprehensive check of your `claude.config.js` and project setup, including:
 
-1. **Permissions**: When you add a step that requires a `Bash` permission not in your `settings.json`, the validator detects it and offers to add it
-2. **Package.json Scripts**: When your pipeline references npm scripts (e.g., `npm test`), the validator ensures those scripts exist in your `package.json`
+- **Pipeline Structure**: Verifies that steps have required properties like `name` and `command`.
+- **Check Objects**: Ensures `check` steps are correctly formed (e.g., a `fileExists` check has a `path`).
+- **Retry and FileAccess**: Validates that `retry` and `fileAccess` rules follow the correct format.
+- **NPM Scripts**: Confirms that any `npm` command used in a `shell` check exists in your `package.json`.
+- **Permissions**: Detects when a step requires a `Bash` permission that is missing from `.claude/settings.json` and offers to add it for you.
 
 For example, if you add a `lint` step that needs to run `npm run lint:fix`, but don't have a `lint:fix` script, the validator will show:
 

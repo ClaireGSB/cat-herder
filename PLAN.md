@@ -17,8 +17,8 @@ This task will enhance the validator to catch these errors proactively. The new 
 -   [x] **2. Deepen `check` Object Validation**: Update `validator.ts` to validate the specific properties required by each `check.type`.
 -   [x] **3. Validate `fileAccess` Object Structure**: Update `validator.ts` to ensure `fileAccess.allowWrite` is an array of strings.
 -   [x] **4. Add Top-Level Config Validation**: Add basic type validation for top-level keys in `claude.config.js`.
--   [ ] **5. Create New Tests**: Add a new test file (`test/validator.test.ts`) to verify all new validation logic.
--   [ ] **6. Update Documentation**: Update `README.md` to reflect the improved capabilities of the `validate` command.
+-   [x] **5. Create New Tests**: Add a new test file (`test/validator.test.ts`) to verify all new validation logic.
+-   [x] **6. Update Documentation**: Update `README.md` to reflect the improved capabilities of the `validate` command.
 
 ---
 
