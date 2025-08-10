@@ -54,6 +54,14 @@ module.exports = {
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
         allowWrite: ["src/**/*"]
+      },
+      hooks: {
+        onCheckFailure: [
+          {
+            type: "shell",
+            command: "echo 'The test suite failed. The errors are provided below. Please analyze the output, fix the code in the src/ directory, and ensure all tests pass. Do not modify the test files themselves.\\n\\n---\\n\\n{check_output}'"
+          }
+        ]
       }
     },
     {
