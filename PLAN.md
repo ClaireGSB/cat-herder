@@ -1,167 +1,136 @@
 
-
 # PLAN.md
 
-## Title: Refactor Pipeline Hooks to a Simpler `retry` Configuration
+### **Title: Enhance `claude-project validate` to Cover All Pipeline Features**
 
-**Goal:** To replace the verbose `hooks` object with a simple `retry: number` property in the step configuration, making the self-correction feature more intuitive and easier to use.
+**Goal:** To make the `claude-project validate` command check for all new pipeline configurations (`retry`, `fileAccess`, and deep `check` validation) to prevent runtime errors and provide immediate feedback to the user.
 
-### Description
+### **Description**
 
-The current `onCheckFailure` hook is powerful but requires users to write a shell command and understand a special `{check_output}` token. This is often more configuration than needed for the common goal of "retrying a step with the failure reason."
+Currently, the `claude-project validate` command checks for basic configuration issues but misses newer features. A user can create a `claude.config.js` with invalid values for `retry`, `fileAccess`, or the `check` object (e.g., `retry: "three"`), and these errors are only discovered when a task is already running. This creates a frustrating user experience.
 
-This refactor simplifies this entire feature. We will remove the `hooks` object and replace it with a single, optional `retry` property. If a step's check fails and `retry: 3` is set, the orchestrator will now *automatically* generate a generic but effective feedback prompt and trigger the retry loop.
+This task will enhance the validator to catch these errors proactively. The new behavior will inspect the entire pipeline configuration and report specific, helpful error messages, guiding the user to fix their `claude.config.js` *before* they attempt to run a task.
 
-**Before:**
-```javascript
-hooks: {
-  onCheckFailure: [{ type: "shell", command: "echo 'Tests failed... {check_output}'" }]
-}```
+### **Summary Checklist**
 
-**After:**
-```javascript
-retry: 3
-```
-
-This change significantly improves user experience by hiding implementation details and focusing the configuration on the user's intent: "How many times should this step retry on failure?"
-
-### Summary Checklist
-
--   [x] **1. Update Configuration Types:** Replace the `hooks` object with a `retry?: number` property in the `PipelineStep` interface.
--   [x] **2. Refactor Orchestrator Logic:** Modify `executeStep` to use the `retry` property and auto-generate the feedback prompt.
--   [x] **3. Delete Obsolete Code:** Remove the `executeHooks` helper function, which is no longer needed.
--   [x] **4. Update Example Configuration:** Revise the `claude.config.js` template to use the new `retry` property.
--   [x] **5. Refactor Unit Tests:** Update tests to validate the new `retry` logic instead of the old `hooks` mechanism.
--   [x] **6. Rewrite Documentation:** Overhaul the "Step Hooks" section in `README.md` to explain the new, simpler `retry` feature.
+-   [x] **1. Validate `retry` Property**: Update `validator.ts` to ensure `retry` is a non-negative integer.
+-   [x] **2. Deepen `check` Object Validation**: Update `validator.ts` to validate the specific properties required by each `check.type`.
+-   [x] **3. Validate `fileAccess` Object Structure**: Update `validator.ts` to ensure `fileAccess.allowWrite` is an array of strings.
+-   [x] **4. Add Top-Level Config Validation**: Add basic type validation for top-level keys in `claude.config.js`.
+-   [x] **5. Create New Tests**: Add a new test file (`test/validator.test.ts`) to verify all new validation logic.
+-   [x] **6. Update Documentation**: Update `README.md` to reflect the improved capabilities of the `validate` command.
 
 ---
 
-### Detailed Implementation Steps
+### **Detailed Implementation Steps**
 
-#### 1. Update Configuration Types
+#### **1. Validate `retry` Property**
 
-*   **Objective:** Modify the core data structure in `src/config.ts` to reflect the new design.
-*   **Task:**
-    1.  Navigate to `src/config.ts`.
-    2.  Delete the `HookConfig` interface, as it will no longer be used.
-    3.  In the `PipelineStep` interface, remove the `hooks?: { ... };` property.
-    4.  Add the new optional property: `retry?: number;`.
-*   **Code Snippet (`src/config.ts`):**
+*   **Objective:** Prevent users from providing invalid values for the `retry` property in a pipeline step.
+*   **Task:** In `src/tools/validator.ts`, locate the `for` loop that iterates through pipeline steps. Inside this loop, add logic to check the `retry` property.
+*   **Code Snippet (to be added in `src/tools/validator.ts`):**
     ```typescript
-    // BEFORE
-    export interface PipelineStep {
-      // ...
-      hooks?: { onCheckFailure?: HookConfig[] };
-    }
-
-    // AFTER
-    export interface PipelineStep {
-      // ...
-      retry?: number;
-    }
-    ```
-
-#### 2. Refactor Orchestrator Logic
-
-*   **Objective:** Update the step execution loop to use the `retry` count and generate its own feedback prompt.
-*   **Task:**
-    1.  Navigate to `src/tools/orchestrator.ts`.
-    2.  In the `executeStep` function, change the retry loop to be governed by `stepConfig.retry`. The `maxRetries` constant can be replaced by `stepConfig.retry ?? 0`.
-    3.  Inside the failure case (after `checkResult.success` is false), replace the call to `executeHooks` with new logic to construct a generic prompt.
-    4.  The new prompt should include the failed command from `check.command` and the error message from `checkResult.output`.
-*   **Code Snippet (New logic in `src/tools/orchestrator.ts`):**
-    ```typescript
-    async function executeStep(stepConfig: PipelineStep, /* ... */) {
-      const { name, command, check, retry } = stepConfig;
-      const maxRetries = retry ?? 0;
-
-      for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-        // ... run Claude command ...
-        const checkResult = await runCheck(check, projectRoot);
-
-        if (checkResult.success) {
-          // ... commit and return
-          return;
-        }
-
-        // --- Failure Case ---
-        if (attempt > maxRetries) {
-          // If we've used all retries, fail permanently
-          throw new Error(`Step "${name}" failed after ${maxRetries} retries.`);
-        }
-        
-        // V-- THIS IS THE NEW CORE LOGIC --V
-        console.log(pc.yellow(`[Orchestrator] Generating automatic feedback for step: ${name}`));
-        const feedbackPrompt = `The previous attempt failed.
-The validation check \`${check.command}\` failed with the following output:
----
-${checkResult.output}
----
-Please analyze this error, fix the underlying code, and try again. Do not modify the tests or checks.`;
-        
-        currentPrompt = feedbackPrompt; // Set prompt for the next loop iteration
-        // ^-- END OF NEW CORE LOGIC --^
+    // Inside the step validation loop...
+    if (step.retry !== undefined) {
+      if (typeof step.retry !== 'number' || !Number.isInteger(step.retry) || step.retry < 0) {
+        errors.push(`${stepId}: The 'retry' property must be a non-negative integer, but found '${step.retry}'.`);
       }
     }
     ```
 
-#### 3. Delete Obsolete Code
+#### **2. Deepen `check` Object Validation**
 
-*   **Objective:** Remove dead code to keep the codebase clean.
-*   **Task:**
-    1.  Navigate to `src/tools/orchestrator.ts`.
-    2.  Delete the entire `executeHooks` helper function, as it is no longer called from anywhere.
-
-#### 4. Update Example Configuration
-
-*   **Objective:** Update the default template to reflect the new, simpler configuration.
-*   **Task:**
-    1.  Navigate to `src/templates/claude.config.js`.
-    2.  Find the `implement` step.
-    3.  Remove the entire `hooks` object.
-    4.  Add the `retry: 3` property.
-*   **Code Snippet (`src/templates/claude.config.js`):**
-    ```javascript
-    // In the 'implement' step object:
-    
-    // BEFORE
-    {
-      name: "implement",
-      // ...
-      hooks: { onCheckFailure: [ /* ... */ ] }
-    }
-
-    // AFTER
-    {
-      name: "implement",
-      command: "implement",
-      check: { type: "shell", command: "npm test", expect: "pass" },
-      fileAccess: { allowWrite: ["src/**/*"] },
-      retry: 3
+*   **Objective:** Ensure that when a `check.type` is specified, its required fields (like `path` or `command`) are also present and correctly formatted.
+*   **Task:** In `src/tools/validator.ts`, right after you validate `step.check.type`, add a `switch` statement to handle the logic for each type.
+*   **Code Snippet (to be added in `src/tools/validator.ts`):**
+    ```typescript
+    // Inside the step validation loop, after checking if step.check.type is valid...
+    switch (step.check.type) {
+      case 'fileExists':
+        if (typeof step.check.path !== 'string' || !step.check.path) {
+          errors.push(`${stepId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
+        }
+        break;
+      case 'shell':
+        if (typeof step.check.command !== 'string' || !step.check.command) {
+          errors.push(`${stepId}: Check type 'shell' requires a non-empty 'command' string property.`);
+        }
+        if (step.check.expect && !['pass', 'fail'].includes(step.check.expect)) {
+          errors.push(`${stepId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
+        }
+        break;
     }
     ```
 
-#### 5. Refactor Unit Tests
+#### **3. Validate `fileAccess` Object Structure**
 
-*   **Objective:** Ensure the test suite validates the new `retry` behavior.
+*   **Objective:** Ensure the `fileAccess` object and its `allowWrite` property are structured correctly to prevent runtime validation failures.
+*   **Task:** In `src/tools/validator.ts`, inside the step validation loop, add a new block to check the `fileAccess` property if it exists.
+*   **Code Snippet (to be added in `src/tools/validator.ts`):**
+    ```typescript
+    // Inside the step validation loop...
+    if (step.fileAccess) {
+      if (typeof step.fileAccess !== 'object' || step.fileAccess === null) {
+        errors.push(`${stepId}: The 'fileAccess' property must be an object.`);
+      } else if (step.fileAccess.allowWrite) {
+        if (!Array.isArray(step.fileAccess.allowWrite)) {
+          errors.push(`${stepId}: The 'fileAccess.allowWrite' property must be an array of strings.`);
+        } else {
+          step.fileAccess.allowWrite.forEach((pattern, i) => {
+            if (typeof pattern !== 'string' || !pattern) {
+              errors.push(`${stepId}: The 'fileAccess.allowWrite' array contains an invalid value at index ${i}. All values must be non-empty strings.`);
+            }
+          });
+        }
+      }
+    }
+    ```
+
+#### **4. Add Top-Level Config Validation**
+
+*   **Objective:** Catch common typos in the main `claude.config.js` keys.
+*   **Task:** At the beginning of the `validatePipeline` function in `src/tools/validator.ts`, add a few checks for the most important top-level properties.
+*   **Code Snippet (to be added in `src/tools/validator.ts`):**
+    ```typescript
+    // At the start of the validatePipeline function...
+    if (config.manageGitBranch !== undefined && typeof config.manageGitBranch !== 'boolean') {
+      errors.push(`Top-level config error: 'manageGitBranch' must be a boolean (true or false).`);
+    }
+    if (config.taskFolder !== undefined && typeof config.taskFolder !== 'string') {
+      errors.push(`Top-level config error: 'taskFolder' must be a string.`);
+    }
+    ```
+
+#### **5. Create New Tests**
+
+*   **Objective:** Create a dedicated test suite to ensure all new validation rules work correctly and do not break in the future.
 *   **Task:**
-    1.  Navigate to `test/orchestrator-hooks.test.ts` and rename it to `test/orchestrator-retry.test.ts`.
-    2.  Update the tests to pass a `retry: 3` property in the mock `stepConfig`.
-    3.  Remove any mocks for `execSync` related to the old hook commands.
-    4.  Assert that the retry loop continues when `checkResult.success` is false.
-    5.  Assert that the `currentPrompt` variable for the next loop iteration matches the expected auto-generated feedback string.
+    1.  Create a new file: `test/validator.test.ts`.
+    2.  Import `validatePipeline` from `src/tools/validator.ts` and `describe`, `it`, `expect` from `vitest`.
+    3.  Write test cases for each invalid configuration scenario:
+        *   A step with `retry: "2"`.
+        *   A step with `check: { type: 'fileExists' }` (missing `path`).
+        *   A step with `check: { type: 'shell', expect: 'succeed' }` (invalid `expect` value).
+        *   A step with `fileAccess: { allowWrite: "src/*" }` (string instead of array).
+    4.  For each case, create a mock `config` object, call `validatePipeline`, and assert that `result.isValid` is `false` and `result.errors` contains the expected message.
+    5.  Add a final test case with a completely valid `config` to ensure it passes without errors.
 
-#### 6. Rewrite Documentation
+#### **6. Update Documentation**
 
-*   **Objective:** Update the `README.md` to be accurate and reflect the simplicity of the final feature.
-*   **Task:**
-    1.  Navigate to `README.md`.
-    2.  Find the "Advanced: Step Hooks and Self-Correction" section and rename it to something like "Automatic Retries on Failure".
-    3.  Rewrite the entire section to explain the new `retry` property.
-    4.  Remove all mentions of `hooks`, `onCheckFailure`, and the `{check_output}` token.
-    5.  Provide a clear example showing a step with the `retry: 3` property.
+*   **Objective:** Inform users about the expanded capabilities of the `claude-project validate` command in the `README.md`.
+*   **Task:** Go to the `README.md` file and find the section describing `claude-project validate` (under `### Permissions and Security (.claude/settings.json)`). Update the description to be more comprehensive.
 
-### Error Handling & Warnings
+*   **Suggested Change:**
+    *   **FROM:** "The `claude-project validate` command acts as a safety net and a helper. It validates two things: 1. Permissions... 2. Package.json Scripts..."
+    *   **TO (suggestion):** "The `claude-project validate` command is an essential tool for ensuring your workflow is correctly configured *before* you run it. It performs a comprehensive check of your `claude.config.js` and project setup, including:
+        *   **Pipeline Structure:** Verifies that steps have required properties like `name` and `command`.
+        *   **Check Objects:** Ensures `check` steps are correctly formed (e.g., a `fileExists` check has a `path`).
+        *   **Retry and FileAccess:** Validates that `retry` and `fileAccess` rules follow the correct format.
+        *   **NPM Scripts:** Confirms that any `npm` command used in a `shell` check exists in your `package.json`.
+        *   **Permissions:** Detects when a step requires a `Bash` permission that is missing from `.claude/settings.json` and offers to add it for you."
 
-*   The existing error handling for the retry loop (exhausting all retries) remains valid and sufficient.
-*   If a user provides a non-numeric value for `retry`, it will be treated as `undefined`, resulting in 0 retries. This is acceptable default behavior.
+### **Error Handling & Warnings**
+
+*   When the `claude-project validate` command detects any errors, it should list all of them clearly in the console.
+*   The command should exit with a non-zero status code to allow for its use in automated scripts.
+*   The error messages generated by the new validation logic should be consistent with the existing ones: `Pipeline '...' Step X ('...'): Descriptive error message.`

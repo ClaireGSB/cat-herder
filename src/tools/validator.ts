@@ -39,6 +39,26 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
   const knownContextKeys = Object.keys(contextProviders);
   const validCheckTypes = ["none", "fileExists", "shell"];
 
+  // --- Top-Level Config Validation ---
+  if (config.manageGitBranch !== undefined && typeof config.manageGitBranch !== 'boolean') {
+    errors.push(`Top-level config error: 'manageGitBranch' must be a boolean (true or false).`);
+  }
+  if (config.taskFolder !== undefined && typeof config.taskFolder !== 'string') {
+    errors.push(`Top-level config error: 'taskFolder' must be a string.`);
+  }
+  if (config.statePath !== undefined && typeof config.statePath !== 'string') {
+    errors.push(`Top-level config error: 'statePath' must be a string.`);
+  }
+  if (config.logsPath !== undefined && typeof config.logsPath !== 'string') {
+    errors.push(`Top-level config error: 'logsPath' must be a string.`);
+  }
+  if (config.structureIgnore !== undefined && !Array.isArray(config.structureIgnore)) {
+    errors.push(`Top-level config error: 'structureIgnore' must be an array of strings.`);
+  }
+  if (config.defaultPipeline !== undefined && typeof config.defaultPipeline !== 'string') {
+    errors.push(`Top-level config error: 'defaultPipeline' must be a string.`);
+  }
+
   // 1. Load settings.json permissions
   const settingsPath = path.join(projectRoot, ".claude", "settings.json");
   let allowedPermissions: string[] = [];
@@ -112,7 +132,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       if (step.check?.type === "shell" && step.check.command) {
         const command = step.check.command;
         // We specifically look for npm script commands
-        if (command.startsWith("npm ")) {
+        if (typeof command === 'string' && command.startsWith("npm ")) {
           // e.g., "npm test" -> "test", "npm run lint" -> "lint"
           const scriptName = command.split(" ").pop();
           if (scriptName && !userScripts[scriptName]) {
@@ -152,9 +172,50 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
 
       // --- Context validation removed - context is now handled automatically by the orchestrator ---
       
+      // --- Retry Validation ---
+      if (step.retry !== undefined) {
+        if (typeof step.retry !== 'number' || !Number.isInteger(step.retry) || step.retry < 0) {
+          errors.push(`${stepId}: The 'retry' property must be a non-negative integer, but found '${step.retry}'.`);
+        }
+      }
+
       // --- Check Validation ---
       if (!validCheckTypes.includes(step.check.type)) {
         errors.push(`${stepId}: Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
+      }
+
+      // --- Deepen Check Object Validation ---
+      switch (step.check.type) {
+        case 'fileExists':
+          if (typeof step.check.path !== 'string' || !step.check.path) {
+            errors.push(`${stepId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
+          }
+          break;
+        case 'shell':
+          if (typeof step.check.command !== 'string' || !step.check.command) {
+            errors.push(`${stepId}: Check type 'shell' requires a non-empty 'command' string property.`);
+          }
+          if (step.check.expect && !['pass', 'fail'].includes(step.check.expect)) {
+            errors.push(`${stepId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
+          }
+          break;
+      }
+
+      // --- FileAccess Validation ---
+      if (step.fileAccess !== undefined) {
+        if (typeof step.fileAccess !== 'object' || step.fileAccess === null || Array.isArray(step.fileAccess)) {
+          errors.push(`${stepId}: The 'fileAccess' property must be an object.`);
+        } else if (step.fileAccess.allowWrite) {
+          if (!Array.isArray(step.fileAccess.allowWrite)) {
+            errors.push(`${stepId}: The 'fileAccess.allowWrite' property must be an array of strings.`);
+          } else {
+            step.fileAccess.allowWrite.forEach((pattern: any, i: number) => {
+              if (typeof pattern !== 'string' || !pattern) {
+                errors.push(`${stepId}: The 'fileAccess.allowWrite' array contains an invalid value at index ${i}. All values must be non-empty strings.`);
+              }
+            });
+          }
+        }
       }
     }
   }
