@@ -152,6 +152,13 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
 
       // --- Context validation removed - context is now handled automatically by the orchestrator ---
       
+      // --- Retry Validation ---
+      if (step.retry !== undefined) {
+        if (typeof step.retry !== 'number' || !Number.isInteger(step.retry) || step.retry < 0) {
+          errors.push(`${stepId}: The 'retry' property must be a non-negative integer, but found '${step.retry}'.`);
+        }
+      }
+
       // --- Check Validation ---
       if (!validCheckTypes.includes(step.check.type)) {
         errors.push(`${stepId}: Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);

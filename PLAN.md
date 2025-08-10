@@ -13,7 +13,7 @@ This task will enhance the validator to catch these errors proactively. The new 
 
 ### **Summary Checklist**
 
--   [ ] **1. Validate `retry` Property**: Update `validator.ts` to ensure `retry` is a non-negative integer.
+-   [x] **1. Validate `retry` Property**: Update `validator.ts` to ensure `retry` is a non-negative integer.
 -   [ ] **2. Deepen `check` Object Validation**: Update `validator.ts` to validate the specific properties required by each `check.type`.
 -   [ ] **3. Validate `fileAccess` Object Structure**: Update `validator.ts` to ensure `fileAccess.allowWrite` is an array of strings.
 -   [ ] **4. Add Top-Level Config Validation**: Add basic type validation for top-level keys in `claude.config.js`.
