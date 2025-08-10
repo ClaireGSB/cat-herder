@@ -346,7 +346,7 @@ Traditional CI/CD pipelines are rigid—when a step fails, the entire process ha
 
 #### Basic Configuration
 
-Add a `hooks` object to any pipeline step. The most powerful hook is `onCheckFailure`, which triggers when the step's `check` validation fails:
+Add a `onCheckFailure` `hooks` object to any pipeline step, which triggers when the step's `check` validation fails:
 
 ```javascript
 {

@@ -2,23 +2,37 @@
 
 # PLAN.md
 
-## Title: Refactor Pipeline Hooks to Remove `preCheck`
+## Title: Refactor Pipeline Hooks to a Simpler `retry` Configuration
 
-**Goal:** To simplify the hooks feature by removing the `preCheck` hook, focusing exclusively on the robust `onCheckFailure` self-correction mechanism to improve clarity and ease of use.
+**Goal:** To replace the verbose `hooks` object with a simple `retry: number` property in the step configuration, making the self-correction feature more intuitive and easier to use.
 
 ### Description
 
-The current implementation includes two types of hooks: `preCheck` and `onCheckFailure`. While functional, the `preCheck` hook (a hard-fail gate) is redundant with the main `check` and adds unnecessary complexity to the configuration.
+The current `onCheckFailure` hook is powerful but requires users to write a shell command and understand a special `{check_output}` token. This is often more configuration than needed for the common goal of "retrying a step with the failure reason."
 
-This refactor will remove the `preCheck` hook entirely. We will streamline the feature to its most powerful and predictable component: the `onCheckFailure` hook. This simplifies the code, makes the configuration cleaner, and focuses the feature on its core benefit: enabling Claude to self-correct when the primary validation fails.
+This refactor simplifies this entire feature. We will remove the `hooks` object and replace it with a single, optional `retry` property. If a step's check fails and `retry: 3` is set, the orchestrator will now *automatically* generate a generic but effective feedback prompt and trigger the retry loop.
+
+**Before:**
+```javascript
+hooks: {
+  onCheckFailure: [{ type: "shell", command: "echo 'Tests failed... {check_output}'" }]
+}```
+
+**After:**
+```javascript
+retry: 3
+```
+
+This change significantly improves user experience by hiding implementation details and focusing the configuration on the user's intent: "How many times should this step retry on failure?"
 
 ### Summary Checklist
 
--   [x] **1. Update Configuration Types:** Remove the `preCheck` property from the `PipelineStep` interface in `src/config.ts`.
--   [x] **2. Simplify Orchestrator Logic:** Remove the code that executes `preCheck` hooks from the `executeStep` function in `src/tools/orchestrator.ts`.
--   [x] **3. Update Example Configuration:** Remove any `preCheck` examples from the default template in `src/templates/claude.config.js`.
--   [ ] **4. Adjust Unit Tests:** Update `test/orchestrator-hooks.test.ts` to remove any tests that validate the `preCheck` functionality.
--   [ ] **5. Update Project Documentation:** Remove all mentions of the `preCheck` hook from `README.md`, focusing the documentation entirely on `onCheckFailure`.
+-   [ ] **1. Update Configuration Types:** Replace the `hooks` object with a `retry?: number` property in the `PipelineStep` interface.
+-   [ ] **2. Refactor Orchestrator Logic:** Modify `executeStep` to use the `retry` property and auto-generate the feedback prompt.
+-   [ ] **3. Delete Obsolete Code:** Remove the `executeHooks` helper function, which is no longer needed.
+-   [ ] **4. Update Example Configuration:** Revise the `claude.config.js` template to use the new `retry` property.
+-   [ ] **5. Refactor Unit Tests:** Update tests to validate the new `retry` logic instead of the old `hooks` mechanism.
+-   [ ] **6. Rewrite Documentation:** Overhaul the "Step Hooks" section in `README.md` to explain the new, simpler `retry` feature.
 
 ---
 
@@ -26,73 +40,128 @@ This refactor will remove the `preCheck` hook entirely. We will streamline the f
 
 #### 1. Update Configuration Types
 
-*   **Objective:** Remove the `preCheck` property from the type definition to enforce the new, simpler configuration structure.
+*   **Objective:** Modify the core data structure in `src/config.ts` to reflect the new design.
 *   **Task:**
     1.  Navigate to `src/config.ts`.
-    2.  In the `PipelineStep` interface, find the `hooks` property.
-    3.  Delete the `preCheck?: HookConfig[];` line.
+    2.  Delete the `HookConfig` interface, as it will no longer be used.
+    3.  In the `PipelineStep` interface, remove the `hooks?: { ... };` property.
+    4.  Add the new optional property: `retry?: number;`.
 *   **Code Snippet (`src/config.ts`):**
     ```typescript
     // BEFORE
     export interface PipelineStep {
       // ...
-      hooks?: {
-        preCheck?: HookConfig[];
-        onCheckFailure?: HookConfig[];
-      };
+      hooks?: { onCheckFailure?: HookConfig[] };
     }
 
     // AFTER
     export interface PipelineStep {
       // ...
-      hooks?: {
-        onCheckFailure?: HookConfig[];
-      };
+      retry?: number;
     }
     ```
 
-#### 2. Simplify Orchestrator Logic
+#### 2. Refactor Orchestrator Logic
 
-*   **Objective:** Remove the code that executes `preCheck` hooks from the orchestrator's retry loop.
+*   **Objective:** Update the step execution loop to use the `retry` count and generate its own feedback prompt.
 *   **Task:**
     1.  Navigate to `src/tools/orchestrator.ts`.
-    2.  In the `executeStep` function, find the section within the `for` loop that calls `executeHooks` for `preCheck`.
-    3.  Delete this entire block of code.
-*   **Code Snippet (What to remove from `src/tools/orchestrator.ts`):**
+    2.  In the `executeStep` function, change the retry loop to be governed by `stepConfig.retry`. The `maxRetries` constant can be replaced by `stepConfig.retry ?? 0`.
+    3.  Inside the failure case (after `checkResult.success` is false), replace the call to `executeHooks` with new logic to construct a generic prompt.
+    4.  The new prompt should include the failed command from `check.command` and the error message from `checkResult.output`.
+*   **Code Snippet (New logic in `src/tools/orchestrator.ts`):**
     ```typescript
-    // Inside the `executeStep` retry loop, DELETE the following block:
+    async function executeStep(stepConfig: PipelineStep, /* ... */) {
+      const { name, command, check, retry } = stepConfig;
+      const maxRetries = retry ?? 0;
 
-    // Execute preCheck hooks
-    try {
-      executeHooks(hooks?.preCheck, projectRoot, name, "Pre-check");
-    } catch (error) {
-      updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-      throw error;
+      for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        // ... run Claude command ...
+        const checkResult = await runCheck(check, projectRoot);
+
+        if (checkResult.success) {
+          // ... commit and return
+          return;
+        }
+
+        // --- Failure Case ---
+        if (attempt > maxRetries) {
+          // If we've used all retries, fail permanently
+          throw new Error(`Step "${name}" failed after ${maxRetries} retries.`);
+        }
+        
+        // V-- THIS IS THE NEW CORE LOGIC --V
+        console.log(pc.yellow(`[Orchestrator] Generating automatic feedback for step: ${name}`));
+        const feedbackPrompt = `The previous attempt failed.
+The validation check \`${check.command}\` failed with the following output:
+---
+${checkResult.output}
+---
+Please analyze this error, fix the underlying code, and try again. Do not modify the tests or checks.`;
+        
+        currentPrompt = feedbackPrompt; // Set prompt for the next loop iteration
+        // ^-- END OF NEW CORE LOGIC --^
+      }
     }
     ```
 
-#### 3. Update Example Configuration
+#### 3. Delete Obsolete Code
 
-*   **Objective:** Ensure the default configuration template is clean and only shows the `onCheckFailure` hook.
+*   **Objective:** Remove dead code to keep the codebase clean.
+*   **Task:**
+    1.  Navigate to `src/tools/orchestrator.ts`.
+    2.  Delete the entire `executeHooks` helper function, as it is no longer called from anywhere.
+
+#### 4. Update Example Configuration
+
+*   **Objective:** Update the default template to reflect the new, simpler configuration.
 *   **Task:**
     1.  Navigate to `src/templates/claude.config.js`.
-    2.  Check the `implement` step (and any others).
-    3.  If a `preCheck` key exists in any `hooks` object, delete it. (Note: The previous plan did not add one to the template, so this is mainly a verification step).
+    2.  Find the `implement` step.
+    3.  Remove the entire `hooks` object.
+    4.  Add the `retry: 3` property.
+*   **Code Snippet (`src/templates/claude.config.js`):**
+    ```javascript
+    // In the 'implement' step object:
+    
+    // BEFORE
+    {
+      name: "implement",
+      // ...
+      hooks: { onCheckFailure: [ /* ... */ ] }
+    }
 
-#### 4. Adjust Unit Tests
+    // AFTER
+    {
+      name: "implement",
+      command: "implement",
+      check: { type: "shell", command: "npm test", expect: "pass" },
+      fileAccess: { allowWrite: ["src/**/*"] },
+      retry: 3
+    }
+    ```
 
-*   **Objective:** Ensure the test suite is up-to-date and only tests existing functionality.
+#### 5. Refactor Unit Tests
+
+*   **Objective:** Ensure the test suite validates the new `retry` behavior.
 *   **Task:**
-    1.  Navigate to `test/orchestrator-hooks.test.ts`.
-    2.  Delete any test cases that were specifically written to validate the behavior of the `preCheck` hook. For example, a test named "should fail immediately if a preCheck hook fails".
-    3.  Ensure the remaining tests for the `onCheckFailure` retry loop are still valid and passing.
+    1.  Navigate to `test/orchestrator-hooks.test.ts` and rename it to `test/orchestrator-retry.test.ts`.
+    2.  Update the tests to pass a `retry: 3` property in the mock `stepConfig`.
+    3.  Remove any mocks for `execSync` related to the old hook commands.
+    4.  Assert that the retry loop continues when `checkResult.success` is false.
+    5.  Assert that the `currentPrompt` variable for the next loop iteration matches the expected auto-generated feedback string.
 
-#### 5. Update Project Documentation
+#### 6. Rewrite Documentation
 
-*   **Objective:** Make the `README.md` accurate and easy for users to understand by removing all references to the now-defunct `preCheck` hook.
+*   **Objective:** Update the `README.md` to be accurate and reflect the simplicity of the final feature.
 *   **Task:**
     1.  Navigate to `README.md`.
-    2.  Search the document for the term `preCheck`.
-    3.  Remove any sentences or list items that explain what `preCheck` is or how to use it.
-    4.  Ensure the "Advanced: Step Hooks and Self-Correction" section reads clearly, focusing exclusively on the power and usage of the `onCheckFailure` hook.
-    5.  Verify that all code examples in the documentation reflect the simplified configuration (with no `preCheck` property).
+    2.  Find the "Advanced: Step Hooks and Self-Correction" section and rename it to something like "Automatic Retries on Failure".
+    3.  Rewrite the entire section to explain the new `retry` property.
+    4.  Remove all mentions of `hooks`, `onCheckFailure`, and the `{check_output}` token.
+    5.  Provide a clear example showing a step with the `retry: 3` property.
+
+### Error Handling & Warnings
+
+*   The existing error handling for the retry loop (exhausting all retries) remains valid and sufficient.
+*   If a user provides a non-numeric value for `retry`, it will be treated as `undefined`, resulting in 0 retries. This is acceptable default behavior.
