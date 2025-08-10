@@ -16,7 +16,7 @@ This change will introduce a third log file, `XX-step-name.raw.json.log`, for ea
 
 ### **Summary Checklist**
 
--   [ ] **Configuration:** Update the orchestrator to generate a path for the new raw JSON log file.
+-   [x] **Configuration:** Update the orchestrator to generate a path for the new raw JSON log file.
 -   [ ] **Implementation:** Modify the process runner to write the raw `stdout` stream from the LLM to the new log file.
 -   [ ] **Documentation:** Update `README.md` to document the new `*.raw.json.log` file and its purpose.
 

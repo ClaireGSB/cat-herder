@@ -160,7 +160,8 @@ async function executeStep(
   fullPrompt: string,
   statusFile: string,
   logFile: string,
-  reasoningLogFile: string
+  reasoningLogFile: string,
+  rawJsonLogFile: string
 ) {
   const { name, command, check, retry } = stepConfig;
   const projectRoot = getProjectRoot();
@@ -176,7 +177,7 @@ async function executeStep(
     }
 
     // Execute the main Claude command
-    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt);
+    const { code } = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile);
     if (code !== 0) {
       updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
       throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
@@ -327,8 +328,9 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
+    const rawJsonLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.raw.json.log`);
 
-    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });

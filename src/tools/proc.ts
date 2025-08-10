@@ -9,7 +9,8 @@ export function runStreaming(
   logPath: string,
   reasoningLogPath: string,
   cwd: string,
-  stdinData?: string
+  stdinData?: string,
+  rawJsonLogPath?: string
 ): Promise<{ code: number; output: string }> {
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
