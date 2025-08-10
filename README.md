@@ -281,6 +281,31 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 check: { type: "none" }
 ```
 
+**Multiple Checks (Sequential Validation):**
+
+You can specify an array of checks for more granular validation. The orchestrator will execute each check in order, and if any single check fails, the entire step validation will fail immediately:
+
+```javascript
+// Multiple checks: ensure type checking passes AND tests fail (for test-writing step)
+check: [
+  { type: "shell", command: "npx tsc --noEmit", expect: "pass" },
+  { type: "shell", command: "npm test", expect: "fail" }
+]
+
+// Multiple validations for a build step
+check: [
+  { type: "shell", command: "npm run lint", expect: "pass" },
+  { type: "shell", command: "npm run build", expect: "pass" },
+  { type: "shell", command: "npm test", expect: "pass" }
+]
+```
+
+When using multiple checks:
+- Checks execute in the order specified
+- The first failing check immediately stops execution and fails the step
+- Error output will clearly indicate which specific check failed
+- All checks must pass for the step to succeed
+
 **Important:** When using `shell` checks with npm commands, the referenced script must exist in your `package.json`. For example, `"npm test"` requires a `"test"` script. The validator will check this and provide clear error messages if scripts are missing.
 
 ### Customizable Guardrails (`fileAccess`)
