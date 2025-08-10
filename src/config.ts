@@ -7,7 +7,7 @@ import { CheckConfig } from "./tools/check-runner.js";
 export interface PipelineStep {
   name: string;
   command: string;
-  check: CheckConfig;
+  check: CheckConfig | CheckConfig[];
   fileAccess?: {
     allowWrite?: string[];
   };
