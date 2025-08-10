@@ -260,6 +260,10 @@ You can re-run the command after the reset time to continue from this step.`);
 
     // Generate automatic feedback prompt for retry
     console.log(pc.yellow(`[Orchestrator] Generating  feedback for step: ${name}`));
+    const checkDescription = Array.isArray(check) 
+      ? 'One of the validation checks' 
+      : `The validation check`;
+        
     const feedbackPrompt = `Your previous attempt to complete the '${name}' step failed its validation check.
 
 Here are the original instructions you were given for this step:
@@ -267,7 +271,7 @@ Here are the original instructions you were given for this step:
 ${fullPrompt}
 --- END ORIGINAL INSTRUCTIONS ---
 
-The automated validation check failed with the following error output:
+${checkDescription} failed with the following error output:
 --- ERROR OUTPUT ---
 ${checkResult.output || 'No output captured'}
 --- END ERROR OUTPUT ---
