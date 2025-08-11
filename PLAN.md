@@ -19,7 +19,7 @@ This project will introduce an `autoCommit` flag in `claude.config.js`. When set
 ## Summary Checklist
 
 - [x] **Step 1: Update Configuration** - Add the `autoCommit` flag to the configuration schema and template.
-- [ ] **Step 2: Modify Orchestrator** - Update the core logic to respect the `autoCommit` flag.
+- [x] **Step 2: Modify Orchestrator** - Update the core logic to respect the `autoCommit` flag.
 - [ ] **Step 3: Grant Command Permissions** - Add Git permissions to default command templates so users can trigger commits.
 - [ ] **Step 4: Update Documentation** - Explain the new feature and how to use it in the `README.md`.
 

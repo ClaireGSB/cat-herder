@@ -165,6 +165,7 @@ async function executeStep(
 ) {
   const { name, command, check, retry } = stepConfig;
   const projectRoot = getProjectRoot();
+  const config = await getConfig();
   const maxRetries = retry ?? 0;
   let currentPrompt = fullPrompt;
 
@@ -241,10 +242,14 @@ You can re-run the command after the reset time to continue from this step.`);
     const checkResult = await runCheck(check, projectRoot);
 
     if (checkResult.success) {
-      // Check passed - commit and return successfully
-      console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
-      execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
-      execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
+      // Check passed - decide whether to commit
+      if (config.autoCommit) {
+        console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
+        execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
+        execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });
+      } else {
+        console.log(pc.gray(`[Orchestrator] Step "${name}" successful. Auto-commit is disabled.`));
+      }
       updateStatus(statusFile, s => { s.phase = "pending"; s.steps[name] = "done"; });
       return;
     }
