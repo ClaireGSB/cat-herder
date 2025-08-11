@@ -15,8 +15,8 @@ This change will introduce a new optional `model` property to the step definitio
 
 - [x] Update configuration interfaces in `src/config.ts` to include the `model` property.
 - [x] Implement the core logic in `src/tools/orchestrator.ts` and `src/tools/proc.ts` to pass the model to the CLI.
-- [ ] Enhance `claude-project validate` to check for valid model names.
-- [ ] Add unit tests to `test/validator.test.ts` for the new validation logic.
+- [x] Enhance `claude-project validate` to check for valid model names.
+- [x] Add unit tests to `test/validator.test.ts` for the new validation logic.
 - [ ] Update user-facing documentation (`README.md`) and configuration templates (`src/templates/claude.config.js`).
 
 ---
