@@ -78,6 +78,7 @@ export function runStreaming(
   let fullOutput = "";
   let buffer = ""; // Buffer for parsing JSON lines across chunks
   let rateLimitInfo: StreamResult['rateLimit'] | undefined;
+  let lastToolUsed: string | null = null;
 
   return new Promise((resolve) => {
     const p = spawn(cmd, finalArgs, {
@@ -115,10 +116,63 @@ export function runStreaming(
         
         try {
           const json = JSON.parse(line);
-          
-          // Log ALL JSON entries to reasoning log
-          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
           const contentItem = json.message?.content?.[0];
+
+          // 1. Filter unwanted system messages
+          if ((json.type === 'system' && json.subtype === 'init') || 
+              (contentItem?.text && contentItem.text.includes('malicious'))) {
+            continue; // Skip writing this line to the reasoning log
+          }
+
+          // 2. Capture the tool name when it's used
+          if (contentItem?.type === 'tool_use') {
+            lastToolUsed = contentItem.name;
+          }
+          
+          // 3. Summarize tool results before logging
+          if (contentItem?.type === 'tool_result' && typeof contentItem.content === 'string') {
+            const originalContent = contentItem.content;
+
+            switch (lastToolUsed) {
+              case 'Read':
+                const lineCount = originalContent.split('\n').length;
+                contentItem.content = `Read file content (${lineCount} lines).`;
+                break;
+              case 'Glob':
+                const fileCount = originalContent.trim().split('\n').filter(Boolean).length;
+                contentItem.content = `Glob found ${fileCount} file(s).`;
+                break;
+              case 'Bash':
+                if (originalContent.includes('Test Files') && originalContent.includes('Tests')) {
+                  const failMatch = originalContent.match(/(\d+) failed/);
+                  const passMatch = originalContent.match(/(\d+) passed/);
+                  let testResult = [];
+                  if (failMatch) testResult.push(`${failMatch[1]} failed`);
+                  if (passMatch) testResult.push(`${passMatch[1]} passed`);
+                  contentItem.content = `Test suite finished. Result: ${testResult.join(', ')}.`;
+                } else if (originalContent.length > 500) {
+                  contentItem.content = `Bash command finished. Output truncated for brevity.`;
+                }
+                break;
+              case 'LS':
+                const itemCount = originalContent.split('\n').filter(Boolean).length;
+                contentItem.content = `Listed ${itemCount} items in directory.`;
+                break;
+              case 'Grep':
+                if (originalContent.trim() === '') {
+                  contentItem.content = `No matches found.`;
+                } else {
+                  const matchCount = originalContent.split('\n').filter(Boolean).length;
+                  contentItem.content = `Found ${matchCount} matches.`;
+                }
+                break;
+            }
+            
+            lastToolUsed = null; // Reset state for the next tool call
+          }
+          
+          // Log entries to reasoning log with existing logic
+          const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
           const contentType = contentItem?.type || json.subtype || 'data';
           
           let content;
