@@ -80,8 +80,15 @@ export function runStreaming(
   let rateLimitInfo: StreamResult['rateLimit'] | undefined;
 
   return new Promise((resolve) => {
-    const p = spawn(cmd, finalArgs, { shell: false, stdio: "pipe", cwd: cwd });
-
+    const p = spawn(cmd, finalArgs, {
+      shell: false,
+      stdio: "pipe",
+      cwd: cwd,
+      env: {
+        ...process.env,
+        CLAUDE_PROJECT_ACTIVE: "true",
+      },
+    });
     const spawnTimestamp = new Date().toISOString();
     // Write stdin data if provided
     if (stdinData) {
