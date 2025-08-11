@@ -164,6 +164,13 @@ module.exports = {
   manageGitBranch: true,
 
   /**
+   * If true, the orchestrator automatically commits changes after each
+   * successful step. Set to false to disable auto-commits and control
+   * commits manually within your command prompts.
+   */
+  autoCommit: false,
+
+  /**
    * The default pipeline to use when none is specified.
    */
   defaultPipeline: "default",
@@ -505,6 +512,45 @@ By default (`manageGitBranch: true`), the orchestrator automatically manages Git
 This keeps your `main` branch clean and isolates all automated work, whether you are working locally or with a remote team.
 
 **Alternative Mode:** If you set `manageGitBranch: false` in your config, the tool will skip all branch management and run directly on your current branch. This is useful for advanced workflows where you want full control over Git operations, but you'll see a warning that the tool is operating on your current branch.
+
+### Controlling Commits Manually
+
+By default, the orchestrator does not automatically commit changes after each pipeline step, giving you full control over your Git history. However, you can enable automatic commits or add commit instructions directly to your command prompts.
+
+#### Enabling Auto-Commits
+
+To have the orchestrator automatically commit after each successful step, set the `autoCommit` flag to `true` in your `claude.config.js`:
+
+```javascript
+// claude.config.js
+module.exports = {
+  // ...
+  autoCommit: true,
+  // ...
+};
+```
+
+With auto-commits enabled, the orchestrator will create a checkpoint commit after each successful pipeline step with messages like `"chore(implement): checkpoint"`.
+
+#### Adding Commit Instructions to Command Prompts
+
+With auto-commits disabled (the default), you can instruct Claude to make commits by adding instructions directly to your command prompts. This allows you to create meaningful commit messages and group related changes together.
+
+**Example: Adding a commit instruction to the implement step**
+
+Modify your `.claude/commands/implement.md` file to include a commit instruction:
+
+```markdown
+---
+description: Implement code so all tests pass. Do not weaken tests.
+allowed-tools: Read, Write, Edit, MultiEdit, Bash(vitest *:*), Bash(npm *:*), Bash(git *:*)
+---
+Based on the PLAN.md and the failing tests, implement the necessary code in the `src/` directory to make all tests pass.
+
+After you have verified that all tests pass, stage all changes and commit them with a meaningful message like "feat: implement new feature functionality".
+```
+
+**Important:** When adding commit instructions to custom commands, make sure to include `Bash(git *:*)` in the `allowed-tools` list so Claude has permission to execute git commands.
 
 ### Permissions and Security (`.claude/settings.json`)
 
