@@ -119,10 +119,11 @@ export function runStreaming(
           const contentItem = json.message?.content?.[0];
 
           // 1. Filter unwanted system messages
-          if ((json.type === 'system' && json.subtype === 'init') || 
-              (contentItem?.text && contentItem.text.includes('malicious'))) {
-            continue; // Skip writing this line to the reasoning log
-          }
+          // actually keep them for now
+          // if ((json.type === 'system' && json.subtype === 'init') || 
+          //     (contentItem?.text && contentItem.text.includes('malicious'))) {
+          //   continue; // Skip writing this line to the reasoning log
+          // }
 
           // 2. Capture the tool name when it's used
           if (contentItem?.type === 'tool_use') {
