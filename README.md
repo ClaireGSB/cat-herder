@@ -141,6 +141,7 @@ This tool is driven by a `pipelines` object in your `claude.config.js` file. You
 
 -   `name`: A unique identifier for the step.
 -   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
+-   `model`: (Optional) The Claude model to use for this specific step.
 -   `check`: A validation object to confirm the step was successful.
 
 ```javascript
@@ -233,6 +234,29 @@ module.exports = {
   },
 };
 ```
+
+**Per-Step Model Selection:**
+
+You can specify which Claude model to use for individual pipeline steps by adding a `model` property. This allows you to optimize your workflow by using more powerful models for complex tasks and faster, more cost-effective models for simpler tasks:
+
+```javascript
+{
+  name: "implement",
+  command: "implement", 
+  model: "claude-opus-4-1-20250805",  // Use Opus for complex implementation
+  check: { type: "shell", command: "npm test", expect: "pass" },
+  // ...
+},
+{
+  name: "docs",
+  command: "docs-update",
+  model: "claude-3-5-haiku-20241022",  // Use Haiku for documentation updates
+  check: { type: "none" },
+  // ...
+}
+```
+
+If no `model` is specified, the step will use your Claude CLI's default model configuration. Valid model names are validated by the `claude-project validate` command.
 
 **Pipeline Selection:**
 

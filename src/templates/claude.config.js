@@ -70,6 +70,9 @@ module.exports = {
     {
       name: "implement",
       command: "implement",
+      // Optional: Specify which Claude model to use for this step.
+      // Useful for using more powerful models for complex implementation tasks.
+      // model: "claude-opus-4-1-20250805",
       // Check that the tests now pass.
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
