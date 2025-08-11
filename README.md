@@ -165,7 +165,7 @@ module.exports = {
 
   /**
    * If true, the orchestrator automatically commits changes after each
-   * successful step. Set to false to disable auto-commits and control
+   * successful step. Set to false (default) to disable auto-commits and control
    * commits manually within your command prompts.
    */
   autoCommit: false,
@@ -513,11 +513,9 @@ This keeps your `main` branch clean and isolates all automated work, whether you
 
 **Alternative Mode:** If you set `manageGitBranch: false` in your config, the tool will skip all branch management and run directly on your current branch. This is useful for advanced workflows where you want full control over Git operations, but you'll see a warning that the tool is operating on your current branch.
 
-### Controlling Commits Manually
+### Enabling Auto-Commits
 
 By default, the orchestrator does not automatically commit changes after each pipeline step, giving you full control over your Git history. However, you can enable automatic commits or add commit instructions directly to your command prompts.
-
-#### Enabling Auto-Commits
 
 To have the orchestrator automatically commit after each successful step, set the `autoCommit` flag to `true` in your `claude.config.js`:
 

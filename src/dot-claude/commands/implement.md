@@ -1,6 +1,6 @@
 ---
 description: Implement code so all tests pass. Do not weaken tests.
-allowed-tools: Read, Write, Edit, MultiEdit, Bash(vitest *:*), Bash(npm *:*), Bash(git *:*)
+allowed-tools: Read, Write, Edit, MultiEdit, Bash(vitest *:*), Bash(npm *:*), Bash(git diff *), Bash(git add *), Bash(git commit *), Bash(git status *)
 ---
 Based on the PLAN.md and the failing tests, implement the necessary code in the `src/` directory to make all tests pass.
 

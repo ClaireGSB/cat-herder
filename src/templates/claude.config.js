@@ -19,12 +19,12 @@ module.exports = {
   manageGitBranch: true,
 
   /**
-   * If true (default), the orchestrator automatically commits changes after each
-   * successful step. Set this to false to disable this behavior and allow users
+   * If true, the orchestrator automatically commits changes after each
+   * successful step. Otherwise, false (default) disables this behavior and allow users
    * to control commits directly within their command prompts by adding instructions
    * like "commit the changes with the message 'feat: add new feature'".
    */
-  autoCommit: true,
+  autoCommit: false,
 
   /**
    * If true, the orchestrator will pause and wait when it hits the Claude

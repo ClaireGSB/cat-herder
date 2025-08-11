@@ -1,6 +1,6 @@
 ---
 description: Generate a precise implementation plan from a task file.
-allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git *:*)
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git diff *), Bash(git add *), Bash(git commit *), Bash(git status *)
 ---
 Based on the task definition provided, and by exploring the project files if needed, create a clear, step-by-step implementation plan.
 

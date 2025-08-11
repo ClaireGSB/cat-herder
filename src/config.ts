@@ -40,7 +40,7 @@ const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" |
     "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
   ],
   manageGitBranch: true,
-  autoCommit: true,
+  autoCommit: false,
   waitForRateLimitReset: false,
 };
 
