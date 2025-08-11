@@ -124,21 +124,35 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
         errors.push(`${stepId}: is missing the 'command' property.`);
         continue;
       }
-      if (!step.check || !step.check.type) {
-        errors.push(`${stepId}: is missing a valid 'check' object with a 'type' property.`);
+      if (!step.check) {
+        errors.push(`${stepId}: is missing a 'check' property.`);
         continue;
       }
 
-      if (step.check?.type === "shell" && step.check.command) {
-        const command = step.check.command;
-        // We specifically look for npm script commands
-        if (typeof command === 'string' && command.startsWith("npm ")) {
-          // e.g., "npm test" -> "test", "npm run lint" -> "lint"
-          const scriptName = command.split(" ").pop();
-          if (scriptName && !userScripts[scriptName]) {
-            errors.push(
-              `${stepId}: The command "${command}" requires a script named "${scriptName}" in your package.json, but it was not found.`
-            );
+      // Handle both single check and array of checks
+      const checksToValidate = Array.isArray(step.check) ? step.check : [step.check];
+      
+      for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
+        const checkId = Array.isArray(step.check) 
+          ? `${stepId}, check #${checkIndex + 1}` 
+          : stepId;
+
+        if (!singleCheck || !singleCheck.type) {
+          errors.push(`${checkId}: is missing a valid 'check' object with a 'type' property.`);
+          continue;
+        }
+
+        if (singleCheck?.type === "shell" && singleCheck.command) {
+          const command = singleCheck.command;
+          // We specifically look for npm script commands
+          if (typeof command === 'string' && command.startsWith("npm ")) {
+            // e.g., "npm test" -> "test", "npm run lint" -> "lint"
+            const scriptName = command.split(" ").pop();
+            if (scriptName && !userScripts[scriptName]) {
+              errors.push(
+                `${checkId}: The command "${command}" requires a script named "${scriptName}" in your package.json, but it was not found.`
+              );
+            }
           }
         }
       }
@@ -180,25 +194,32 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
       }
 
       // --- Check Validation ---
-      if (!validCheckTypes.includes(step.check.type)) {
-        errors.push(`${stepId}: Invalid check type '${step.check.type}'. Available: ${validCheckTypes.join(", ")}`);
-      }
+      // Re-use the same checksToValidate array from above
+      for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
+        const checkId = Array.isArray(step.check) 
+          ? `${stepId}, check #${checkIndex + 1}` 
+          : stepId;
 
-      // --- Deepen Check Object Validation ---
-      switch (step.check.type) {
-        case 'fileExists':
-          if (typeof step.check.path !== 'string' || !step.check.path) {
-            errors.push(`${stepId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
-          }
-          break;
-        case 'shell':
-          if (typeof step.check.command !== 'string' || !step.check.command) {
-            errors.push(`${stepId}: Check type 'shell' requires a non-empty 'command' string property.`);
-          }
-          if (step.check.expect && !['pass', 'fail'].includes(step.check.expect)) {
-            errors.push(`${stepId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
-          }
-          break;
+        if (!validCheckTypes.includes(singleCheck.type)) {
+          errors.push(`${checkId}: Invalid check type '${singleCheck.type}'. Available: ${validCheckTypes.join(", ")}`);
+        }
+
+        // --- Deepen Check Object Validation ---
+        switch (singleCheck.type) {
+          case 'fileExists':
+            if (typeof singleCheck.path !== 'string' || !singleCheck.path) {
+              errors.push(`${checkId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
+            }
+            break;
+          case 'shell':
+            if (typeof singleCheck.command !== 'string' || !singleCheck.command) {
+              errors.push(`${checkId}: Check type 'shell' requires a non-empty 'command' string property.`);
+            }
+            if (singleCheck.expect && !['pass', 'fail'].includes(singleCheck.expect)) {
+              errors.push(`${checkId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
+            }
+            break;
+        }
       }
 
       // --- FileAccess Validation ---

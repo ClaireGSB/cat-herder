@@ -1,260 +1,167 @@
+\
+
 # PLAN.md
 
 ## Title & Goal
 
-**Title:** Graceful Handling and Auto-Resume for Claude API Usage Limits
+**Title:** Enable Multiple Checks per Pipeline Step
 
-**Goal:** Implement a feature to intelligently handle Claude API usage limit errors by either pausing and automatically resuming the workflow or failing gracefully in a way that allows for easy manual continuation.
+**Goal:** To allow a user to define an array of `check` objects for a single pipeline step, which will be executed sequentially to provide more granular validation.
 
 ## Description
 
-Currently, when the Claude API usage limit is reached, the tool receives a specific JSON error but treats it as a generic failure. This causes the workflow to halt abruptly with an unhelpful error message, forcing the user to manually restart the entire process later.
+Currently, each step in a `claude.config.js` pipeline can only have a single `check` object. This forces users to chain multiple validation commands together in a single shell script (e.g., `npm run typecheck && npm test`). This approach is not intuitive and provides poor feedback, as it's not immediately clear which part of the chained command failed.
 
-This change introduces a more resilient approach. It will parse the rate limit error to identify the exact reset time. Based on a new configuration option, the tool will either:
-1.  **Wait & Resume (Opt-in):** Pause execution and automatically restart the failed step once the usage limit has been reset.
-2.  **Graceful Fail & Resume (Default):** Terminate the process with a clear, informative message explaining when the user can resume. The task's state is preserved, allowing the user to re-run the command and pick up exactly where they left off.
+This change will update the system to accept an array of `check` objects. The orchestrator will execute each check in order, and if any single check fails, the entire step validation will fail immediately. This makes the pipeline configuration cleaner, more readable, and provides more precise error feedback.
 
 ## Summary Checklist
 
-- [x] **Config:** Add a `waitForRateLimitReset` option to `claude.config.js` and the config type definitions.
-- [x] **Proc:** Update the process runner (`proc.ts`) to specifically detect and parse the rate limit error message.
-- [x] **Status:** Add a new `waiting_for_reset` phase to the task status model.
-- [x] **Orchestrator:** Implement the core logic in `orchestrator.ts` to handle the parsed error, deciding whether to wait or fail based on the user's config.
-- [x] **Documentation:** Update `README.md` to explain the new feature to users.
+-   [x] **Interfaces:** Update `PipelineStep` interface to accept `CheckConfig | CheckConfig[]`.
+-   [x] **Check Runner:** Modify `check-runner.ts` to process an array of checks sequentially.
+-   [x] **Orchestrator:** Adjust the retry feedback logic in `orchestrator.ts` to handle failures from a specific check within an array.
+-   [x] **Validator:** Update `validator.ts` to validate both single and array-based `check` configurations.
+-   [x] **Templates:** Update the default `claude.config.js` template to use a multi-check example.
+-   [x] **Documentation:** Update `README.md` to document the new feature and provide usage examples.
 
 ## Detailed Implementation Steps
 
-### 1. Update Configuration
+### 1. Update Core Interfaces
 
-*   **Objective:** Introduce a new configuration setting that allows users to opt into the auto-resume behavior.
-*   **Tasks:**
-    1.  Modify the `ClaudeProjectConfig` interface in `src/config.ts`.
-    2.  Update the default configuration object.
-    3.  Add the new setting to the template file `src/templates/claude.config.js` with explanatory comments.
-
-*   **Code Snippets:**
-
-    **File:** `src/config.ts`
+*   **Objective:** Modify the core data structures to officially support an array of checks.
+*   **Task:**
+    1.  Go to `src/config.ts`.
+    2.  Locate the `PipelineStep` interface.
+    3.  Change the `check` property's type to allow for an array of `CheckConfig` objects.
+*   **Code Snippet (`src/config.ts`):**
     ```typescript
-    // Before:
-    export interface ClaudeProjectConfig {
-      // ... existing properties
-      defaultPipeline?: string;
-      pipeline?: PipelineStep[];
+    // Before
+    export interface PipelineStep {
+      //...
+      check: CheckConfig;
+      //...
     }
-    
-    // After:
-    export interface ClaudeProjectConfig {
-      // ... existing properties
-      manageGitBranch?: boolean;
-      waitForRateLimitReset?: boolean; // Add this line
-      pipelines?: PipelinesMap;
-      defaultPipeline?: string;
+
+    // After
+    export interface PipelineStep {
+      //...
+      check: CheckConfig | CheckConfig[];
+      //...
     }
     ```
 
-    **File:** `src/templates/claude.config.js`
-    ```javascript
-    // Add this new section with comments
-    module.exports = {
-      //...
-      manageGitBranch: true,
-    
-      /**
-       * If true, the orchestrator will pause and wait when it hits the Claude
-       * API usage limit, then automatically resume when the limit resets.
-       * If false (default), it will fail gracefully with a message.
-       */
-      waitForRateLimitReset: false,
-    
-      defaultPipeline: 'default',
-      //...
-    };
+### 2. Implement Multi-Check Logic
+
+*   **Objective:** Rework the check runner to execute each check in a sequence if an array is provided.
+*   **Task:**
+    1.  Open `src/tools/check-runner.ts`.
+    2.  Modify the `runCheck` function to handle both a single `check` object and an array of them.
+    3.  If the input is an array, loop through it and execute each check.
+    4.  If any check fails, the function should immediately return a `CheckResult` with `success: false` and the specific error output. Do not proceed to the next check.
+    5.  If all checks in the array pass, return `{ success: true }`.
+*   **Code Snippet (`src/tools/check-runner.ts`):**
+    ```typescript
+    // Change the function signature
+    export async function runCheck(checkConfig: CheckConfig | CheckConfig[], projectRoot: string): Promise<CheckResult> {
+      
+      // Add a wrapper function for single check logic
+      async function runSingleCheck(singleCheck: CheckConfig): Promise<CheckResult> {
+        console.log(`\n[Orchestrator] Running check: ${pc.yellow(singleCheck.type)}`);
+        // ... (existing switch statement logic for a single check)
+      }
+
+      if (Array.isArray(checkConfig)) {
+        for (const [index, singleCheck] of checkConfig.entries()) {
+          console.log(`[Orchestrator] Running check ${index + 1}/${checkConfig.length}...`);
+          const result = await runSingleCheck(singleCheck); // Use the wrapper
+          if (!result.success) {
+            // Immediately fail and return the result from the failing check
+            return result;
+          }
+        }
+        // All checks in the array passed
+        return { success: true };
+      } else {
+        // It's a single check object, run as before
+        return runSingleCheck(checkConfig);
+      }
+    }
     ```
 
-### 2. Detect Rate Limit Error in Process Runner
+### 3. Adjust Orchestrator Feedback
 
-*   **Objective:** Enhance the `runStreaming` function to recognize the specific "usage limit reached" error from Claude's output and return a structured result.
-*   **Tasks:**
-    1.  Modify the return type of `runStreaming` in `src/tools/proc.ts` to include optional rate limit details.
-    2.  Inside the `stdout.on('data')` handler, parse the JSON output and check for the specific error string.
-    3.  If the error is found, extract the timestamp and store it.
-    4.  When the process closes, resolve the promise with the structured error data.
-
-*   **Code Snippets:**
-
-    **File:** `src/tools/proc.ts`
+*   **Objective:** Ensure the retry prompt clearly states which check failed when using a multi-check array.
+*   **Task:**
+    1.  Open `src/tools/orchestrator.ts`.
+    2.  In the `executeStep` function, locate the `feedbackPrompt` generation logic.
+    3.  The `check` variable in this scope will be the array. The `checkResult` from `runCheck`, however, will contain the details of the *single* check that failed. The existing code that uses `checkResult.output` should work correctly.
+    4.  The part of the prompt that shows the command, `\`${check.command}\``, will be problematic because `check` is an array. You should improve the feedback to be more generic if it's an array or pinpoint the failing check if possible. A simple solution is to just describe the validation failed without mentioning the specific command.
+*   **Code Snippet (`src/tools/orchestrator.ts`):**
     ```typescript
-    // Define a new, more descriptive return type
-    export interface StreamResult {
-        code: number;
-        output: string;
-        rateLimit?: {
-            resetTimestamp: number;
-        };
-    }
+    // Before
+    const feedbackPrompt = `...
+    The automated validation check (\`${check.command}\`) failed with the following error output:
+    ...`;
 
-    // Update the function signature
-    export function runStreaming(
-      //...
-    ): Promise<StreamResult> { // Changed return type
-        // ...
-        let rateLimitInfo: StreamResult['rateLimit'] | undefined;
-
-        // Inside the promise
-        p.stdout.on("data", (chunk) => {
-            //... inside the line processing loop
-            try {
-                const json = JSON.parse(line);
-
-                if (json.type === "result" && typeof json.result === 'string' && json.result.startsWith("Claude AI usage limit reached|")) {
-                    const parts = json.result.split('|');
-                    const timestamp = parseInt(parts[1], 10);
-                    if (!isNaN(timestamp)) {
-                        rateLimitInfo = { resetTimestamp: timestamp };
-                    }
-                }
-                
-                // ... rest of the stdout handler
-            } catch (e) {
-                // ...
-            }
-        });
+    // After (conceptual change)
+    const checkDescription = Array.isArray(check) 
+        ? 'One of the validation checks' 
+        : `The validation check (\`${check.command}\`)`;
         
-        // ...
-        p.on("close", (code) => {
-            //...
-            // Resolve with the structured data
-            resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
-        });
-    }
+    const feedbackPrompt = `...
+    ${checkDescription} failed with the following error output:
+    --- ERROR OUTPUT ---
+    ${checkResult.output || 'No output captured'}
+    --- END ERROR OUTPUT ---
+    ...`;
     ```
 
-### 3. Add New "Waiting" Task Status
+### 4. Update the Pipeline Validator
 
-*   **Objective:** Create a new status phase to accurately reflect when the tool is paused and waiting for an API limit reset.
-*   **Tasks:**
-    1.  Edit the `Phase` type in `src/tools/status.ts`.
+*   **Objective:** Make `claude-project validate` aware of the new array format so it can correctly validate configurations.
+*   **Task:**
+    1.  Open `src/tools/validator.ts`.
+    2.  In `validatePipeline`, find the loop that iterates through each pipeline `step`.
+    3.  Inside the loop, check if `step.check` is an array.
+    4.  If it is, loop through the array and apply the existing validation logic to each `CheckConfig` object within it.
+    5.  Make sure any error messages clearly state the index of the failing check (e.g., `Step 'write_tests', check #2: ...`).
 
-*   **Code Snippet:**
+### 5. Update Configuration Templates
 
-    **File:** `src/tools/status.ts`
-    ```typescript
-    // Before:
-    export type Phase = "pending" | "running" | "done" | "failed" | "interrupted";
-
-    // After:
-    export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
-    ```
-
-#### **4. Implement Core Orchestrator Logic (Revised)**
-
-*   **Objective:** Modify the `executeStep` function to handle the `rateLimit` error by either pausing and retrying with a context-aware "Resume Prompt" or failing gracefully.
-*   **Tasks:**
-    1.  In `src/tools/orchestrator.ts`, check the result of the `runStreaming` call for the `rateLimit` property.
-    2.  If the error is present, check the `waitForRateLimitReset` config value.
-    3.  **Wait Logic:** If `true`:
-        a. **Read the `reasoningLogFile`** for the failed attempt.
-        b. Calculate wait time, log a message, and update the task status.
-        c. Use `setTimeout` to pause execution.
-        d. After the wait, **construct the new "Resume Prompt"** using the original instructions and the reasoning log content.
-        e. Use this new prompt for the next attempt.
-    4.  **Graceful Fail Logic:** If `false`, throw the informative error as previously planned.
-
-*   **Code Snippet:**
-
-    **File:** `src/tools/orchestrator.ts` (updated logic inside `executeStep`)
-    ```typescript
-    // Inside the for-loop for attempts
-    const result = await runStreaming(/*...args...*/, currentPrompt /* This holds the prompt for the attempt */);
-
-    if (result.rateLimit) {
-        const config = await getConfig();
-        const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
-
-        if (config.waitForRateLimitReset) {
-            const waitMs = resetTime.getTime() - Date.now();
-            if (waitMs > 0) {
-                console.log(pc.yellow(`[Orchestrator] Claude API usage limit reached.`));
-                console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
-                updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
-                
-                await new Promise(resolve => setTimeout(resolve, waitMs));
-
-                console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
-                updateStatus(statusFile, s => { s.phase = "running"; });
-
-                // **NEW LOGIC: Construct the Resume Prompt**
-                const reasoningLogContent = readFileSync(reasoningLogFile, 'utf-8');
-                const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.
-
-                --- ORIGINAL INSTRUCTIONS ---
-                ${fullPrompt}
-                --- END ORIGINAL INSTRUCTIONS ---
-
-                --- PREVIOUS ACTIONS LOG ---
-                ${reasoningLogContent}
-                --- END PREVIOUS ACTIONS LOG ---
-
-                Please analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
-                                
-                                // Update the prompt for the next iteration of the loop.
-                                currentPrompt = resumePrompt; 
-
-                                attempt--; // Do not count this as a formal "retry"
-                                continue; // Re-run the step with the new resume prompt
-                            }
-                        } else {
-                            // ... graceful failure logic as before ...
-                        }
-                    }
-                    // ... rest of the function
-    ```
-
-
-### 5. Update Documentation
-
-*   **Objective:** Clearly document the new feature for all users.
-*   **Task:** Add a new section to `README.md`.
-
-*   **Code Snippet:**
-
-    **File:** `README.md` (add a new section)
-    ```markdown
-    ### Handling API Rate Limits
-
-    The orchestrator is designed to be resilient against Claude API usage limits. When a rate limit is hit, the tool detects it and handles it in one of two ways.
-
-    #### Graceful Failure (Default)
-
-    By default, if the API limit is reached, the workflow will stop and display a message like this:
-
-    ```
-    Workflow failed: Claude AI usage limit reached. Your limit will reset at 1:00:00 PM.
-    To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
-    You can re-run the command after the reset time to continue from this step.
-    ```
-    
-    Your progress is saved. Once your limit resets, simply run the exact same `claude-project run` command again, and the orchestrator will pick up right where it left off.
-
-    #### Automatic Wait & Resume (Opt-in)
-
-    For a fully autonomous workflow, you can enable the auto-resume feature. In your `claude.config.js`, set:
-
+*   **Objective:** Provide a clear, real-world example of the new feature in the default configuration file.
+*   **Task:**
+    1.  Open `src/templates/claude.config.js`.
+    2.  Find the `write_tests` step in the `default` pipeline.
+    3.  Modify its `check` property to be an array of two checks: one for typechecking (expected to pass) and one for tests (expected to fail).
+*   **Code Snippet (`src/templates/claude.config.js`):**
     ```javascript
-    module.exports = {
-      // ...
-      waitForRateLimitReset: true,
-      // ...
-    };
+    // In the 'write_tests' step
+    check: [
+      { type: "shell", command: "npx tsc --noEmit", expect: "pass" },
+      { type: "shell", command: "npm test", expect: "fail" }
+    ],
     ```
 
-    With this setting, instead of failing, the tool will pause execution and log a waiting message. It will automatically resume the task as soon as the API usage limit has reset.
-    ```
+### 6. Update Documentation
+
+*   **Objective:** Document the new feature for all users.
+*   **Task:**
+    1.  Open `README.md`.
+    2.  Navigate to the **`Check Types`** section.
+    3.  Add a new subsection explaining that the `check` property can accept an array of check objects for sequential validation.
+    4.  Include a clear example, like the one from the `write_tests` step.
+    5.  Explain that the checks run in order and the entire step will fail if any one of them fails.
 
 ## Error Handling & Warnings
 
-*   **Invalid Timestamp:** If the timestamp received from the Claude tool is malformed or non-numeric, the `parseInt` will result in `NaN`. The logic should treat this as a generic failure and not attempt to wait.
-*   **Long Wait Times:** If the calculated wait duration is excessively long (e.g., more than 8 hours), log a clear warning to the console so the user is aware of the extended pause.
-    *   Example: `[Orchestrator] WARNING: API reset is scheduled for tomorrow at 1:00 PM. The process will pause for over 8 hours. You can safely terminate with Ctrl+C and restart manually after the reset time.`
-*   **User Interruption:** If the user presses `Ctrl+C` while the process is waiting, the process should terminate cleanly. No special signal handling is required for the initial implementation. The task status will remain as `waiting_for_reset`, and on the next run, it will resume the step.
+*   **Configuration Errors:** The `validate` command will now detect and report invalid `check` objects within a check array, specifying their position (e.g., "Pipeline 'default', Step 2, Check #1: Invalid check type").
+*   **Runtime Failures:** When a step fails during a run, the console output should clearly indicate which check in the sequence failed. For example:
+    ```
+    [Orchestrator] Running check 1/2...
+    [Orchestrator] Running check: shell
+      › Executing: "npx tsc --noEmit" (expecting to pass)
+      ✔ Check passed: Command succeeded as expected.
+    [Orchestrator] Running check 2/2...
+    [Orchestrator] Running check: shell
+      › Executing: "npm test" (expecting to fail)
+      ✖ Check failed: Validation failed: Command "npm test" succeeded but was expected to fail.
+    ```
