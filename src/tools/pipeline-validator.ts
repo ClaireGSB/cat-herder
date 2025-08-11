@@ -90,6 +90,10 @@ function createHelpfulErrorMessage(
 
 // Main validation logic
 async function main() {
+  if (process.env.CLAUDE_PROJECT_ACTIVE !== "true") {
+    process.exit(0);
+  }
+
   // 1. Read the tool input payload from stdin
   const input = fs.readFileSync(0, "utf8"); // Synchronous and reliable
   if (!input) return; // No input, nothing to do
