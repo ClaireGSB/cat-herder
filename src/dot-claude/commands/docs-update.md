@@ -1,6 +1,6 @@
 ---
 description: Update docs for the change.
-allowed-tools: Read, Write, Edit, Glob
+allowed-tools: Read, Write, Edit, Glob, Bash(git diff *), Bash(git add *), Bash(git commit *), Bash(git status *)
 ---
 Based on the recent code changes, please update the project's documentation.
 

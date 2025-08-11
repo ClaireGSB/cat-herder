@@ -23,6 +23,7 @@ export interface ClaudeProjectConfig {
   logsPath: string;
   structureIgnore: string[];
   manageGitBranch?: boolean;
+  autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
@@ -39,6 +40,7 @@ const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" |
     "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
   ],
   manageGitBranch: true,
+  autoCommit: false,
   waitForRateLimitReset: false,
 };
 

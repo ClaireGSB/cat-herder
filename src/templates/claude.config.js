@@ -19,6 +19,14 @@ module.exports = {
   manageGitBranch: true,
 
   /**
+   * If true, the orchestrator automatically commits changes after each
+   * successful step. Otherwise, false (default) disables this behavior and allow users
+   * to control commits directly within their command prompts by adding instructions
+   * like "commit the changes with the message 'feat: add new feature'".
+   */
+  autoCommit: false,
+
+  /**
    * If true, the orchestrator will pause and wait when it hits the Claude
    * API usage limit, then automatically resume when the limit resets.
    * If false (default), it will fail gracefully with a message explaining
