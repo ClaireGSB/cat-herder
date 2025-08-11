@@ -8,10 +8,14 @@
       "Grep",
       "Glob",
       "LS",
-      "Bash(git *:*)",
-      "Bash(npm *:*)",
-      "Bash(vitest:*:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git status:*)",
+      "Bash(npm run:*)",
+      "Bash(npm test:*)",
+      "Bash(vitest:*:*)"
     ],
     "deny": [
       "WebFetch",
