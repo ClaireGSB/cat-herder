@@ -19,10 +19,16 @@ export function runStreaming(
   reasoningLogPath: string,
   cwd: string,
   stdinData?: string,
-  rawJsonLogPath?: string
+  rawJsonLogPath?: string,
+  model?: string
 ): Promise<StreamResult> {
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
+  
+  // Conditionally add the model flag
+  if (model) {
+    finalArgs.push("--model", model);
+  }
   
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);

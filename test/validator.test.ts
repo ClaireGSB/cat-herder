@@ -601,6 +601,303 @@ describe('Validator - Check Object Validation', () => {
   });
 });
 
+describe('Validator - Model Property Validation', () => {
+  const mockProjectRoot = '/test/project';
+  
+  beforeEach(() => {
+    vi.clearAllMocks();
+    
+    // Mock settings.json exists with basic permissions
+    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
+      if (filePath.includes('settings.json')) return true;
+      if (filePath.includes('package.json')) return true;
+      if (filePath.includes('commands')) return true; // Mock command files exist
+      return false;
+    });
+    
+    // Mock file reads
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
+      if (filePath.includes('settings.json')) {
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+      }
+      if (filePath.includes('package.json')) {
+        return JSON.stringify({ scripts: { test: 'vitest' } });
+      }
+      if (filePath.includes('commands')) {
+        return '---\nallowed-tools: []\n---\nTest command content';
+      }
+      return '';
+    });
+  });
+
+  it('should accept valid model name', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: 'claude-opus-4-1-20250805',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).not.toContain(expect.stringContaining('model'));
+  });
+
+  it('should accept step with no model property', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+            // No model property - should be valid
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).not.toContain(expect.stringContaining('model'));
+  });
+
+  it('should accept all valid model names', () => {
+    const validModels = [
+      'claude-opus-4-1-20250805',
+      'claude-opus-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-3-7-sonnet-20250219',
+      'claude-3-5-haiku-20241022'
+    ];
+
+    validModels.forEach((modelName, index) => {
+      const config: ClaudeProjectConfig = {
+        pipelines: {
+          default: [
+            {
+              name: `test-step-${index}`,
+              command: 'test-command',
+              model: modelName,
+              check: { type: 'shell', command: 'npm test', expect: 'pass' }
+            }
+          ]
+        }
+      };
+
+      const result = validatePipeline(config, mockProjectRoot);
+      expect(result.isValid).toBe(true);
+      expect(result.errors).not.toContain(expect.stringContaining('Invalid model name'));
+    });
+  });
+
+  it('should fail validation for invalid model name', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: 'claude-opus-9000', // Invalid model
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'): Invalid model name \"claude-opus-9000\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+  });
+
+  it('should fail validation for misspelled model name', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: 'claude-sonnet-4-20250515', // Misspelled (wrong date)
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'): Invalid model name \"claude-sonnet-4-20250515\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+  });
+
+  it('should fail validation for non-string model value', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: 123 as any, // Invalid number value
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'): The 'model' property must be a string."
+    );
+  });
+
+  it('should fail validation for null model value', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: null as any,
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'): The 'model' property must be a string."
+    );
+  });
+
+  it('should fail validation for empty string model value', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'test-step',
+            command: 'test-command',
+            model: '', // Empty string
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('test-step'): Invalid model name \"\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+  });
+
+  it('should handle model validation alongside other validation errors', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: '', // Missing name
+            command: 'test-command',
+            model: 'invalid-model', // Invalid model
+            check: { type: 'shell', command: 'npm test', expect: 'pass' },
+            retry: 'bad' as any // Invalid retry
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('unnamed'): is missing the 'name' property."
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('unnamed'): Invalid model name \"invalid-model\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 1 ('unnamed'): The 'retry' property must be a non-negative integer, but found 'bad'."
+    );
+  });
+
+  it('should validate model in multiple pipelines', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        pipeline1: [
+          {
+            name: 'step1',
+            command: 'test-command',
+            model: 'claude-opus-4-1-20250805', // Valid
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ],
+        pipeline2: [
+          {
+            name: 'step2',
+            command: 'test-command',
+            model: 'claude-invalid-model', // Invalid
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'pipeline2', Step 1 ('step2'): Invalid model name \"claude-invalid-model\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+    // Should not contain errors for the valid pipeline1
+    expect(result.errors.filter(err => err.includes('pipeline1'))).toHaveLength(0);
+  });
+
+  it('should validate multiple steps with different model configurations', () => {
+    const config: ClaudeProjectConfig = {
+      pipelines: {
+        default: [
+          {
+            name: 'step1',
+            command: 'test-command',
+            model: 'claude-opus-4-1-20250805', // Valid
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          },
+          {
+            name: 'step2',
+            command: 'test-command',
+            // No model - should be valid
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          },
+          {
+            name: 'step3',
+            command: 'test-command',
+            model: 'claude-haiku-3-5-invalid', // Invalid
+            check: { type: 'shell', command: 'npm test', expect: 'pass' }
+          }
+        ]
+      }
+    };
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'default', Step 3 ('step3'): Invalid model name \"claude-haiku-3-5-invalid\". Available models are: claude-opus-4-1-20250805, claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-7-sonnet-20250219, claude-3-5-haiku-20241022"
+    );
+    // Should not contain errors for the valid steps
+    expect(result.errors.filter(err => err.includes('step1') || err.includes('step2'))).toHaveLength(0);
+  });
+});
+
 describe('Validator - FileAccess Property Validation', () => {
   const mockProjectRoot = '/test/project';
   

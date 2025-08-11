@@ -163,7 +163,7 @@ async function executeStep(
   reasoningLogFile: string,
   rawJsonLogFile: string
 ) {
-  const { name, command, check, retry } = stepConfig;
+  const { name, command, check, retry, model } = stepConfig;
   const projectRoot = getProjectRoot();
   const config = await getConfig();
   const maxRetries = retry ?? 0;
@@ -178,7 +178,7 @@ async function executeStep(
     }
 
     // Execute the main Claude command
-    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile);
+    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model);
     
     // Check for rate limit error
     if (result.rateLimit) {

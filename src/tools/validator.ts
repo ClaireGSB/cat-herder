@@ -4,6 +4,15 @@ import yaml from "js-yaml";
 import { ClaudeProjectConfig } from "../config.js";
 import { contextProviders } from "./providers.js";
 
+// Valid Claude model names for validation
+const VALID_CLAUDE_MODELS = [
+  "claude-opus-4-1-20250805",
+  "claude-opus-4-20250514",
+  "claude-sonnet-4-20250514",
+  "claude-3-7-sonnet-20250219",
+  "claude-3-5-haiku-20241022",
+];
+
 /**
  * A simple utility to parse YAML frontmatter from a markdown file.
  * @param content The string content of the markdown file.
@@ -236,6 +245,15 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
               }
             });
           }
+        }
+      }
+
+      // --- Model Validation ---
+      if (step.model !== undefined) {
+        if (typeof step.model !== 'string') {
+          errors.push(`${stepId}: The 'model' property must be a string.`);
+        } else if (!VALID_CLAUDE_MODELS.includes(step.model)) {
+          errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
         }
       }
     }
