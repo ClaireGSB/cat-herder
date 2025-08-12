@@ -1,6 +1,6 @@
 ---
 description: Improve names, style, and docstrings without changing behavior.
-allowed-tools: Read, Edit, MultiEdit, Glob, Grep, Bash(git diff *), Bash(git add *), Bash(git commit *), Bash(git status *)
+allowed-tools: Read, Edit, MultiEdit, Glob, Grep, Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git status:*)
 ---
 Perform a final code review and apply stylistic improvements to the files that were just changed.
 

@@ -565,20 +565,20 @@ Modify your `.claude/commands/implement.md` file to include a commit instruction
 ```markdown
 ---
 description: Implement code so all tests pass. Do not weaken tests.
-allowed-tools: Read, Write, Edit, MultiEdit, Bash(vitest *:*), Bash(npm *:*), Bash(git *:*)
+allowed-tools: Read, Write, Edit, MultiEdit, Bash(vitest:*:*), Bash(npm run:*), Bash(npm test:*), Bash(git add:*), Bash(git commit:*), Bash(git status:*)
 ---
 Based on the PLAN.md and the failing tests, implement the necessary code in the `src/` directory to make all tests pass.
 
 After you have verified that all tests pass, stage all changes and commit them with a meaningful message like "feat: implement new feature functionality".
 ```
 
-**Important:** When adding commit instructions to custom commands, make sure to include `Bash(git *:*)` in the `allowed-tools` list so Claude has permission to execute git commands.
+**Important:** When adding commit instructions to custom commands, make sure to include the specific git permissions like `Bash(git add:*)`, `Bash(git commit:*)`, and `Bash(git status:*)` in the `allowed-tools` list so Claude has permission to execute git commands.
 
 ### Permissions and Security (`.claude/settings.json`)
 
 For the orchestrator to run non-interactively, it needs permission to execute `Bash` commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions to enable this.
 
-This file pre-approves `Bash` commands that are essential for the default workflow (scoped to `npm`, `git`, and `vitest`) while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.
+This file pre-approves `Bash` commands that are essential for the default workflow using specific permission patterns like `Bash(git commit:*)` instead of broad glob patterns like `Bash(git *:*)`, which can be unreliable for commands with arguments, while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.
 
 Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command is an essential tool for ensuring your workflow is correctly configured *before* you run it. It performs a comprehensive check of your `claude.config.js` and project setup, including:
 
