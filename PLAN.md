@@ -22,7 +22,7 @@ This change introduces a new `run-sequence` command that targets a folder of tas
 -   [x] **4. Implement the Dynamic Sequence Orchestrator:** Build the main "worker loop" that finds and executes tasks dynamically.
 -   [x] **5. Implement Helper Functions:** Create the logic for finding the next task and managing the sequence's Git branch.
 -   [x] **6. Add Integration Test:** Create a new test case to validate the end-to-end dynamic sequence workflow.
--   [ ] **7. Update Documentation:** Add a section to `README.md` explaining the new feature and how to use it.
+-   [x] **7. Update Documentation:** Add a section to `README.md` explaining the new feature and how to use it.
 
 ---
 
