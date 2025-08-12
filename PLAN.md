@@ -21,7 +21,7 @@
 
 -   [x] **Step 1:** Update the default permission settings in the project template.
 -   [x] **Step 2:** Update the `allowed-tools` in all default command markdown files.
--   [ ] **Step 3:** Update the `README.md` documentation to reflect the new best practice.
+-   [x] **Step 3:** Update the `README.md` documentation to reflect the new best practice.
 
 ---
 
