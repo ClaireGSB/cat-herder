@@ -15,6 +15,17 @@ export type TaskStatus = {
   lastCommit?: string;
 };
 
+export type SequencePhase = "pending" | "running" | "done" | "failed";
+export interface SequenceStatus {
+  version: number;
+  sequenceId: string;
+  branch: string;
+  phase: SequencePhase;
+  currentTaskPath: string | null;
+  completedTasks: string[];
+  lastUpdate: string;
+}
+
 // This function receives an absolute path, so it doesn't need to know the project root.
 function writeJsonAtomic(file: string, data: unknown) {
   const dir = path.dirname(file);
@@ -59,4 +70,38 @@ export function updateStatus(file: string, mut: (s: TaskStatus) => void) {
   mut(s);
   s.lastUpdate = new Date().toISOString();
   writeJsonAtomic(file, s);
+}
+
+const defaultSequenceStatus: SequenceStatus = {
+    version: 1,
+    sequenceId: "unknown",
+    branch: "",
+    phase: "pending",
+    currentTaskPath: null,
+    completedTasks: [],
+    lastUpdate: new Date().toISOString()
+};
+
+export function readSequenceStatus(file: string): SequenceStatus {
+    if (fs.existsSync(file)) {
+        try {
+            return JSON.parse(fs.readFileSync(file, "utf8"));
+        } catch {
+            return defaultSequenceStatus;
+        }
+    }
+    return defaultSequenceStatus;
+}
+
+export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => void) {
+    let s: SequenceStatus = readSequenceStatus(file);
+    mut(s);
+    s.lastUpdate = new Date().toISOString();
+    writeJsonAtomic(file, s);
+}
+
+export function folderPathToSequenceId(folderPath: string): string {
+    // Convert path like "claude-Tasks/my-feature" to "sequence-my-feature"
+    const folderName = path.basename(path.resolve(folderPath));
+    return `sequence-${folderName}`;
 }

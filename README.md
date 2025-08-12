@@ -43,6 +43,78 @@ npm run claude:run -- claude-Tasks/task-001-sample.md
 
 The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
 
+## Running Task Sequences
+
+For complex features that require multiple, ordered steps that might not be known ahead of time, `claude-project` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
+
+### The Dynamic Workflow Advantage
+
+Traditional single-task execution works well for self-contained features, but complex workflows often require multiple coordinated steps. The sequence orchestrator transforms your development process by:
+
+- **Dynamic Task Discovery**: After completing each task, the orchestrator re-scans the folder for new tasks that may have been created
+- **Single Branch Execution**: All tasks in a sequence run on the same Git branch, maintaining workflow continuity
+- **Autonomous Multi-Step Workflows**: Initial tasks can generate the rest of the workflow, creating fully autonomous development sequences
+
+### Usage
+
+Execute a sequence of tasks from a folder:
+
+```bash
+# Direct command
+claude-project run-sequence claude-Tasks/my-feature
+
+# Via npm script  
+npm run claude:run-sequence -- claude-Tasks/my-feature
+```
+
+### How It Works
+
+1. **Initial Setup**: The orchestrator creates a dedicated Git branch for the entire sequence
+2. **Sequential Execution**: Tasks are executed in alphabetical order by filename
+3. **Dynamic Discovery**: After each task completes, the folder is re-scanned for new tasks
+4. **Continuation**: The cycle continues until no more tasks are found
+
+### Task Ordering and Naming
+
+Tasks are executed alphabetically by filename. For workflows requiring specific ordering, use a numbered naming convention:
+
+```
+claude-Tasks/my-feature/
+├── 01-analyze-requirements.md
+├── 02-design-architecture.md
+├── 03-implement-core.md
+└── 04-write-tests.md
+```
+
+### Example Dynamic Workflow
+
+Consider a feature development sequence:
+
+**Initial Task**: `01-break-down-prd.md`
+```markdown
+---
+pipeline: default
+---
+# Break Down PRD
+
+Analyze the product requirements document and create individual task files for each implementation step.
+
+Use the Write tool to create:
+- `02-setup-database-schema.md`
+- `03-implement-api-endpoints.md` 
+- `04-create-frontend-components.md`
+- `05-write-integration-tests.md`
+```
+
+When you run `claude-project run-sequence claude-Tasks/new-feature`, the orchestrator will:
+
+1. Execute `01-break-down-prd.md`, which creates the additional task files
+2. Automatically discover and execute `02-setup-database-schema.md`
+3. Continue through each generated task in sequence
+4. Complete the entire workflow autonomously on a single branch
+
+This creates a fully autonomous, multi-step development workflow where the initial planning task drives the entire implementation sequence.
+
 ## How to Test Locally (for Developers)
 
 When developing the `claude-project` tool itself, you need a way to test your local changes without publishing to npm. This is done using `npm link`.
@@ -611,6 +683,7 @@ All commands are available directly via the `claude-project` executable.
 -   `claude-project init`: Scaffolds the workflow in the current repository.
 -   `claude-project run <path-to-task.md>`: Runs the full workflow for a specific task.
     -   `--pipeline <name>`: Specifies which pipeline to use, overriding config and task defaults.
+-   `claude-project run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder, executing them in alphabetical order and re-scanning for new tasks after each completion.
 -   `claude-project validate`: Validates your `claude.config.js` pipeline configuration.
 -   `claude-project watch`: Watches the tasks directory and runs new tasks automatically.
 -   `claude-project status`: Displays the status of the most recent task as JSON.
@@ -622,6 +695,7 @@ All commands are available directly via the `claude-project` executable.
 The `init` command adds these `claude:*` scripts to your project's `package.json`:
 
 -   `npm run claude:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
+-   `npm run claude:run-sequence -- <folderPath>`: The recommended way to run a task sequence from a folder.
 -   `npm run claude:watch`: Watches for new tasks.
 -   `npm run claude:status`: Shows the latest task status.
 -   `npm run claude:tui`: Launches the terminal UI.
