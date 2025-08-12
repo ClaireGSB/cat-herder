@@ -154,7 +154,13 @@ async function main() {
     process.exit(0);
   }
 
-  const isAllowed: boolean = allowedPatterns.some((pattern: string): boolean => minimatch(filePathToEdit, pattern, { dot: true }));
+  // 4.4. Normalize path: if absolute, convert to relative for the check.
+  // This makes the guardrail more forgiving and efficient.
+  const pathToCheck = path.isAbsolute(filePathToEdit)
+    ? path.relative(projectRoot, filePathToEdit)
+    : filePathToEdit;
+
+  const isAllowed = allowedPatterns.some((pattern: string) => minimatch(pathToCheck, pattern, { dot: true }));
 
   if (!isAllowed) {
     const helpfulMessage = createHelpfulErrorMessage(
