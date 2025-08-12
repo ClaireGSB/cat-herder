@@ -287,70 +287,60 @@ Please re-attempt the task. Your goal is to satisfy the **original instructions*
   }
 }
 
-export async function runTask(taskRelativePath: string, pipelineOption?: string) {
+/**
+ * Executes the pipeline for a given task without Git branch management.
+ * This function contains the core pipeline execution logic that can be reused
+ * by both runTask and runTaskSequence.
+ * 
+ * @param taskPath Absolute path to the task file
+ * @param options Options to control behavior
+ */
+async function executePipelineForTask(
+  taskPath: string, 
+  options: { skipGitManagement?: boolean; pipelineOption?: string } = {}
+): Promise<void> {
   const config = await getConfig();
   if (!config) {
     throw new Error("Failed to load configuration.");
   }
   const projectRoot = getProjectRoot();
-  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
 
-  // 1. Determine paths and check status FIRST.
-  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
-  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
-  mkdirSync(path.dirname(statusFile), { recursive: true });
-  const status: TaskStatus = readStatus(statusFile);
-
-  if (status.phase === 'done') {
-    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
-    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
-    return;
-  }
-
-  // 2. Validate the pipeline configuration.
-  const { isValid, errors } = validatePipeline(config, projectRoot);
-  if (!isValid) {
-    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
-    for (const error of errors) console.error(pc.yellow(`  - ${error}`));
-    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
-    process.exit(1);
-  }
-
-  // 3. Ensure we are on the correct Git branch (now respects the user's config).
-  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
-
-  // 4. Parse the task file to extract frontmatter
-  const rawTaskContent = readFileSync(path.resolve(projectRoot, taskRelativePath), 'utf-8');
+  // Parse the task file to extract frontmatter
+  const rawTaskContent = readFileSync(taskPath, 'utf-8');
   const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
 
-  // 5. Determine which pipeline to use (priority: CLI option > task frontmatter > config default > first available)
+  // Determine task ID and status file path
+  const taskId = path.basename(taskPath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+
+  // Determine which pipeline to use (priority: option > task frontmatter > config default > first available)
   let selectedPipeline: PipelineStep[];
   let pipelineName: string;
   if (config.pipelines) {
     // New multi-pipeline format
-    pipelineName = pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
+    pipelineName = options.pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
     if (!pipelineName || !config.pipelines[pipelineName]) {
       throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
     }
     selectedPipeline = config.pipelines[pipelineName];
 
     // Log which source determined the pipeline selection
-    if (pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from --pipeline option: "${pipelineName}"`));
+    if (options.pipelineOption) console.log(pc.cyan(`[Orchestrator] Using pipeline from option: "${pipelineName}"`));
     else if (taskPipelineName) console.log(pc.cyan(`[Orchestrator] Using pipeline from task frontmatter: "${pipelineName}"`));
     else console.log(pc.cyan(`[Orchestrator] Using default pipeline: "${pipelineName}"`));
   } else {
     // Backward compatibility: old single pipeline format
     selectedPipeline = (config as any).pipeline;
     pipelineName = 'default'; // fallback name for legacy format
-    if (pipelineOption) {
-      console.log(pc.yellow(`[Orchestrator] Warning: --pipeline option ignored. Configuration uses legacy single pipeline format.`));
+    if (options.pipelineOption) {
+      console.log(pc.yellow(`[Orchestrator] Warning: pipeline option ignored. Configuration uses legacy single pipeline format.`));
     }
   }
 
-  // 6. Proceed with execution.
+  // Update status with pipeline information (branch will be set by caller if needed)
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') s.taskId = taskId;
-    s.branch = branchName;
     s.pipeline = pipelineName;
   });
 
@@ -386,7 +376,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
     const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
-    // **REFACTORED PART**: Assemble the full prompt using the new function
+    // Assemble the full prompt using the assemblePrompt function
     const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
@@ -398,6 +388,48 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
   console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
+}
+
+export async function runTask(taskRelativePath: string, pipelineOption?: string) {
+  const config = await getConfig();
+  if (!config) {
+    throw new Error("Failed to load configuration.");
+  }
+  const projectRoot = getProjectRoot();
+  console.log(pc.cyan(`Project root identified: ${projectRoot}`));
+
+  // 1. Determine paths and check status FIRST.
+  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+  const status: TaskStatus = readStatus(statusFile);
+
+  if (status.phase === 'done') {
+    console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
+    console.log(pc.gray("  › To re-run, delete the state file and associated branch."));
+    return;
+  }
+
+  // 2. Validate the pipeline configuration.
+  const { isValid, errors } = validatePipeline(config, projectRoot);
+  if (!isValid) {
+    console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
+    for (const error of errors) console.error(pc.yellow(`  - ${error}`));
+    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
+    process.exit(1);
+  }
+
+  // 3. Ensure we are on the correct Git branch (now respects the user's config).
+  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
+
+  // 4. Update the status with the branch name
+  updateStatus(statusFile, s => {
+    s.branch = branchName;
+  });
+
+  // 5. Execute the pipeline using the new reusable function
+  const taskPath = path.resolve(projectRoot, taskRelativePath);
+  await executePipelineForTask(taskPath, { pipelineOption });
 }
 
 export async function runTaskSequence(taskFolderPath: string): Promise<void> {

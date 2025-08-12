@@ -18,7 +18,7 @@ This change introduces a new `run-sequence` command that targets a folder of tas
 
 -   [x] **1. Add New CLI Command:** Create the user-facing `claude-project run-sequence <folderPath>` command.
 -   [x] **2. Define Sequence State:** Create the data structures and helper functions for managing the state of an entire sequence.
--   [ ] **3. Refactor Core Pipeline Execution:** Decouple the existing pipeline logic from Git management so it can be reused.
+-   [x] **3. Refactor Core Pipeline Execution:** Decouple the existing pipeline logic from Git management so it can be reused.
 -   [ ] **4. Implement the Dynamic Sequence Orchestrator:** Build the main "worker loop" that finds and executes tasks dynamically.
 -   [ ] **5. Implement Helper Functions:** Create the logic for finding the next task and managing the sequence's Git branch.
 -   [ ] **6. Add Integration Test:** Create a new test case to validate the end-to-end dynamic sequence workflow.
