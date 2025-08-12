@@ -6,7 +6,7 @@ import path from "path";
 import readline from "readline";
 
 import { init } from "./init.js";
-import { runTask } from "./tools/orchestrator.js";
+import { runTask, runTaskSequence } from "./tools/orchestrator.js";
 import { startWebServer } from "./tools/web.js";
 import { startTui } from "./tools/tui.js";
 import { showStatus } from "./tools/status-cli.js";
@@ -43,6 +43,19 @@ program
       await runTask(taskPath, options.pipeline);
     } catch (error: any) {
       console.error(pc.red(`\nWorkflow failed: ${error.message}`));
+      process.exit(1);
+    }
+  });
+
+// `run-sequence` command
+program
+  .command("run-sequence <taskFolderPath>")
+  .description("Runs a dynamic sequence of tasks from a specified folder.")
+  .action(async (taskFolderPath) => {
+    try {
+      await runTaskSequence(taskFolderPath);
+    } catch (error: any) {
+      console.error(pc.red(`\nSequence failed: ${error.message}`));
       process.exit(1);
     }
   });

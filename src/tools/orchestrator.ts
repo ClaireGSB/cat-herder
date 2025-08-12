@@ -399,3 +399,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   updateStatus(statusFile, s => { s.phase = 'done'; });
   console.log(pc.green("\n[Orchestrator] All steps completed successfully!"));
 }
+
+export async function runTaskSequence(taskFolderPath: string): Promise<void> {
+  throw new Error("runTaskSequence is not yet implemented. This is a placeholder for Step 1 of the PLAN.md implementation.");
+}
