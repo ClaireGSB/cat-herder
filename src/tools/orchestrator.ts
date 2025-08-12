@@ -1,10 +1,10 @@
 import { execSync } from "node:child_process";
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import yaml from 'js-yaml';
 import { runStreaming, StreamResult } from "./proc.js";
-import { updateStatus, readStatus, TaskStatus } from "./status.js";
+import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
@@ -432,6 +432,173 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   await executePipelineForTask(taskPath, { pipelineOption });
 }
 
+/**
+ * Finds the next available task to execute in a sequence.
+ * Tasks are executed in alphabetical order by filename.
+ */
+function findNextAvailableTask(folderPath: string, statusFile: string): string | null {
+  const sequenceStatus = readSequenceStatus(statusFile);
+  const completedTasks = sequenceStatus.completedTasks;
+  
+  try {
+    // Read all .md files from the folder
+    const files = readdirSync(folderPath)
+      .filter(file => file.endsWith('.md'))
+      .map(file => path.resolve(folderPath, file));
+    
+    // Filter out completed tasks
+    const availableTasks = files.filter(taskPath => !completedTasks.includes(taskPath));
+    
+    // Sort alphabetically and return the first one
+    availableTasks.sort();
+    
+    return availableTasks.length > 0 ? availableTasks[0] : null;
+  } catch (error) {
+    // If folder doesn't exist or can't be read, return null
+    return null;
+  }
+}
+
+/**
+ * Ensures the repository is on the correct branch for a sequence,
+ * creating it if necessary.
+ */
+function ensureCorrectGitBranchForSequence(branchName: string, projectRoot: string): string {
+  const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
+
+  if (currentBranch === branchName) {
+    console.log(pc.cyan(`[Sequence] Resuming sequence on existing branch: "${branchName}"`));
+    return branchName;
+  }
+
+  console.log(pc.cyan("[Sequence] Setting up Git environment..."));
+
+  const gitStatus = execSync('git status --porcelain', { cwd: projectRoot }).toString().trim();
+  if (gitStatus) {
+    throw new Error(`Git working directory on branch "${currentBranch}" is not clean. Please commit or stash your changes.`);
+  }
+
+  console.log(pc.gray("  › Switching to main branch..."));
+  try {
+    execSync('git checkout main', { cwd: projectRoot, stdio: 'pipe' });
+  } catch (e) {
+    throw new Error("Could not check out 'main' branch. A 'main' branch is required for automated branch management.");
+  }
+
+  try {
+    execSync('git remote get-url origin', { cwd: projectRoot, stdio: 'pipe' });
+    console.log(pc.gray("  › Remote 'origin' found. Syncing..."));
+    execSync('git pull origin main', { cwd: projectRoot, stdio: 'pipe', timeout: 5000 });
+  } catch (err) {
+    console.log(pc.yellow("  › No remote 'origin' found or pull failed. Proceeding with local 'main'."));
+  }
+
+  const existingBranches = execSync(`git branch --list ${branchName}`, { cwd: projectRoot }).toString().trim();
+  if (existingBranches) {
+    console.log(pc.yellow(`  › Branch "${branchName}" already exists. Checking it out.`));
+    execSync(`git checkout ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  } else {
+    console.log(pc.green(`  › Creating and checking out new branch: "${branchName}"`));
+    execSync(`git checkout -b ${branchName}`, { cwd: projectRoot, stdio: 'pipe' });
+  }
+
+  return branchName;
+}
+
 export async function runTaskSequence(taskFolderPath: string): Promise<void> {
-  throw new Error("runTaskSequence is not yet implemented. This is a placeholder for Step 1 of the PLAN.md implementation.");
+  const config = await getConfig();
+  if (!config) {
+    throw new Error("Failed to load configuration.");
+  }
+  const projectRoot = getProjectRoot();
+  console.log(pc.cyan(`[Sequence] Project root identified: ${projectRoot}`));
+  
+  // Input validation - check if folder exists and contains .md files
+  const folderPathResolved = path.resolve(projectRoot, taskFolderPath);
+  try {
+    const files = readdirSync(folderPathResolved).filter(file => file.endsWith('.md'));
+    if (files.length === 0) {
+      throw new Error(`Error: No task files (.md) found in folder: ${taskFolderPath}`);
+    }
+  } catch (error: any) {
+    if (error.message.includes('No task files')) {
+      throw error;
+    }
+    throw new Error(`Error: Folder does not exist or cannot be accessed: ${taskFolderPath}`);
+  }
+
+  // 1. Setup: get config, derive sequence ID, determine statusFile path, create sequence branch
+  const sequenceId = folderPathToSequenceId(taskFolderPath);
+  const branchName = `claude/${sequenceId}`;
+  const statusFile = path.resolve(projectRoot, config.statePath, `${sequenceId}.state.json`);
+  mkdirSync(path.dirname(statusFile), { recursive: true });
+
+  // Initialize or read existing sequence status
+  let sequenceStatus = readSequenceStatus(statusFile);
+  if (sequenceStatus.sequenceId === 'unknown') {
+    // This is a new sequence
+    updateSequenceStatus(statusFile, s => {
+      s.sequenceId = sequenceId;
+      s.phase = "pending";
+    });
+    sequenceStatus = readSequenceStatus(statusFile);
+  }
+
+  // Set up Git branch for the entire sequence (if not disabled)
+  if (config.manageGitBranch !== false) {
+    const actualBranch = ensureCorrectGitBranchForSequence(branchName, projectRoot);
+    updateSequenceStatus(statusFile, s => {
+      s.branch = actualBranch;
+    });
+  } else {
+    console.log(pc.yellow("[Sequence] Automatic branch management is disabled."));
+    const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
+    console.log(pc.yellow(`[Sequence] Sequence will run on your current branch: "${currentBranch}"`));
+    updateSequenceStatus(statusFile, s => {
+      s.branch = currentBranch;
+    });
+  }
+
+  console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
+
+  // 2. Main execution loop
+  let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
+
+  while (nextTaskPath) {
+    try {
+      console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
+      
+      // Update status to "running" for this task
+      updateSequenceStatus(statusFile, s => { 
+        s.currentTaskPath = nextTaskPath;
+        s.phase = "running"; 
+      });
+      
+      // Execute the task's pipeline (skip Git management since we're managing the branch at sequence level)
+      await executePipelineForTask(nextTaskPath, { skipGitManagement: true });
+
+      // Mark task as "done" and reset phase for next search
+      updateSequenceStatus(statusFile, s => { 
+          s.completedTasks.push(nextTaskPath!);
+          s.currentTaskPath = null;
+          s.phase = "pending";
+      });
+      
+      console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
+      
+      // Look for the next task (which may have just been created)
+      nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
+
+    } catch (error: any) {
+        console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
+        updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
+        throw error; // Re-throw to propagate the error up
+    }
+  }
+
+  const finalStatus = readSequenceStatus(statusFile);
+  if (finalStatus.phase !== 'failed') {
+      console.log(pc.green("[Sequence] No more tasks found. All done!"));
+      updateSequenceStatus(statusFile, s => { s.phase = "done"; });
+  }
 }
