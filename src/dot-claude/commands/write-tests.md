@@ -1,6 +1,6 @@
 ---
 description: Write failing tests from PLAN.md. Do not change src code yet.
-allowed-tools: Read, Write, Edit, Bash(vitest *:*), Bash(npm *:*), Bash(git diff *), Bash(git add *), Bash(git commit *), Bash(git status *)
+allowed-tools: Read, Write, Edit, Bash(vitest:*:*), Bash(npm run:*), Bash(npm test:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git status:*)
 ---
 Based on the PLAN.md and the original task definition provided above, create the necessary test files under a `test/` directory.
 
