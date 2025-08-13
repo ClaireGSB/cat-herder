@@ -542,6 +542,8 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
   console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
 
   let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
+  let pauseStartTime: number | null = null;
+  let totalPauseTime = 0;
 
   while (nextTaskPath) {
     try {
@@ -579,11 +581,10 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           const startTime = new Date(s.startTime).getTime();
           const endTime = new Date().getTime();
           const totalDuration = (endTime - startTime) / 1000;
-          // This is a simplification. A more accurate implementation would require tracking pause times.
           s.stats = {
               totalDuration,
-              totalDurationExcludingPauses: totalDuration, 
-              totalPauseTime: 0
+              totalDurationExcludingPauses: totalDuration - totalPauseTime,
+              totalPauseTime
           }
       });
   }
