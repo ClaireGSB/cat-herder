@@ -514,7 +514,6 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
   const projectRoot = getProjectRoot();
   console.log(pc.cyan(`[Sequence] Project root identified: ${projectRoot}`));
   
-  // Input validation - check if folder exists and contains .md files
   const folderPathResolved = path.resolve(projectRoot, taskFolderPath);
   try {
     const files = readdirSync(folderPathResolved).filter(file => file.endsWith('.md'));
@@ -528,24 +527,21 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
     throw new Error(`Error: Folder does not exist or cannot be accessed: ${taskFolderPath}`);
   }
 
-  // 1. Setup: get config, derive sequence ID, determine statusFile path, create sequence branch
   const sequenceId = folderPathToSequenceId(taskFolderPath);
   const branchName = `claude/${sequenceId}`;
   const statusFile = path.resolve(projectRoot, config.statePath, `${sequenceId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
 
-  // Initialize or read existing sequence status
   let sequenceStatus = readSequenceStatus(statusFile);
   if (sequenceStatus.sequenceId === 'unknown') {
-    // This is a new sequence
     updateSequenceStatus(statusFile, s => {
       s.sequenceId = sequenceId;
+      s.startTime = new Date().toISOString();
       s.phase = "pending";
     });
     sequenceStatus = readSequenceStatus(statusFile);
   }
 
-  // Set up Git branch for the entire sequence (if not disabled)
   if (config.manageGitBranch !== false) {
     const actualBranch = ensureCorrectGitBranchForSequence(branchName, projectRoot);
     updateSequenceStatus(statusFile, s => {
@@ -562,23 +558,19 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
 
-  // 2. Main execution loop
   let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
 
   while (nextTaskPath) {
     try {
       console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
       
-      // Update status to "running" for this task
       updateSequenceStatus(statusFile, s => { 
         s.currentTaskPath = nextTaskPath;
         s.phase = "running"; 
       });
       
-      // Execute the task's pipeline (skip Git management since we're managing the branch at sequence level)
       await executePipelineForTask(nextTaskPath, { skipGitManagement: true });
 
-      // Mark task as "done" and reset phase for next search
       updateSequenceStatus(statusFile, s => { 
           s.completedTasks.push(nextTaskPath!);
           s.currentTaskPath = null;
@@ -587,13 +579,12 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       
       console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
       
-      // Look for the next task (which may have just been created)
       nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
 
     } catch (error: any) {
         console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
         updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
-        throw error; // Re-throw to propagate the error up
+        throw error;
     }
   }
 
