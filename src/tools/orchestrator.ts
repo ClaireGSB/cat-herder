@@ -58,14 +58,7 @@ function assemblePrompt(
   // 4. Assemble the specific context data required for this step.
   let contextString = "";
   for (const [title, content] of Object.entries(context)) {
-    contextString += `--- ${title.toUpperCase()} ---\n\
-\
-\
-${content.trim()}\n\
-\
-\
-\
-\n`;
+    contextString += `--- ${title.toUpperCase()} ---\n\`\`\`\n${content.trim()}\n\`\`\`\n\n`;
   }
 
   if (contextString) { // Check if there's any context left to display
@@ -168,9 +161,7 @@ async function executeStep(
   statusFile: string,
   logFile: string,
   reasoningLogFile: string,
-  rawJsonLogFile: string,
-  pipelineName: string,
-  sequenceStatusFile?: string
+  rawJsonLogFile: string
 ) {
   const { name, command, check, retry, model } = stepConfig;
   const projectRoot = getProjectRoot();
@@ -186,17 +177,21 @@ async function executeStep(
       console.log(pc.yellow(`\n[Orchestrator] Retry attempt ${attempt}/${maxRetries} for step: ${name}`));
     }
 
-    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
+    // Execute the main Claude command
+    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model);
     
+    // Check for rate limit error
     if (result.rateLimit) {
       const config = await getConfig();
       const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
       
       if (config.waitForRateLimitReset) {
+        // Wait & Resume Logic
         const waitMs = resetTime.getTime() - Date.now();
         if (waitMs > 0) {
           console.log(pc.yellow(`[Orchestrator] Claude API usage limit reached.`));
           
+          // Check for excessively long wait times (8 hours = 28,800,000 ms)
           if (waitMs > 28800000) {
             console.log(pc.red(`[Orchestrator] WARNING: API reset is scheduled for ${resetTime.toLocaleString()}. The process will pause for over 8 hours.`));
             console.log(pc.yellow(`[Orchestrator] You can safely terminate with Ctrl+C and restart manually after the reset time.`));
@@ -204,28 +199,37 @@ async function executeStep(
           
           console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
           updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
-          if (sequenceStatusFile) {
-            updateSequenceStatus(sequenceStatusFile, s => { (s.phase as any) = "waiting_for_reset"; });
-          }
           
           await new Promise(resolve => setTimeout(resolve, waitMs));
           
           console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
           updateStatus(statusFile, s => { s.phase = "running"; });
-          if (sequenceStatusFile) {
-            updateSequenceStatus(sequenceStatusFile, s => { s.phase = "running"; });
-          }
           
+          // Construct the Resume Prompt
           const reasoningLogContent = readFileSync(reasoningLogFile, 'utf-8');
-          const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.\n\n--- ORIGINAL INSTRUCTIONS ---\n${fullPrompt}\n--- END ORIGINAL INSTRUCTIONS ---\n\n--- PREVIOUS ACTIONS LOG ---\n${reasoningLogContent}\n--- END PREVIOUS ACTIONS LOG ---\n\nPlease analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
+          const resumePrompt = `You are resuming an automated task that was interrupted by an API usage limit. Your progress up to the point of interruption has been saved. Your goal is to review your previous actions and continue the task from where you left off.
+
+--- ORIGINAL INSTRUCTIONS ---
+${fullPrompt}
+--- END ORIGINAL INSTRUCTIONS ---
+
+--- PREVIOUS ACTIONS LOG ---
+${reasoningLogContent}
+--- END PREVIOUS ACTIONS LOG ---
+
+Please analyze the original instructions and your previous actions, then continue executing the plan to complete the step.`;
           
+          // Update the prompt for the next iteration of the loop
           currentPrompt = resumePrompt;
-          attempt--;
-          continue;
+          attempt--; // Do not count this as a formal "retry"
+          continue; // Re-run the step with the new resume prompt
         }
       } else {
+        // Graceful Fail Logic
         updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-        throw new Error(`Workflow failed: Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleString()}.\nTo automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.\nYou can re-run the command after the reset time to continue from this step.`);
+        throw new Error(`Workflow failed: Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleString()}.
+To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
+You can re-run the command after the reset time to continue from this step.`);
       }
     }
     
@@ -234,9 +238,11 @@ async function executeStep(
       throw new Error(`Step "${name}" failed. Check the output log for details: ${logFile}\nAnd the reasoning log: ${reasoningLogFile}`);
     }
 
+    // Run the main check
     const checkResult = await runCheck(check, projectRoot);
 
     if (checkResult.success) {
+      // Check passed - decide whether to commit
       if (config.autoCommit) {
         console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
         execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
@@ -248,21 +254,34 @@ async function executeStep(
       return;
     }
 
+    // Check failed - handle failure
     console.log(pc.red(`[Orchestrator] Check failed for step "${name}" (attempt ${attempt}/${maxRetries + 1})`));
 
+    // If this is the final attempt, fail the step
     if (attempt > maxRetries) {
       updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
       throw new Error(`Step "${name}" failed after ${maxRetries} retries. Final check error: ${checkResult.output || 'Check validation failed'}`);
     }
 
+    // Generate automatic feedback prompt for retry
     console.log(pc.yellow(`[Orchestrator] Generating  feedback for step: ${name}`));
     const checkDescription = Array.isArray(check) 
       ? 'One of the validation checks' 
       : `The validation check`;
         
-    const feedbackPrompt = `Your previous attempt to complete the '${name}' step failed its validation check.\n\nHere are the original instructions you were given for this step:
---- ORIGINAL INSTRUCTIONS ---\n${fullPrompt}\n--- END ORIGINAL INSTRUCTIONS ---\n\n${checkDescription} failed with the following error output:
---- ERROR OUTPUT ---\n${checkResult.output || 'No output captured'}\n--- END ERROR OUTPUT ---\n\nPlease re-attempt the task. Your goal is to satisfy the **original instructions** while also fixing the error reported above. Analyze both the original goal and the specific failure. Do not modify the tests or checks.`;
+    const feedbackPrompt = `Your previous attempt to complete the '${name}' step failed its validation check.
+
+Here are the original instructions you were given for this step:
+--- ORIGINAL INSTRUCTIONS ---
+${fullPrompt}
+--- END ORIGINAL INSTRUCTIONS ---
+
+${checkDescription} failed with the following error output:
+--- ERROR OUTPUT ---
+${checkResult.output || 'No output captured'}
+--- END ERROR OUTPUT ---
+
+Please re-attempt the task. Your goal is to satisfy the **original instructions** while also fixing the error reported above. Analyze both the original goal and the specific failure. Do not modify the tests or checks.`;
 
     currentPrompt = feedbackPrompt;
   }
@@ -278,7 +297,7 @@ async function executeStep(
  */
 async function executePipelineForTask(
   taskPath: string, 
-  options: { skipGitManagement?: boolean; pipelineOption?: string, sequenceStatusFile?: string } = {}
+  options: { skipGitManagement?: boolean; pipelineOption?: string } = {}
 ): Promise<void> {
   const config = await getConfig();
   if (!config) {
@@ -321,10 +340,7 @@ async function executePipelineForTask(
 
   // Update status with pipeline information (branch will be set by caller if needed)
   updateStatus(statusFile, s => {
-    if (s.taskId === 'unknown') {
-        s.taskId = taskId;
-        s.startTime = new Date().toISOString();
-    }
+    if (s.taskId === 'unknown') s.taskId = taskId;
     s.pipeline = pipelineName;
   });
 
@@ -367,7 +383,7 @@ async function executePipelineForTask(
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
     const rawJsonLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.raw.json.log`);
 
-    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile, pipelineName, options.sequenceStatusFile);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
@@ -497,6 +513,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
   const projectRoot = getProjectRoot();
   console.log(pc.cyan(`[Sequence] Project root identified: ${projectRoot}`));
   
+  // Input validation - check if folder exists and contains .md files
   const folderPathResolved = path.resolve(projectRoot, taskFolderPath);
   try {
     const files = readdirSync(folderPathResolved).filter(file => file.endsWith('.md'));
@@ -510,21 +527,24 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
     throw new Error(`Error: Folder does not exist or cannot be accessed: ${taskFolderPath}`);
   }
 
+  // 1. Setup: get config, derive sequence ID, determine statusFile path, create sequence branch
   const sequenceId = folderPathToSequenceId(taskFolderPath);
   const branchName = `claude/${sequenceId}`;
   const statusFile = path.resolve(projectRoot, config.statePath, `${sequenceId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
 
+  // Initialize or read existing sequence status
   let sequenceStatus = readSequenceStatus(statusFile);
   if (sequenceStatus.sequenceId === 'unknown') {
+    // This is a new sequence
     updateSequenceStatus(statusFile, s => {
       s.sequenceId = sequenceId;
-      s.startTime = new Date().toISOString();
       s.phase = "pending";
     });
     sequenceStatus = readSequenceStatus(statusFile);
   }
 
+  // Set up Git branch for the entire sequence (if not disabled)
   if (config.manageGitBranch !== false) {
     const actualBranch = ensureCorrectGitBranchForSequence(branchName, projectRoot);
     updateSequenceStatus(statusFile, s => {
@@ -541,21 +561,23 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
 
+  // 2. Main execution loop
   let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
-  let pauseStartTime: number | null = null;
-  let totalPauseTime = 0;
 
   while (nextTaskPath) {
     try {
       console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
       
+      // Update status to "running" for this task
       updateSequenceStatus(statusFile, s => { 
         s.currentTaskPath = nextTaskPath;
         s.phase = "running"; 
       });
       
-      await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
+      // Execute the task's pipeline (skip Git management since we're managing the branch at sequence level)
+      await executePipelineForTask(nextTaskPath, { skipGitManagement: true });
 
+      // Mark task as "done" and reset phase for next search
       updateSequenceStatus(statusFile, s => { 
           s.completedTasks.push(nextTaskPath!);
           s.currentTaskPath = null;
@@ -564,28 +586,19 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       
       console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
       
+      // Look for the next task (which may have just been created)
       nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
 
     } catch (error: any) {
         console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
         updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
-        throw error;
+        throw error; // Re-throw to propagate the error up
     }
   }
 
   const finalStatus = readSequenceStatus(statusFile);
   if (finalStatus.phase !== 'failed') {
       console.log(pc.green("[Sequence] No more tasks found. All done!"));
-      updateSequenceStatus(statusFile, s => { 
-          s.phase = "done"; 
-          const startTime = new Date(s.startTime).getTime();
-          const endTime = new Date().getTime();
-          const totalDuration = (endTime - startTime) / 1000;
-          s.stats = {
-              totalDuration,
-              totalDurationExcludingPauses: totalDuration - totalPauseTime,
-              totalPauseTime
-          }
-      });
+      updateSequenceStatus(statusFile, s => { s.phase = "done"; });
   }
 }

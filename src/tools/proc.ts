@@ -1,19 +1,15 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, createWriteStream, WriteStream, readFileSync } from "node:fs";
+import { mkdirSync, createWriteStream, WriteStream } from "node:fs";
 import { dirname } from "node:path";
-import pc from "picocolors";
+import pc from "picocolors"; // Import the colors library
 
+// Define the enhanced return type for rate limit handling
 export interface StreamResult {
   code: number;
   output: string;
   rateLimit?: {
     resetTimestamp: number;
   };
-}
-
-export interface RunStreamingOptions {
-  pipelineName?: string;
-  settings?: any;
 }
 
 export function runStreaming(
@@ -24,8 +20,7 @@ export function runStreaming(
   cwd: string,
   stdinData?: string,
   rawJsonLogPath?: string,
-  model?: string,
-  options?: RunStreamingOptions
+  model?: string
 ): Promise<StreamResult> {
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
@@ -74,9 +69,6 @@ export function runStreaming(
 =================================================
   New Attempt Started at: ${startTime.toISOString()}
   Command: ${cmd} ${finalArgs.join(" ")}
-  Pipeline: ${options?.pipelineName || 'N/A'}
-  Model: ${model || 'default'}
-  Settings: ${options?.settings ? JSON.stringify(options.settings, null, 2) : 'N/A'}
 =================================================
 `;
   
@@ -125,8 +117,7 @@ export function runStreaming(
         
         // Write raw line to JSON stream before any processing
         if (rawJsonStream) {
-          const timestamp = new Date().toISOString();
-          rawJsonStream.write(`[${timestamp}] ${line}\n`);
+          rawJsonStream.write(line + '\n');
         }
         
         try {
