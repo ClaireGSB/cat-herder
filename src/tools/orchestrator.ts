@@ -757,11 +757,17 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           const startTime = new Date(s.startTime).getTime();
           const endTime = new Date().getTime();
           const totalDuration = (endTime - startTime) / 1000;
+          
+          // Ensure stats object exists and preserve existing token usage
+          if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+          const existingTokenUsage = s.stats.totalTokenUsage;
+          const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
+          
           s.stats = {
               totalDuration,
-              totalDurationExcludingPauses: totalDuration - totalPauseTime,
-              totalPauseTime,
-              totalTokenUsage: {}
+              totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
+              totalPauseTime: currentTotalPauseTime,
+              totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
           }
       });
   }
