@@ -13,7 +13,7 @@ This project will replace the existing page with a modern dashboard. The new UX 
 ### **Summary Checklist**
 
 -   [x] **1. Add Dependencies & Restructure Project**
--   [ ] **2. Implement Backend Server & Routes**
+-   [x] **2. Implement Backend Server & Routes**
 -   [ ] **3. Create Frontend EJS Templates**
 -   [ ] **4. Integrate Real-Time Updates with WebSockets & Chokidar**
 -   [ ] **5. Add Unit/Integration Tests for the Web Server**
