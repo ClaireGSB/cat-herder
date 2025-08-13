@@ -601,7 +601,7 @@ The reasoning logs are particularly valuable when:
 The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `.claude/state` directory.
 
 **Task State File (`<task-id>.state.json`):**
-This file contains the status of a single task. It now includes the `startTime` of the task.
+This file contains the status of a single task. It includes the `startTime` of the task and a `stats` object with total duration and pause time metrics.
 
 **Sequence State File (`<sequence-id>.state.json`):**
 This file contains the status of a sequence of tasks. It now includes the `startTime` of the sequence, and a `stats` object with the following fields:
