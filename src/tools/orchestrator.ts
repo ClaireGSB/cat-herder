@@ -65,10 +65,10 @@ async function handleGracefulShutdown() {
   } catch (e) {
     console.error(pc.red("[Orchestrator] Error writing to log files during shutdown:"), e);
   }
-  
+
   // 4. Kill the active claude process
   killActiveProcess();
-  
+
   // 5. Exit
   process.exit(130); // Standard exit code for Ctrl+C
 }
@@ -250,37 +250,11 @@ async function executeStep(
   console.log(pc.cyan(`
 [Orchestrator] Starting step: ${name}`));
 
-  // --- Resume Logic ---
   const status = readStatus(statusFile);
+
   if (status.steps[name] === 'interrupted') {
     console.log(pc.yellow(`[Orchestrator] Resuming interrupted step: "${name}"`));
-    const resumeHeader = `
-=================================================
-  Resuming Interrupted Attempt at: ${new Date().toISOString()}
-  Command: claude /project:${command}
-  Pipeline: ${pipelineName}
-  Model: ${model || 'default'}
-  Settings: ${config ? JSON.stringify(config, null, 2) : 'N/A'}
-=================================================
-`;
-    const reasoningHeader = resumeHeader + `--- This file contains Claude's step-by-step reasoning process ---
-`;
-
-    try {
-      const currentReasoning = readFileSync(reasoningLogFile, 'utf-8');
-      writeFileSync(reasoningLogFile, reasoningHeader + currentReasoning);
-    } catch (e) {
-      // If file doesn't exist, it will be created by the stream, so we write the header only.
-      writeFileSync(reasoningLogFile, reasoningHeader);
-    }
-    try {
-      const currentLog = readFileSync(logFile, 'utf-8');
-      writeFileSync(logFile, resumeHeader + currentLog);
-    } catch (e) {
-      writeFileSync(logFile, resumeHeader);
-    }
   }
-  // --- End Resume Logic ---
 
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
@@ -330,21 +304,21 @@ async function executeStep(
           }
 
           console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
-          
+
           // --- ADD PAUSE TIME TRACKING ---
           const pauseInSeconds = waitMs / 1000;
           updateStatus(statusFile, s => {
-              s.phase = "waiting_for_reset";
-              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
-              s.stats.totalPauseTime += pauseInSeconds;
+            s.phase = "waiting_for_reset";
+            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+            s.stats.totalPauseTime += pauseInSeconds;
           });
 
           if (sequenceStatusFile) {
-              updateSequenceStatus(sequenceStatusFile, s => {
-                  (s.phase as any) = "waiting_for_reset";
-                  if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
-                  s.stats.totalPauseTime += pauseInSeconds;
-              });
+            updateSequenceStatus(sequenceStatusFile, s => {
+              (s.phase as any) = "waiting_for_reset";
+              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+              s.stats.totalPauseTime += pauseInSeconds;
+            });
           }
           // --- END PAUSE TIME TRACKING ---
 
@@ -396,8 +370,8 @@ async function executeStep(
     }
 
     console.log(pc.yellow(`[Orchestrator] Generating  feedback for step: ${name}`));
-    const checkDescription = Array.isArray(check) 
-      ? 'One of the validation checks' 
+    const checkDescription = Array.isArray(check)
+      ? 'One of the validation checks'
       : `The validation check`;
 
     const feedbackPrompt = `Your previous attempt to complete the '${name}' step failed its validation check.\n\nHere are the original instructions you were given for this step:
@@ -417,7 +391,7 @@ async function executeStep(
  * @param options Options to control behavior
  */
 async function executePipelineForTask(
-  taskPath: string, 
+  taskPath: string,
   options: { skipGitManagement?: boolean; pipelineOption?: string, sequenceStatusFile?: string } = {}
 ): Promise<void> {
   const config = await getConfig();
@@ -462,8 +436,8 @@ async function executePipelineForTask(
   // Update status with pipeline information (branch will be set by caller if needed)
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') {
-        s.taskId = taskId;
-        s.startTime = new Date().toISOString();
+      s.taskId = taskId;
+      s.startTime = new Date().toISOString();
     }
     s.pipeline = pipelineName;
   });
@@ -566,7 +540,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
       const startTime = new Date(s.startTime).getTime();
       const endTime = new Date().getTime();
       const totalDuration = (endTime - startTime) / 1000;
-      
+
       if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
       const totalPauseTime = s.stats.totalPauseTime;
 
@@ -714,9 +688,9 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
     try {
       console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
 
-      updateSequenceStatus(statusFile, s => { 
+      updateSequenceStatus(statusFile, s => {
         s.currentTaskPath = nextTaskPath;
-        s.phase = "running"; 
+        s.phase = "running";
       });
 
       await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
@@ -726,33 +700,33 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
       const completedTaskStatus = readStatus(completedTaskStatusFile);
 
-      updateSequenceStatus(statusFile, s => { 
-          s.completedTasks.push(nextTaskPath!);
-          s.currentTaskPath = null;
-          s.phase = "pending";
+      updateSequenceStatus(statusFile, s => {
+        s.completedTasks.push(nextTaskPath!);
+        s.currentTaskPath = null;
+        s.phase = "pending";
 
-          // Aggregate token usage if available
-          if (completedTaskStatus.tokenUsage) {
-            if (!s.stats) {
-              s.stats = {
-                totalDuration: 0,
-                totalDurationExcludingPauses: 0,
-                totalPauseTime: 0,
-                totalTokenUsage: {}
-              };
-            }
-            if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
-
-            for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
-              if (!s.stats.totalTokenUsage[model]) {
-                s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
-              }
-              s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
-              s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
-              s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
-              s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
-            }
+        // Aggregate token usage if available
+        if (completedTaskStatus.tokenUsage) {
+          if (!s.stats) {
+            s.stats = {
+              totalDuration: 0,
+              totalDurationExcludingPauses: 0,
+              totalPauseTime: 0,
+              totalTokenUsage: {}
+            };
           }
+          if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
+
+          for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
+            if (!s.stats.totalTokenUsage[model]) {
+              s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+            }
+            s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
+            s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
+            s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
+            s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
+          }
+        }
       });
 
       console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
@@ -760,32 +734,32 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
 
     } catch (error: any) {
-        console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
-        updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
-        throw error;
+      console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
+      updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
+      throw error;
     }
   }
 
   const finalStatus = readSequenceStatus(statusFile);
   if (finalStatus.phase !== 'failed') {
-      console.log(pc.green("[Sequence] No more tasks found. All done!"));
-      updateSequenceStatus(statusFile, s => { 
-          s.phase = "done"; 
-          const startTime = new Date(s.startTime).getTime();
-          const endTime = new Date().getTime();
-          const totalDuration = (endTime - startTime) / 1000;
-          
-          // Ensure stats object exists and preserve existing token usage
-          if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
-          const existingTokenUsage = s.stats.totalTokenUsage;
-          const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
-          
-          s.stats = {
-              totalDuration,
-              totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
-              totalPauseTime: currentTotalPauseTime,
-              totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
-          }
-      });
+    console.log(pc.green("[Sequence] No more tasks found. All done!"));
+    updateSequenceStatus(statusFile, s => {
+      s.phase = "done";
+      const startTime = new Date(s.startTime).getTime();
+      const endTime = new Date().getTime();
+      const totalDuration = (endTime - startTime) / 1000;
+
+      // Ensure stats object exists and preserve existing token usage
+      if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+      const existingTokenUsage = s.stats.totalTokenUsage;
+      const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
+
+      s.stats = {
+        totalDuration,
+        totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
+        totalPauseTime: currentTotalPauseTime,
+        totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
+      }
+    });
   }
 }
