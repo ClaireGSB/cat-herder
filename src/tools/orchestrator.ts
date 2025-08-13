@@ -161,7 +161,8 @@ async function executeStep(
   statusFile: string,
   logFile: string,
   reasoningLogFile: string,
-  rawJsonLogFile: string
+  rawJsonLogFile: string,
+  pipelineName: string
 ) {
   const { name, command, check, retry, model } = stepConfig;
   const projectRoot = getProjectRoot();
@@ -178,7 +179,7 @@ async function executeStep(
     }
 
     // Execute the main Claude command
-    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model);
+    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
     
     // Check for rate limit error
     if (result.rateLimit) {
@@ -383,7 +384,7 @@ async function executePipelineForTask(
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
     const rawJsonLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.raw.json.log`);
 
-    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile, pipelineName);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });
