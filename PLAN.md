@@ -25,7 +25,7 @@ This plan will address these issues by:
 -   [x] **Step 1:** Update State Interfaces and Defaults
 -   [x] **Step 2:** Implement Pause Time Tracking in the Orchestrator
 -   [x] **Step 3:** Fix Token Usage Aggregation in `runTaskSequence`
--   [ ] **Step 4:** Implement Final Stats Calculation for Isolated Tasks
+-   [x] **Step 4:** Implement Final Stats Calculation for Isolated Tasks
 -   [ ] **Step 5:** Write New Tests for Stats Calculation
 -   [ ] **Step 6:** Update Documentation (`README.md`)
 

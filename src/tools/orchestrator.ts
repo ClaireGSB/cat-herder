@@ -558,6 +558,23 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   // 5. Execute the pipeline using the new reusable function
   const taskPath = path.resolve(projectRoot, taskRelativePath);
   await executePipelineForTask(taskPath, { pipelineOption });
+
+  // 6. Calculate final task statistics
+  console.log(pc.cyan("\n[Orchestrator] Calculating final task statistics..."));
+  updateStatus(statusFile, s => {
+    if (s.phase === 'done') {
+      const startTime = new Date(s.startTime).getTime();
+      const endTime = new Date().getTime();
+      const totalDuration = (endTime - startTime) / 1000;
+      
+      if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+      const totalPauseTime = s.stats.totalPauseTime;
+
+      s.stats.totalDuration = totalDuration;
+      s.stats.totalDurationExcludingPauses = totalDuration - totalPauseTime;
+    }
+  });
+  console.log(pc.green("[Orchestrator] Task statistics saved."));
 }
 
 /**
