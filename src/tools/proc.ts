@@ -5,6 +5,14 @@ import pc from "picocolors";
 
 let activeProcess: ChildProcess | null = null;
 
+// Interface for token usage data from Claude CLI stream
+interface StepTokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+}
+
 export function killActiveProcess() {
   if (activeProcess) {
     console.log(pc.yellow("[Proc] Interruption signal received. Terminating active Claude process..."));
@@ -16,6 +24,7 @@ export function killActiveProcess() {
 export interface StreamResult {
   code: number;
   output: string;
+  tokenUsage?: StepTokenUsage;
   rateLimit?: {
     resetTimestamp: number;
   };
@@ -101,6 +110,7 @@ export function runStreaming(
 
   let fullOutput = "";
   let buffer = ""; // Buffer for parsing JSON lines across chunks
+  let stepTokenUsage: StepTokenUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   let rateLimitInfo: StreamResult['rateLimit'] | undefined;
   let lastToolUsed: string | null = null;
 
@@ -142,6 +152,16 @@ export function runStreaming(
 
         try {
           const json = JSON.parse(line);
+          
+          // Capture token usage data if present in the message
+          if (json.message?.usage) {
+            const usage = json.message.usage;
+            stepTokenUsage.input_tokens += usage.input_tokens || 0;
+            stepTokenUsage.output_tokens += usage.output_tokens || 0;
+            stepTokenUsage.cache_creation_input_tokens += usage.cache_creation_input_tokens || 0;
+            stepTokenUsage.cache_read_input_tokens += usage.cache_read_input_tokens || 0;
+          }
+          
           const contentItem = json.message?.content?.[0];
 
           // 1. Filter unwanted system messages
@@ -258,9 +278,15 @@ export function runStreaming(
       const endTime = new Date();
       const duration = (endTime.getTime() - startTime.getTime()) / 1000;
 
+      const tokenFooter = `\n--- Token Usage ---\n` +
+                          `Input Tokens: ${stepTokenUsage.input_tokens}\n` +
+                          `Output Tokens: ${stepTokenUsage.output_tokens}\n` +
+                          `Cache Creation Input Tokens: ${stepTokenUsage.cache_creation_input_tokens}\n` +
+                          `Cache Read Input Tokens: ${stepTokenUsage.cache_read_input_tokens}\n`;
+
       const footer = `\n\n-------------------------------------------------\n`;
       const footer2 = `--- Process finished at: ${endTime.toISOString()} ---\n`;
-      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
+      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n` + tokenFooter;
 
       logStream.write(footer + footer2 + footer3);
       logStream.end();
@@ -275,7 +301,7 @@ export function runStreaming(
         rawJsonStream.end();
       }
       activeProcess = null;
-      resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
+      resolve({ code: code ?? 1, output: fullOutput, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
     });
   });
 }
