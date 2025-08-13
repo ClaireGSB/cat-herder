@@ -1,7 +1,17 @@
-import { spawn } from "node:child_process";
+import { spawn, ChildProcess } from "node:child_process";
 import { mkdirSync, createWriteStream, WriteStream, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import pc from "picocolors";
+
+let activeProcess: ChildProcess | null = null;
+
+export function killActiveProcess() {
+  if (activeProcess) {
+    console.log(pc.yellow("[Proc] Interruption signal received. Terminating active Claude process..."));
+    activeProcess.kill('SIGINT');
+    activeProcess = null;
+  }
+}
 
 export interface StreamResult {
   code: number;
@@ -104,6 +114,7 @@ export function runStreaming(
         CLAUDE_PROJECT_ACTIVE: "true",
       },
     });
+    activeProcess = p;
     const spawnTimestamp = new Date().toISOString();
     // Write stdin data if provided
     if (stdinData) {
@@ -263,7 +274,7 @@ export function runStreaming(
         rawJsonStream.write(footer + footer2 + footer3);
         rawJsonStream.end();
       }
-      
+      activeProcess = null;
       resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
     });
   });

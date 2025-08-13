@@ -1,14 +1,83 @@
 import { execSync } from "node:child_process";
-import { readFileSync, mkdirSync, readdirSync } from "node:fs";
+import { readFileSync, mkdirSync, readdirSync, appendFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import yaml from 'js-yaml';
-import { runStreaming, StreamResult } from "./proc.js";
+import { runStreaming, StreamResult, killActiveProcess } from "./proc.js";
 import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
+
+// --- Graceful Shutdown Handling ---
+let isInterrupted = false;
+let shutdownInProgress = false;
+// Holds the state needed for the graceful shutdown handler to clean up.
+let shutdownState: {
+  statusFile: string;
+  logFile: string;
+  reasoningLogFile: string;
+  sequenceStatusFile?: string;
+  currentStepName: string;
+} | null = null;
+
+/**
+ * Handles the graceful shutdown process when a SIGINT is received.
+ * It updates state files and logs to indicate an interruption.
+ */
+async function handleGracefulShutdown() {
+  if (shutdownInProgress || !shutdownState) return;
+  shutdownInProgress = true;
+
+  console.log(pc.yellow("\n[Orchestrator] Gracefully shutting down. Updating state files..."));
+
+  const { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName } = shutdownState;
+  const interruptTime = new Date();
+  const interruptISO = interruptTime.toISOString();
+
+  // 1. Update Task State
+  updateStatus(statusFile, s => {
+    s.phase = "interrupted";
+    if (s.steps[currentStepName] === "running") {
+      s.steps[currentStepName] = "interrupted";
+    }
+  });
+
+  // 2. Update Sequence State (if applicable)
+  if (sequenceStatusFile) {
+    updateSequenceStatus(sequenceStatusFile, s => {
+      s.phase = "interrupted";
+    });
+  }
+
+  // 3. Append to Log Files
+  const reasonLogMessage = `\n=================================================\n--- [SYSTEM] [INTERRUPT] User interrupted the process at: ${interruptISO} ---\n=================================================\n`;
+  const mainLogMessage = `\n-------------------------------------------------
+--- [Orchestrator] User interrupted the process at: ${interruptISO} ---
+-------------------------------------------------
+`;
+
+  try {
+    appendFileSync(reasoningLogFile, reasonLogMessage);
+    appendFileSync(logFile, mainLogMessage);
+    console.log(pc.green("[Orchestrator] State and logs updated."));
+  } catch (e) {
+    console.error(pc.red("[Orchestrator] Error writing to log files during shutdown:"), e);
+  }
+  
+  // 4. Kill the active claude process
+  killActiveProcess();
+  
+  // 5. Exit
+  process.exit(130); // Standard exit code for Ctrl+C
+}
+
+process.on('SIGINT', () => {
+  isInterrupted = true;
+  handleGracefulShutdown();
+});
+// --- End Graceful Shutdown Handling ---
 
 /**
  * Parses YAML frontmatter from a task file to extract pipeline configuration.
@@ -178,16 +247,59 @@ async function executeStep(
   const maxRetries = retry ?? 0;
   let currentPrompt = fullPrompt;
 
-  console.log(pc.cyan(`\n[Orchestrator] Starting step: ${name}`));
+  console.log(pc.cyan(`
+[Orchestrator] Starting step: ${name}`));
+  
+  // --- Resume Logic ---
+  const status = readStatus(statusFile);
+  if (status.steps[name] === 'interrupted') {
+    console.log(pc.yellow(`[Orchestrator] Resuming interrupted step: "${name}"`));
+    const resumeHeader = `
+=================================================
+  Resuming Interrupted Attempt at: ${new Date().toISOString()}
+  Command: claude /project:${command}
+  Pipeline: ${pipelineName}
+  Model: ${model || 'default'}
+  Settings: ${config ? JSON.stringify(config, null, 2) : 'N/A'}
+=================================================
+`;
+    const reasoningHeader = resumeHeader + `--- This file contains Claude's step-by-step reasoning process ---
+`;
+
+    try {
+      const currentReasoning = readFileSync(reasoningLogFile, 'utf-8');
+      writeFileSync(reasoningLogFile, reasoningHeader + currentReasoning);
+    } catch (e) {
+      // If file doesn't exist, it will be created by the stream, so we write the header only.
+      writeFileSync(reasoningLogFile, reasoningHeader);
+    }
+    try {
+      const currentLog = readFileSync(logFile, 'utf-8');
+      writeFileSync(logFile, resumeHeader + currentLog);
+    } catch (e) {
+      writeFileSync(logFile, resumeHeader);
+    }
+  }
+  // --- End Resume Logic ---
+
   updateStatus(statusFile, s => { s.currentStep = name; s.phase = "running"; s.steps[name] = "running"; });
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     if (attempt > 1) {
-      console.log(pc.yellow(`\n[Orchestrator] Retry attempt ${attempt}/${maxRetries} for step: ${name}`));
+      console.log(pc.yellow(`
+[Orchestrator] Retry attempt ${attempt}/${maxRetries} for step: ${name}`));
     }
+
+    // Set shutdown state before running the process
+    shutdownState = { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName: name };
 
     const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
     
+    // Clear shutdown state after the process finishes
+    shutdownState = null;
+
+    if (isInterrupted) return; // Exit gracefully if interrupted
+
     if (result.rateLimit) {
       const config = await getConfig();
       const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
@@ -394,6 +506,10 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
     return;
   }
 
+  if (status.phase === 'interrupted') {
+    console.log(pc.yellow(`[Orchestrator] Resuming interrupted task: "${taskId}"`));
+  }
+
   // 2. Validate the pipeline configuration.
   const { isValid, errors } = validatePipeline(config, projectRoot);
   if (!isValid) {
@@ -523,6 +639,10 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       s.phase = "pending";
     });
     sequenceStatus = readSequenceStatus(statusFile);
+  }
+
+  if (sequenceStatus.phase === 'interrupted') {
+    console.log(pc.yellow(`[Sequence] Resuming interrupted sequence: "${sequenceId}"`));
   }
 
   if (config.manageGitBranch !== false) {
