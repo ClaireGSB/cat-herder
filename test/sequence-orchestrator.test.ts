@@ -31,7 +31,7 @@ describe('Sequence Orchestrator Integration Tests', () => {
     await fs.ensureDir(taskFolderPath);
     
     // Mock successful Claude execution and checks
-    vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+    vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
     vi.mocked(runCheck).mockResolvedValue({ success: true, output: 'success' });
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
     
@@ -128,7 +128,7 @@ This is the final step in the sequence.
         await fs.writeFile(path.join(taskFolderPath, '03-final-step.md'), task03);
       }
       
-      return { code: 0 };
+      return { code: 0, output: '' };
     });
 
     // Execute the sequence
@@ -198,7 +198,7 @@ This task should fail.
       if (callCount === 2) {
         throw new Error('Task execution failed');
       }
-      return { code: 0 };
+      return { code: 0, output: '' };
     });
 
     // Execute the sequence and expect it to fail

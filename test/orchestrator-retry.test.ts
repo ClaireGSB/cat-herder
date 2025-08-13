@@ -32,7 +32,7 @@ describe('Orchestrator Retry Logic', () => {
   describe('executeStep retry behavior', () => {
     it('should not retry when check passes on first attempt', async () => {
       // Mock successful Claude execution and check
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck).mockResolvedValue({ success: true, output: 'success' });
 
       // Import and call executeStep directly (we need to extract it or test via runTask)
@@ -96,7 +96,7 @@ Please analyze this error, fix the underlying code, and try again. Do not modify
 
     it('should retry with auto-generated feedback when check fails', async () => {
       // Mock successful Claude execution but failing check initially
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck)
         .mockResolvedValueOnce({ success: false, output: 'Test failed: expected true but got false' })
         .mockResolvedValueOnce({ success: true, output: 'All tests passed' });
@@ -164,7 +164,7 @@ Please analyze this error, fix the underlying code, and try again. Do not modify
 
     it('should fail after exhausting all retries', async () => {
       // Mock successful Claude execution but always failing check
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck).mockResolvedValue({ 
         success: false, 
         output: 'Persistent test failure' 
@@ -226,7 +226,7 @@ Please analyze this error, fix the underlying code, and try again. Do not modify
 
     it('should not retry when retry is 0 or undefined', async () => {
       // Mock successful Claude execution but failing check
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck).mockResolvedValue({ success: false, output: 'Test failed' });
 
       const stepConfig = {
@@ -278,7 +278,7 @@ Please analyze this error, fix the underlying code, and try again. Do not modify
     });
 
     it('should generate correct feedback prompt format', async () => {
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck)
         .mockResolvedValueOnce({ success: false, output: 'TypeError: Cannot read property \'foo\' of undefined\n  at line 42' })
         .mockResolvedValueOnce({ success: true, output: 'success' });
@@ -346,7 +346,7 @@ Please analyze this error, fix the underlying code, and try again. Do not modify
     });
 
     it('should handle missing output in check result', async () => {
-      vi.mocked(runStreaming).mockResolvedValue({ code: 0 });
+      vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: '' });
       vi.mocked(runCheck)
         .mockResolvedValueOnce({ success: false, output: '' }) // Empty output
         .mockResolvedValueOnce({ success: true, output: 'success' });
