@@ -330,10 +330,23 @@ async function executeStep(
           }
 
           console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
-          updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
+          
+          // --- ADD PAUSE TIME TRACKING ---
+          const pauseInSeconds = waitMs / 1000;
+          updateStatus(statusFile, s => {
+              s.phase = "waiting_for_reset";
+              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+              s.stats.totalPauseTime += pauseInSeconds;
+          });
+
           if (sequenceStatusFile) {
-            updateSequenceStatus(sequenceStatusFile, s => { (s.phase as any) = "waiting_for_reset"; });
+              updateSequenceStatus(sequenceStatusFile, s => {
+                  (s.phase as any) = "waiting_for_reset";
+                  if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+                  s.stats.totalPauseTime += pauseInSeconds;
+              });
           }
+          // --- END PAUSE TIME TRACKING ---
 
           await new Promise(resolve => setTimeout(resolve, waitMs));
 
@@ -545,6 +558,23 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   // 5. Execute the pipeline using the new reusable function
   const taskPath = path.resolve(projectRoot, taskRelativePath);
   await executePipelineForTask(taskPath, { pipelineOption });
+
+  // 6. Calculate final task statistics
+  console.log(pc.cyan("\n[Orchestrator] Calculating final task statistics..."));
+  updateStatus(statusFile, s => {
+    if (s.phase === 'done') {
+      const startTime = new Date(s.startTime).getTime();
+      const endTime = new Date().getTime();
+      const totalDuration = (endTime - startTime) / 1000;
+      
+      if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+      const totalPauseTime = s.stats.totalPauseTime;
+
+      s.stats.totalDuration = totalDuration;
+      s.stats.totalDurationExcludingPauses = totalDuration - totalPauseTime;
+    }
+  });
+  console.log(pc.green("[Orchestrator] Task statistics saved."));
 }
 
 /**
@@ -744,11 +774,17 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           const startTime = new Date(s.startTime).getTime();
           const endTime = new Date().getTime();
           const totalDuration = (endTime - startTime) / 1000;
+          
+          // Ensure stats object exists and preserve existing token usage
+          if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+          const existingTokenUsage = s.stats.totalTokenUsage;
+          const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
+          
           s.stats = {
               totalDuration,
-              totalDurationExcludingPauses: totalDuration - totalPauseTime,
-              totalPauseTime,
-              totalTokenUsage: {}
+              totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
+              totalPauseTime: currentTotalPauseTime,
+              totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
           }
       });
   }
