@@ -1,7 +1,17 @@
-import { spawn } from "node:child_process";
+import { spawn, ChildProcess } from "node:child_process";
 import { mkdirSync, createWriteStream, WriteStream, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import pc from "picocolors";
+
+let activeProcess: ChildProcess | null = null;
+
+export function killActiveProcess() {
+  if (activeProcess) {
+    console.log(pc.yellow("[Proc] Interruption signal received. Terminating active Claude process..."));
+    activeProcess.kill('SIGINT');
+    activeProcess = null;
+  }
+}
 
 export interface StreamResult {
   code: number;
@@ -29,12 +39,12 @@ export function runStreaming(
 ): Promise<StreamResult> {
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
-  
+
   // Conditionally add the model flag
   if (model) {
     finalArgs.push("--model", model);
   }
-  
+
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
   console.log(`[Proc] Logging to: ${logPath}`);
   console.log(`[Proc] Logging reasoning to: ${reasoningLogPath}`);
@@ -79,7 +89,7 @@ export function runStreaming(
   Settings: ${options?.settings ? JSON.stringify(options.settings, null, 2) : 'N/A'}
 =================================================
 `;
-  
+
   logStream.write(headerInfo);
   reasoningStream.write(headerInfo);
   reasoningStream.write(`--- This file contains Claude's step-by-step reasoning process ---\n`);
@@ -104,6 +114,7 @@ export function runStreaming(
         CLAUDE_PROJECT_ACTIVE: "true",
       },
     });
+    activeProcess = p;
     const spawnTimestamp = new Date().toISOString();
     // Write stdin data if provided
     if (stdinData) {
@@ -115,20 +126,20 @@ export function runStreaming(
     p.stdout.on("data", (chunk) => {
       const chunkStr = chunk.toString();
       buffer += chunkStr;
-            
+
       // Process complete lines
       const lines = buffer.split('\n');
       buffer = lines.pop() || ''; // Keep incomplete line in buffer
-      
+
       for (const line of lines) {
         if (line.trim() === '') continue;
-        
+
         // Write raw line to JSON stream before any processing
         if (rawJsonStream) {
           const timestamp = new Date().toISOString();
           rawJsonStream.write(`[${timestamp}] ${line}\n`);
         }
-        
+
         try {
           const json = JSON.parse(line);
           const contentItem = json.message?.content?.[0];
@@ -144,7 +155,7 @@ export function runStreaming(
           if (contentItem?.type === 'tool_use') {
             lastToolUsed = contentItem.name;
           }
-          
+
           // 3. Summarize tool results before logging
           if (contentItem?.type === 'tool_result' && typeof contentItem.content === 'string') {
             const originalContent = contentItem.content;
@@ -183,14 +194,14 @@ export function runStreaming(
                 }
                 break;
             }
-            
-            lastToolUsed = null; // Reset state for the next tool call
+            // Reset state for the next tool call
+            lastToolUsed = null; 
           }
-          
+
           // Log entries to reasoning log with existing logic
           const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
           const contentType = contentItem?.type || json.subtype || 'data';
-          
+
           let content;
           if (contentItem?.type === 'tool_use') {
             // For tool use, show just tool name and input
@@ -199,9 +210,9 @@ export function runStreaming(
             // For other content, use existing logic
             content = contentItem?.text || contentItem?.content || json.result || JSON.stringify(json, null, 2);
           }
-          
+
           reasoningStream.write(`[${timestamp}] [${json.type.toUpperCase()}] [${contentType.toUpperCase()}] ${content}\n`);
-          
+
           // Special case: also output "result" to CLI with [CLAUDE] prefix
           if (json.type === "result") {
             const resultText = json.result;
@@ -214,7 +225,7 @@ export function runStreaming(
                   rateLimitInfo = { resetTimestamp: timestamp };
                 }
               }
-              
+
               process.stdout.write(`[CLAUDE] ${resultText}`);
               logStream.write(resultText);
               fullOutput += resultText;
@@ -232,14 +243,14 @@ export function runStreaming(
     p.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       logStream.write(chunk);
-      
+
       // Write stderr to reasoning log with enhanced debugging
       if (reasoningStream) {
         const timestamp = new Date().toISOString();
         reasoningStream.write(`[${timestamp}] [STDERR] Received ${chunk.toString().length} bytes\n`);
         reasoningStream.write(`[${timestamp}] [STDERR] Content: ${chunk.toString()}`);
       }
-      
+
       fullOutput += chunk.toString();
     });
 
@@ -253,17 +264,17 @@ export function runStreaming(
 
       logStream.write(footer + footer2 + footer3);
       logStream.end();
-      
+
       // Close reasoning stream
       reasoningStream.write(footer + footer2 + footer3);
       reasoningStream.end();
-      
+
       // Close raw JSON stream if it exists
       if (rawJsonStream) {
         rawJsonStream.write(footer + footer2 + footer3);
         rawJsonStream.end();
       }
-      
+      activeProcess = null;
       resolve({ code: code ?? 1, output: fullOutput, rateLimit: rateLimitInfo });
     });
   });

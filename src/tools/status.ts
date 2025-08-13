@@ -16,7 +16,7 @@ export type TaskStatus = {
   lastCommit?: string;
 };
 
-export type SequencePhase = "pending" | "running" | "done" | "failed";
+export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
 export interface SequenceStatus {
   version: number;
   sequenceId: string;
