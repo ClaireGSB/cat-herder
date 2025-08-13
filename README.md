@@ -581,8 +581,8 @@ With this setting, instead of failing, the tool will pause execution and log a w
 
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `.claude/logs/` directory:
 
-- **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see.
-- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output.
+- **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
+- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
 - **`XX-step-name.raw.json.log`**: Contains the raw, line-by-line JSON objects streamed from the LLM. This is useful for deep debugging of the tool's behavior, as it shows every event, including tool use attempts and content chunks.
 
 **When to use each log:**
@@ -595,6 +595,19 @@ The reasoning logs are particularly valuable when:
 - You want to understand the AI's decision-making process
 - You're fine-tuning your prompts or pipeline configuration
 - You need to troubleshoot complex implementation choices
+
+### State Files
+
+The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `.claude/state` directory.
+
+**Task State File (`<task-id>.state.json`):**
+This file contains the status of a single task. It now includes the `startTime` of the task.
+
+**Sequence State File (`<sequence-id>.state.json`):**
+This file contains the status of a sequence of tasks. It now includes the `startTime` of the sequence, and a `stats` object with the following fields:
+- `totalDuration`: The total duration of the sequence in seconds, including pauses.
+- `totalDurationExcludingPauses`: The total duration of the sequence in seconds, excluding pauses.
+- `totalPauseTime`: The total pause time in seconds.
 
 ### Isolated and Resumable Git Branches
 

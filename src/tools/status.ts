@@ -5,6 +5,7 @@ export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | 
 export type TaskStatus = {
   version: number;
   taskId: string;
+  startTime: string;
   branch: string;
   pipeline?: string;
   currentStep: string;
@@ -19,11 +20,17 @@ export type SequencePhase = "pending" | "running" | "done" | "failed";
 export interface SequenceStatus {
   version: number;
   sequenceId: string;
+  startTime: string;
   branch: string;
   phase: SequencePhase;
   currentTaskPath: string | null;
   completedTasks: string[];
   lastUpdate: string;
+  stats: {
+    totalDuration: number;
+    totalDurationExcludingPauses: number;
+    totalPauseTime: number;
+  } | null;
 }
 
 // This function receives an absolute path, so it doesn't need to know the project root.
@@ -46,6 +53,7 @@ function writeJsonAtomic(file: string, data: unknown) {
 const defaultStatus: TaskStatus = {
     version: 1,
     taskId: "unknown",
+    startTime: new Date().toISOString(),
     branch: "",
     currentStep: "",
     phase: "pending",
@@ -75,11 +83,13 @@ export function updateStatus(file: string, mut: (s: TaskStatus) => void) {
 const defaultSequenceStatus: SequenceStatus = {
     version: 1,
     sequenceId: "unknown",
+    startTime: new Date().toISOString(),
     branch: "",
     phase: "pending",
     currentTaskPath: null,
     completedTasks: [],
-    lastUpdate: new Date().toISOString()
+    lastUpdate: new Date().toISOString(),
+    stats: null
 };
 
 export function readSequenceStatus(file: string): SequenceStatus {
