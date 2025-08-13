@@ -23,6 +23,11 @@ export type TaskStatus = {
   phase: Phase;
   steps: Record<string, Phase>;
   tokenUsage: ModelTokenUsage;
+  stats: {
+    totalDuration: number;
+    totalDurationExcludingPauses: number;
+    totalPauseTime: number;
+  } | null;
   lastUpdate: string;
   prUrl?: string;
   lastCommit?: string;
@@ -72,6 +77,7 @@ const defaultStatus: TaskStatus = {
     phase: "pending",
     steps: {},
     tokenUsage: {},
+    stats: null,
     lastUpdate: new Date().toISOString()
 };
 
