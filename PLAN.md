@@ -22,8 +22,7 @@ This change will introduce a new feature to capture token usage data directly fr
 -   [x] **2. Capture Token Usage from Stream:** Enhance the `runStreaming` function in `proc.ts` to parse and return token usage information from the `claude` CLI output.
 -   [x] **3. Aggregate and Persist Token Data in Orchestrator:** Update the `orchestrator.ts` to receive token usage from `runStreaming`, aggregate it per-model, and save it to the correct state files.
 -   [x] **4. Add Token Usage to Log File Footer:** Modify the `runStreaming` function in `proc.ts` to append a token usage summary to the footer of each log file.
--   [ ] **5. Write or Update Tests:** Create or modify tests to validate that token usage is correctly parsed, aggregated, and stored.
--   [ ] **6. Update Documentation:** Update `README.md` to explain the new token usage tracking feature and show examples of the new state file structures.
+-   [x] **5. Update Documentation:** Update `README.md` to explain the new token usage tracking feature and show examples of the new state file structures.
 
 ---
 
@@ -245,19 +244,7 @@ This change will introduce a new feature to capture token usage data directly fr
     });
     ```
 
-### **5. Write or Update Tests**
-
-*   **Objective:** Ensure the new functionality is reliable and prevent future regressions.
-*   **Files to Modify:** `test/orchestrator-*.test.ts`, and potentially a new `test/proc.test.ts`.
-*   **Task:**
-    1.  **Unit Test for `proc.ts`:** Create a test that simulates a JSON stream with `usage` objects and asserts that `runStreaming` correctly parses and aggregates the token counts.
-    2.  **Integration Test for `orchestrator.ts`:**
-        *   Create a test pipeline with steps using different models.
-        *   Mock the `runStreaming` function to return pre-defined `tokenUsage` data for each step/model.
-        *   Run a test task and assert that the final `task.state.json` contains the correctly aggregated token data, properly separated by model.
-        *   Run a test sequence and assert the same for the `sequence.state.json`.
-
-### **6. Update Documentation**
+### **5. Update Documentation**
 
 *   **Objective:** Inform users about the new token tracking feature.
 *   **File to Modify:** `README.md`
