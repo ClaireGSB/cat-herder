@@ -704,7 +704,8 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           s.stats = {
               totalDuration,
               totalDurationExcludingPauses: totalDuration - totalPauseTime,
-              totalPauseTime
+              totalPauseTime,
+              totalTokenUsage: {}
           }
       });
   }

@@ -2,6 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
+
+export type TokenUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationInputTokens: number;
+  cacheReadInputTokens: number;
+};
+
+export type ModelTokenUsage = {
+  [modelName: string]: TokenUsage;
+};
 export type TaskStatus = {
   version: number;
   taskId: string;
@@ -11,6 +22,7 @@ export type TaskStatus = {
   currentStep: string;
   phase: Phase;
   steps: Record<string, Phase>;
+  tokenUsage: ModelTokenUsage;
   lastUpdate: string;
   prUrl?: string;
   lastCommit?: string;
@@ -30,6 +42,7 @@ export interface SequenceStatus {
     totalDuration: number;
     totalDurationExcludingPauses: number;
     totalPauseTime: number;
+    totalTokenUsage: ModelTokenUsage;
   } | null;
 }
 
@@ -58,6 +71,7 @@ const defaultStatus: TaskStatus = {
     currentStep: "",
     phase: "pending",
     steps: {},
+    tokenUsage: {},
     lastUpdate: new Date().toISOString()
 };
 

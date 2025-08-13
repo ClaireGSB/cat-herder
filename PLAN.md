@@ -18,7 +18,7 @@ This change will introduce a new feature to capture token usage data directly fr
 
 ## **Summary Checklist**
 
--   [ ] **1. Update State Interfaces:** Modify the `TaskStatus` and `SequenceStatus` interfaces to include structures for storing token usage data.
+-   [x] **1. Update State Interfaces:** Modify the `TaskStatus` and `SequenceStatus` interfaces to include structures for storing token usage data.
 -   [ ] **2. Capture Token Usage from Stream:** Enhance the `runStreaming` function in `proc.ts` to parse and return token usage information from the `claude` CLI output.
 -   [ ] **3. Aggregate and Persist Token Data in Orchestrator:** Update the `orchestrator.ts` to receive token usage from `runStreaming`, aggregate it per-model, and save it to the correct state files.
 -   [ ] **4. Add Token Usage to Log File Footer:** Modify the `runStreaming` function in `proc.ts` to append a token usage summary to the footer of each log file.
