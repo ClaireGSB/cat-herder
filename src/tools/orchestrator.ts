@@ -300,6 +300,21 @@ async function executeStep(
 
     if (isInterrupted) return; // Exit gracefully if interrupted
 
+    // Aggregate token usage data if available
+    if (result.tokenUsage) {
+      const modelName = model || 'default';
+      updateStatus(statusFile, s => {
+        if (!s.tokenUsage) s.tokenUsage = {};
+        if (!s.tokenUsage[modelName]) {
+          s.tokenUsage[modelName] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+        }
+        s.tokenUsage[modelName].inputTokens += result.tokenUsage!.input_tokens;
+        s.tokenUsage[modelName].outputTokens += result.tokenUsage!.output_tokens;
+        s.tokenUsage[modelName].cacheCreationInputTokens += result.tokenUsage!.cache_creation_input_tokens;
+        s.tokenUsage[modelName].cacheReadInputTokens += result.tokenUsage!.cache_read_input_tokens;
+      });
+    }
+
     if (result.rateLimit) {
       const config = await getConfig();
       const resetTime = new Date(result.rateLimit.resetTimestamp * 1000);
@@ -676,10 +691,38 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
       await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
 
+      // Aggregate token usage from the completed task into sequence stats
+      const completedTaskId = path.basename(nextTaskPath, '.md').replace(/[^a-z0-9-]/gi, '-');
+      const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
+      const completedTaskStatus = readStatus(completedTaskStatusFile);
+
       updateSequenceStatus(statusFile, s => { 
           s.completedTasks.push(nextTaskPath!);
           s.currentTaskPath = null;
           s.phase = "pending";
+
+          // Aggregate token usage if available
+          if (completedTaskStatus.tokenUsage) {
+            if (!s.stats) {
+              s.stats = {
+                totalDuration: 0,
+                totalDurationExcludingPauses: 0,
+                totalPauseTime: 0,
+                totalTokenUsage: {}
+              };
+            }
+            if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
+
+            for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
+              if (!s.stats.totalTokenUsage[model]) {
+                s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+              }
+              s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
+              s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
+              s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
+              s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
+            }
+          }
       });
 
       console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
