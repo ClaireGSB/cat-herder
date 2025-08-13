@@ -330,10 +330,23 @@ async function executeStep(
           }
 
           console.log(pc.cyan(`  › Pausing and will auto-resume at ${resetTime.toLocaleTimeString()}.`));
-          updateStatus(statusFile, s => { s.phase = "waiting_for_reset"; });
+          
+          // --- ADD PAUSE TIME TRACKING ---
+          const pauseInSeconds = waitMs / 1000;
+          updateStatus(statusFile, s => {
+              s.phase = "waiting_for_reset";
+              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+              s.stats.totalPauseTime += pauseInSeconds;
+          });
+
           if (sequenceStatusFile) {
-            updateSequenceStatus(sequenceStatusFile, s => { (s.phase as any) = "waiting_for_reset"; });
+              updateSequenceStatus(sequenceStatusFile, s => {
+                  (s.phase as any) = "waiting_for_reset";
+                  if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+                  s.stats.totalPauseTime += pauseInSeconds;
+              });
           }
+          // --- END PAUSE TIME TRACKING ---
 
           await new Promise(resolve => setTimeout(resolve, waitMs));
 
