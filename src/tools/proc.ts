@@ -125,7 +125,8 @@ export function runStreaming(
         
         // Write raw line to JSON stream before any processing
         if (rawJsonStream) {
-          rawJsonStream.write(line + '\n');
+          const timestamp = new Date().toISOString();
+          rawJsonStream.write(`[${timestamp}] ${line}\n`);
         }
         
         try {
