@@ -16,6 +16,7 @@ export type ModelTokenUsage = {
 export type TaskStatus = {
   version: number;
   taskId: string;
+  taskPath: string;
   startTime: string;
   branch: string;
   pipeline?: string;
@@ -70,8 +71,9 @@ function writeJsonAtomic(file: string, data: unknown) {
 }
 
 const defaultStatus: TaskStatus = {
-    version: 1,
+    version: 2,
     taskId: "unknown",
+    taskPath: "unknown",
     startTime: new Date().toISOString(),
     branch: "",
     currentStep: "",
@@ -85,7 +87,11 @@ const defaultStatus: TaskStatus = {
 export function readStatus(file: string): TaskStatus {
     if (fs.existsSync(file)) {
         try {
-            return JSON.parse(fs.readFileSync(file, "utf8"));
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            // Simple migration for old status files
+            if (!data.taskPath) data.taskPath = "unknown";
+            if (!data.version || data.version < 2) data.version = 2;
+            return data;
         } catch {
             return defaultStatus;
         }
@@ -131,8 +137,23 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
     writeJsonAtomic(file, s);
 }
 
+// New function to generate a unique task ID from its path
+export function taskPathToTaskId(taskPath: string, projectRoot: string): string {
+    const relativePath = path.isAbsolute(taskPath)
+        ? path.relative(projectRoot, taskPath)
+        : taskPath;
+
+    const taskId = relativePath
+        .replace(/\.md$/, '') // remove extension
+        .replace(/[\\/]/g, '-') // replace path separators
+        .replace(/[^a-z0-9-]/gi, '-'); // sanitize
+    return `task-${taskId}`;
+}
+
 export function folderPathToSequenceId(folderPath: string): string {
     // Convert path like "claude-Tasks/my-feature" to "sequence-my-feature"
     const folderName = path.basename(path.resolve(folderPath));
-    return `sequence-${folderName}`;
+    // Sanitize to make it a safe filename component
+    const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');
+    return `sequence-${sanitizedName}`;
 }
