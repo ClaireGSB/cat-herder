@@ -13,7 +13,7 @@
 -   [x] **4. Create Backend API for Sequences**
 -   [x] **5. Implement Frontend Views for Sequence Dashboard**
 -   [x] **6. Add Real-Time Updates to Sequence Views**
--   [ ] **7. Update README.md Documentation**
+-   [x] **7. Update README.md Documentation**
 
 ---
 

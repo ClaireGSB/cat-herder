@@ -791,7 +791,7 @@ The validator ensures both your security settings and project configuration stay
 
 ## Interactive Web Dashboard
 
-`claude-project` includes a powerful web-based dashboard for visual monitoring and real-time task tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task information, and watch Claude's reasoning process in real-time.
+`claude-project` includes a powerful web-based dashboard for visual monitoring and real-time task and sequence tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, and watch Claude's reasoning process in real-time with full lifecycle awareness for both individual tasks and multi-task sequences.
 
 ### Getting Started
 
@@ -809,9 +809,10 @@ The dashboard will be available at `http://localhost:5177` in your browser.
 
 ### Dashboard Overview
 
-The web interface provides two main views:
+The web interface provides three main views:
 
 - **Dashboard**: Overview of all tasks with their status, duration, token usage, and detailed information
+- **Sequences**: Monitor multi-task sequences with real-time updates and individual task tracking
 - **Live Activity**: Real-time stream of Claude's reasoning process during active tasks
 
 ### Live Activity Stream
@@ -821,15 +822,17 @@ The Live Activity feature provides an "as-if-CLI" monitoring experience, letting
 **Key Features:**
 - **Real-time Log Streaming**: See Claude's reasoning process as it happens, with automatic updates as new log content is written
 - **Task Information Display**: Shows current running task ID and the active pipeline step
+- **Sequence Context Awareness**: Displays parent sequence information when monitoring tasks within sequences
 - **Auto-scrolling Interface**: Terminal-like experience that automatically scrolls to show the latest reasoning
 - **WebSocket Technology**: Efficient real-time updates with minimal overhead
+- **Sequence Completion Notifications**: Get immediate alerts when entire multi-task sequences finish
 - **Graceful Fallback**: Clean interface when no tasks are currently running
 
 **How to Use:**
-1. Start a task using `claude-project run` or `npm run claude:run`
+1. Start a task using `claude-project run` or `npm run claude:run` (or a sequence using `claude-project run-sequence`)
 2. Open the web dashboard at `http://localhost:5177`
 3. Click "Live Activity" in the navigation or go directly to `/live`
-4. Watch Claude's reasoning process unfold in real-time
+4. Watch Claude's reasoning process unfold in real-time, with sequence context automatically displayed when applicable
 
 [Screenshot of the Live Activity stream]
 
@@ -838,6 +841,36 @@ This feature is perfect for:
 - **Understanding Claude's Process**: See the step-by-step reasoning that leads to code decisions
 - **Debugging Workflows**: Identify where tasks might be struggling or taking unexpected approaches
 - **Team Collaboration**: Share live task progress with team members via a simple URL
+- **Sequence Completion Awareness**: Get notified when entire multi-task sequences are complete
+
+### Sequence Monitoring
+
+The dashboard includes comprehensive sequence monitoring capabilities, allowing you to track the progress of multi-task workflows from start to finish.
+
+**Sequences Dashboard:**
+- **Overview of All Sequences**: View all task sequences with their overall status, branch information, and execution statistics
+- **Real-time Status Updates**: Sequence cards update automatically as tasks within them start, complete, or fail
+- **Completion Statistics**: See at-a-glance how many tasks in each sequence are done, running, or pending
+- **Quick Navigation**: Direct links to detailed sequence views and individual task details
+
+**Sequence Detail View:**
+- **Complete Task Listing**: See all tasks belonging to a sequence, including their individual statuses
+- **Visual Status Indicators**: Color-coded badges show each task's current state (done, running, failed, pending)
+- **Live Task Tracking**: Currently running tasks are highlighted with LIVE badges that update in real-time
+- **Individual Task Links**: Navigate directly to detailed views of any task within the sequence
+- **Sequence Statistics**: View overall duration, token usage, and execution metrics
+
+**Real-time Updates:**
+- **WebSocket Integration**: All sequence views update automatically without page refreshes
+- **Task Status Changes**: See individual task states change from pending → running → done in real-time
+- **Sequence Completion**: Get immediate notification when an entire sequence finishes
+- **Live Activity Integration**: Running tasks within sequences link directly to the live reasoning stream
+
+**How to Access:**
+1. Start the web dashboard: `npm run claude:web`
+2. Navigate to the "Sequences" tab in the main navigation
+3. View the sequences dashboard or click on any sequence for detailed monitoring
+4. For running sequences, use the LIVE badges to jump to the active reasoning stream
 
 ## Commands Reference
 
