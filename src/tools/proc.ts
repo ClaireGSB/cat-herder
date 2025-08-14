@@ -144,10 +144,26 @@ export function runStreaming(
       for (const line of lines) {
         if (line.trim() === '') continue;
 
-        // Write raw line to JSON stream before any processing
+        // Write raw line to JSON stream with embedded timestamp
         if (rawJsonStream) {
           const timestamp = new Date().toISOString();
-          rawJsonStream.write(`[${timestamp}] ${line}\n`);
+          try {
+            const eventData = JSON.parse(line);
+            // Create a new object with timestamp first, then spread the original data
+            const logEntry = {
+              timestamp: timestamp,
+              ...eventData
+            };
+            rawJsonStream.write(JSON.stringify(logEntry) + '\n');
+          } catch (e) {
+            // If a line is not valid JSON, log it as an error object with timestamp first
+            const errorPayload = {
+              timestamp: timestamp,
+              error: "Log event was not valid JSON",
+              originalLine: line
+            };
+            rawJsonStream.write(JSON.stringify(errorPayload) + '\n');
+          }
         }
 
         try {
