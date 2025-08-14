@@ -3,7 +3,13 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import ejs from "ejs";
+import { WebSocketServer, WebSocket } from 'ws';
+import chokidar from 'chokidar';
+import { createServer } from 'node:http';
 import { getConfig, getProjectRoot } from "../config.js";
+
+// Track WebSocket clients and their watched log files
+const watchedLogs = new Map<WebSocket, { filePath: string; lastSize: number }>();
 
 interface TaskStatus {
   taskId: string;
@@ -182,6 +188,7 @@ export async function startWebServer() {
   const logsDir = path.resolve(projectRoot, config.logsPath);
 
   const app = express();
+  const server = createServer(app);
   
   // Set view engine
   app.set("view engine", "ejs");
@@ -226,8 +233,116 @@ export async function startWebServer() {
     res.send(logContent);
   });
 
+  // Create WebSocket server
+  const wss = new WebSocketServer({ server, path: '/ws' });
+  
+  // Handle WebSocket connections
+  wss.on('connection', (ws: WebSocket) => {
+    console.log('WebSocket client connected');
+    
+    // Handle incoming messages from clients
+    ws.on('message', (message: Buffer) => {
+      try {
+        const data = JSON.parse(message.toString());
+        
+        if (data.type === 'watch_log') {
+          const { taskId, logFile } = data;
+          
+          // Validate inputs
+          if (!taskId || !logFile || typeof taskId !== "string" || typeof logFile !== "string") {
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid taskId or logFile' }));
+            return;
+          }
+          
+          const filePath = path.join(logsDir, taskId, logFile);
+          
+          // Security check - ensure file path is within logs directory
+          const resolvedPath = path.resolve(filePath);
+          const resolvedLogsDir = path.resolve(logsDir);
+          if (!resolvedPath.startsWith(resolvedLogsDir)) {
+            ws.send(JSON.stringify({ type: 'error', message: 'Access denied' }));
+            return;
+          }
+          
+          if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            watchedLogs.set(ws, { filePath, lastSize: stats.size });
+            
+            // Send initial full content
+            const content = fs.readFileSync(filePath, 'utf-8');
+            ws.send(JSON.stringify({ type: 'log_content', content }));
+          } else {
+            ws.send(JSON.stringify({ type: 'error', message: 'Log file not found' }));
+          }
+        }
+      } catch (e) {
+        console.error('Error parsing WebSocket message:', e);
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+      }
+    });
+    
+    // Handle client disconnection
+    ws.on('close', () => {
+      console.log('WebSocket client disconnected');
+      watchedLogs.delete(ws);
+    });
+    
+    // Handle WebSocket errors
+    ws.on('error', (error) => {
+      console.error('WebSocket error:', error);
+      watchedLogs.delete(ws);
+    });
+  });
+
+  // Set up file watcher for log files
+  const watcher = chokidar.watch(logsDir, { 
+    persistent: true, 
+    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+    ignoreInitial: true
+  });
+
+  watcher.on('change', (filePath: string) => {
+    // Check if any client is watching this file
+    for (const [ws, watchInfo] of watchedLogs.entries()) {
+      if (watchInfo.filePath === filePath && ws.readyState === WebSocket.OPEN) {
+        try {
+          const stats = fs.statSync(filePath);
+          const newSize = stats.size;
+
+          if (newSize > watchInfo.lastSize) {
+            const stream = fs.createReadStream(filePath, {
+              start: watchInfo.lastSize,
+              end: newSize - 1,
+              encoding: 'utf-8'
+            });
+
+            let chunk = '';
+            stream.on('data', (data: string | Buffer) => {
+              chunk += data.toString();
+            });
+
+            stream.on('end', () => {
+              if (chunk) {
+                ws.send(JSON.stringify({ type: 'log_update', content: chunk }));
+              }
+            });
+
+            stream.on('error', (error) => {
+              console.error('Error reading log file stream:', error);
+            });
+
+            // Update the last known size
+            watchInfo.lastSize = newSize;
+          }
+        } catch (error) {
+          console.error('Error processing file change:', error);
+        }
+      }
+    }
+  });
+
   const port = 5177;
-  app.listen(port, () => {
+  server.listen(port, () => {
     console.log(pc.green(`Status web server running.`));
     console.log(pc.cyan(`›› Open http://localhost:${port} in your browser.`));
   });
