@@ -4,7 +4,7 @@ import path from "node:path";
 import pc from "picocolors";
 import yaml from 'js-yaml';
 import { runStreaming, StreamResult, killActiveProcess } from "./proc.js";
-import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId } from "./status.js";
+import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId, taskPathToTaskId } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
@@ -160,16 +160,15 @@ ${content.trim()}\n\
 
 /**
  * Converts a task file path into a Git-friendly branch name.
- * e.g., "claude-Tasks/01-sample.md" -> "claude/01-sample"
+ * e.g., "claude-Tasks/sequence-A/01-sample.md" -> "claude/claude-Tasks-sequence-A-01-sample"
  * @param taskPath The path to the task file.
+ * @param projectRoot The project root directory.
  */
-function taskPathToBranchName(taskPath: string): string {
-  const taskFileName = path.basename(taskPath, '.md');
-  const sanitized = taskFileName
-    .toLowerCase()
-    .replace(/[^a-z0-9-]/g, '-')
-    .replace(/-+/g, '-');
-  return `claude/${sanitized}`;
+function taskPathToBranchName(taskPath: string, projectRoot: string): string {
+  const taskId = taskPathToTaskId(taskPath, projectRoot);
+  // remove the "task-" prefix for the branch name for brevity
+  const branchNameSegment = taskId.startsWith('task-') ? taskId.substring(5) : taskId;
+  return `claude/${branchNameSegment}`;
 }
 
 /**
@@ -191,7 +190,7 @@ function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string
   }
 
   // SCENARIO B: Branch management is enabled (default behavior).
-  const expectedBranch = taskPathToBranchName(taskPath);
+  const expectedBranch = taskPathToBranchName(taskPath, projectRoot);
 
   if (currentBranch === expectedBranch) {
     console.log(pc.cyan(`[Orchestrator] Resuming task on existing branch: "${expectedBranch}"`));
@@ -406,7 +405,7 @@ async function executePipelineForTask(
   const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
 
   // Determine task ID and status file path
-  const taskId = path.basename(taskPath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const taskId = taskPathToTaskId(taskPath, projectRoot);
   const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
 
@@ -440,11 +439,13 @@ async function executePipelineForTask(
     : undefined;
 
   // Update status with pipeline information (branch will be set by caller if needed)
+  const relativeTaskPath = path.relative(projectRoot, taskPath);
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') {
       s.taskId = taskId;
       s.startTime = new Date().toISOString();
     }
+    s.taskPath = relativeTaskPath; // Ensure taskPath is always set
     s.pipeline = pipelineName;
     if (sequenceId) {
       s.parentSequenceId = sequenceId; // Explicitly set the link
@@ -506,7 +507,8 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   console.log(pc.cyan(`Project root identified: ${projectRoot}`));
 
   // 1. Determine paths and check status FIRST.
-  const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+  const taskPath = path.resolve(projectRoot, taskRelativePath);
+  const taskId = taskPathToTaskId(taskPath, projectRoot);
   const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
   const status: TaskStatus = readStatus(statusFile);
@@ -531,15 +533,16 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   }
 
   // 3. Ensure we are on the correct Git branch (now respects the user's config).
-  const branchName = ensureCorrectGitBranch(config, projectRoot, taskRelativePath);
+  const branchName = ensureCorrectGitBranch(config, projectRoot, taskPath);
 
-  // 4. Update the status with the branch name
+  // 4. Update the status with the branch name and task path
+  const relativeTaskPath = path.relative(projectRoot, taskPath);
   updateStatus(statusFile, s => {
     s.branch = branchName;
+    s.taskPath = relativeTaskPath; // Ensure taskPath is always set
   });
 
   // 5. Execute the pipeline using the new reusable function
-  const taskPath = path.resolve(projectRoot, taskRelativePath);
   await executePipelineForTask(taskPath, { pipelineOption });
 
   // 6. Calculate final task statistics
@@ -705,7 +708,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
 
       // Aggregate token usage from the completed task into sequence stats
-      const completedTaskId = path.basename(nextTaskPath, '.md').replace(/[^a-z0-9-]/gi, '-');
+      const completedTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
       const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
       const completedTaskStatus = readStatus(completedTaskStatusFile);
 
