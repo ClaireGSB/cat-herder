@@ -1,190 +1,145 @@
 
 # PLAN.md
 
-### **Title: Enhance Web Dashboard with Real-Time State Updates and Sequence Monitoring**
+### **Title: Refine Web Dashboard for Robustness and Maintainability**
 
-**Goal:** Evolve the web dashboard into a fully real-time monitoring tool by implementing global state updates for both tasks *and sequences*, and adding a dedicated dashboard for monitoring multi-task sequences.
+**Goal:** Refactor the web dashboard's backend logic for 100% reliable task-sequence association, improve the frontend code structure for better maintainability, and polish the UI text to reflect its real-time capabilities.
+
+### **Description**
+
+The web dashboard is now feature-complete, but its internal architecture can be made more robust and easier to maintain. Currently, the association between a task and its parent sequence relies on string pattern matching, which can be fragile. Additionally, all client-side JavaScript resides in a single large script tag, which will become difficult to manage as the application grows.
+
+This plan outlines three key refinements:
+1.  **Explicit Linking:** We will modify the orchestrator to explicitly write a `parentSequenceId` into a task's state file, making the relationship between tasks and sequences unambiguous.
+2.  **Code Modularization:** We will refactor the frontend JavaScript into separate, page-specific files for better organization and readability.
+3.  **UI Polish:** We will update minor UI text to accurately reflect the new, fully real-time nature of the dashboard.
 
 ### **Summary Checklist**
 
--   [x] **1. Implement Real-Time State Updates for Tasks & Sequences**
--   [x] **2. Enhance Live Activity Page with Full Lifecycle Awareness**
--   [x] **3. Add Contextual Link from Task Detail to Live View**
--   [x] **4. Create Backend API for Sequences**
--   [x] **5. Implement Frontend Views for Sequence Dashboard**
--   [x] **6. Add Real-Time Updates to Sequence Views**
--   [x] **7. Update README.md Documentation**
+-   [ ] **1. Implement Explicit Task-to-Sequence Linking**
+-   [ ] **2. Refactor Client-Side JavaScript into Modular Files**
+-   [ ] **3. Polish UI Text and Contextual Links**
 
 ---
 
 ### **Detailed Implementation Steps**
 
-#### **1. Implement Real-Time State Updates for Tasks & Sequences (Revised)**
+#### **1. Implement Explicit Task-to-Sequence Linking**
 
-*   **Objective:** Make the server watch for changes in **both** task and sequence state files and broadcast appropriately typed updates, making the entire application aware of the full workflow state.
+*   **Objective:** To create an explicit, immutable link between a task and its parent sequence within the state files, removing the need for fragile string-matching logic.
 
-*   **Task (Backend - `src/tools/web.ts`):**
-    1.  Use a single `chokidar` watcher for the entire `stateDir`.
-    2.  Modify the `handleStateChange(filePath)` function to be smarter. It needs to check the filename to determine if the update is for a single task or a sequence.
-    3.  If the file is `task-....state.json`, broadcast a `{ type: 'task_update', ... }` message.
-    4.  If the file is `sequence-....state.json`, broadcast a **new message type**: `{ type: 'sequence_update', data: sequenceStatus }`. This is the key change.
+*   **Task 1.1 (Backend - `src/tools/status.ts`):**
+    1.  Update the `TaskStatus` type definition to include an optional `parentSequenceId` field.
 
-*   **Code Snippet (Backend - `src/tools/web.ts`):**
+*   **Code Snippet (`src/tools/status.ts`):**
     ```typescript
-    // Revised handleStateChange function
-    const handleStateChange = (filePath: string) => {
-        if (!filePath.endsWith('.state.json')) return;
-
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const stateData = JSON.parse(content);
-            let messageType;
-
-            if (path.basename(filePath).startsWith('sequence-')) {
-                messageType = 'sequence_update';
-            } else {
-                messageType = 'task_update';
-            }
-
-            // Broadcast the update to all connected clients with the correct type
-            for (const ws of wss.clients) {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(JSON.stringify({ type: messageType, data: stateData }));
-                }
-            }
-        } catch (e) {
-            console.error(`[State Watcher] Failed to process state change for ${filePath}`, e);
-        }
-    };
-
-    const stateWatcher = chokidar.watch(path.join(stateDir, '*.state.json'), { persistent: true });
-    stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
-    ```
-
-#### **2. Enhance Live Activity Page with Full Lifecycle Awareness (Revised)**
-
-*   **Objective:** Make the `/live` page aware of the sequence context, allowing it to display sequence completion status in addition to task status.
-
-*   **Task (Backend - `src/tools/web.ts`):**
-    1.  When rendering the `/live` route, the server logic must not only find the running task but also determine if it's part of a sequence.
-    2.  You can infer the `sequenceId` from the task's folder structure or by finding a sequence state file that lists the running task.
-    3.  Pass both the `runningTask` and the `parentSequence` (if it exists) to the `live-activity.ejs` template.
-
-*   **Task (Frontend - `live-activity.ejs` & `footer.ejs`):**
-    1.  The `live-activity.ejs` template should now display the parent sequence ID if it exists (e.g., "Monitoring Sequence: `sequence-my-feature`").
-    2.  Add a separate, hidden banner for "Sequence Complete".
-    3.  The client-side JavaScript for the live page must now listen for both `task_update` and `sequence_update` messages.
-    4.  When a `sequence_update` message is received for the parent sequence, and its `phase` is `done` or `failed`, display the "Sequence Complete" banner with a link to the sequence detail page. This provides a more definitive and satisfying conclusion for the user.
-
-*   **Code Snippet (Frontend - update `initLiveActivityWebSocket` in `footer.ejs`):**
-    ```javascript
-    // This logic now needs to be aware of the parent sequence
-    const runningTaskData = <%- typeof runningTask !== 'undefined' && runningTask ? JSON.stringify(runningTask) : 'null' %>;
-    const parentSequenceData = <%- typeof parentSequence !== 'undefined' && parentSequence ? JSON.stringify(parentSequence) : 'null' %>;
-
-    // ... inside the setupLiveActivityHandlers function ...
-    window.dashboard.websocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        const logContainer = document.getElementById('live-log-content');
-
-        if (data.type === 'log_content' || data.type === 'log_update') {
-            // ... same as before ...
-        } else if (data.type === 'task_update' && data.data.taskId === runningTaskData.taskId) {
-            // ... same as before, update the step name, show task finished banner ...
-        } else if (parentSequenceData && data.type === 'sequence_update' && data.data.sequenceId === parentSequenceData.sequenceId) {
-            // NEW: Handle sequence completion
-            if (data.data.phase !== 'running') {
-                logContainer.textContent += `\n\n--- SEQUENCE FINISHED with status: ${data.data.phase} ---`;
-                autoScrollToBottom();
-
-                // Show a more prominent "Sequence Finished" banner
-                const seqBanner = document.getElementById('sequence-finished-banner'); // A new banner
-                const seqDetailsLink = document.getElementById('view-sequence-details-link');
-                seqDetailsLink.href = `/sequence/${parentSequenceData.sequenceId}`;
-                seqBanner.style.display = 'block';
-
-                // Hide the individual task finished banner if it's showing
-                document.getElementById('task-finished-banner').style.display = 'none';
-            }
-        }
+    export type TaskStatus = {
+      // ... existing fields
+      pipeline?: string;
+      parentSequenceId?: string; // Add this new optional field
+      currentStep: string;
+      // ... rest of the fields
     };
     ```
 
-#### **3. Add Contextual Link from Task Detail to Live View**
+*   **Task 1.2 (Backend - `src/tools/orchestrator.ts`):**
+    1.  In the `executePipelineForTask` function, detect if the task is being run as part of a sequence (the `options.sequenceStatusFile` will be defined).
+    2.  If it is, extract the `sequenceId` from the filename.
+    3.  When calling `updateStatus` for the task, write the extracted `sequenceId` to the new `parentSequenceId` field.
 
-*   **Objective:** Provide an easy and intuitive way for users to jump from a running task's detail page directly to the live log stream.
+*   **Code Snippet (`src/tools/orchestrator.ts`):**
+    ```typescript
+    // Inside executePipelineForTask function
+    const sequenceId = options.sequenceStatusFile
+      ? path.basename(options.sequenceStatusFile, '.state.json')
+      : undefined;
 
-*   **Task (`src/templates/web/task-detail.ejs`):**
-    1.  In the pipeline steps loop, add an EJS conditional to check if the `task.phase` is `"running"` and the current `step.status` is also `"running"`.
-    2.  If both are true, render a styled link or badge next to the step name that points to the `/live` page.
+    updateStatus(statusFile, s => {
+      if (s.taskId === 'unknown') {
+        s.taskId = taskId;
+        s.startTime = new Date().toISOString();
+      }
+      s.pipeline = pipelineName;
+      if (sequenceId) {
+        s.parentSequenceId = sequenceId; // Explicitly set the link
+      }
+    });
+    ```
 
-*   **Code Snippet (`src/templates/web/task-detail.ejs`):**
+*   **Task 1.3 (Backend - `src/tools/web.ts`):**
+    1.  Rewrite the `getSequenceDetails` helper function. Instead of scanning folders and matching filenames, it will now scan all task state files and filter them where `parentSequenceId` matches the requested `sequenceId`. This is much faster and more reliable.
+    2.  Rewrite the `findParentSequence` helper. It will now simply read a task's state file and return the value of the `parentSequenceId` field if it exists.
+
+#### **2. Refactor Client-Side JavaScript into Modular Files**
+
+*   **Objective:** To modularize the client-side JavaScript by moving it from a single `<script>` block into separate files, improving code organization and maintainability.
+
+*   **Task 2.1 (Project Structure):**
+    1.  Create a new directory: `src/public/js/`.
+    2.  Move the `ClaudeDashboard` class and its related logic from `footer.ejs` into a new file: `src/public/js/dashboard.js`.
+    3.  Move the page-specific initialization logic (like `initializeLiveActivity`) into separate files: `src/public/js/live-activity.js`, `src/public/js/sequence-detail.js`, etc.
+
+*   **Task 2.2 (Build Process - `package.json`):**
+    1.  Ensure the build script copies the entire `src/public` directory (which now contains `index.html` and the new `js/` subdirectory) to the `dist` folder.
+    *Note: Your current build script `cp -r src/templates dist/` seems to handle this already if we place `public` inside `templates`, but creating a dedicated `public` folder is cleaner. Let's assume a new `cp -r src/public dist/` command might be needed.*
+
+*   **Task 2.3 (Frontend - `footer.ejs`):**
+    1.  Replace the large inline `<script>` block with individual `<script>` tags that load the new JavaScript files.
+    2.  Use a pattern to conditionally load page-specific scripts.
+
+*   **Code Snippet (New file structure and loading in `footer.ejs`):**
+    ```
+    <!-- In footer.ejs -->
+    <script src="/js/dashboard.js"></script> <!-- Main class -->
+
+    <% if (page === 'dashboard') { %>
+        <script src="/js/dashboard-page.js"></script>
+    <% } else if (page === 'sequence_detail') { %>
+        <script src="/js/sequence-detail-page.js"></script>
+    <% } else if (page === 'live_activity') { %>
+        <script src="/js/live-activity-page.js"></script>
+    <% } %>
+    ```
+    *(This requires passing a `page` variable from each Express route when rendering the template.)*
+
+#### **3. Polish UI Text and Contextual Links**
+
+*   **Objective:** To update UI text to align with the new real-time capabilities and improve the clarity of contextual links.
+
+*   **Task 3.1 (`src/templates/web/dashboard.ejs`):**
+    1.  Locate the text "Auto-refreshes every 30s".
+    2.  Change it to "Status updates in real-time".
+    3.  Change the icon from `bi-arrow-clockwise` to something like `bi-reception-4` or `bi-broadcast` to better represent a live connection.
+
+*   **Code Snippet (`dashboard.ejs`):**
     ```html
-    <!-- Inside the forEach loop for task.steps -->
-    <h6 class="mb-1">
-        <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-        <%= step.name %>
-        
-        <!-- ... existing status icons ... -->
+    <!-- Before -->
+    <div class="d-flex align-items-center text-muted">
+        <i class="bi bi-arrow-clockwise me-1"></i>
+        <small>Auto-refreshes every 30s</small>
+    </div>
 
-        <% if (task.phase === 'running' && step.status === 'running') { %>
-            <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
-                <i class="bi bi-broadcast me-1"></i>LIVE
-            </a>
-        <% } %>
-    </h6>
+    <!-- After -->
+    <div class="d-flex align-items-center text-muted">
+        <i class="bi bi-broadcast-pin me-1"></i>
+        <small>Status updates in real-time</small>
+    </div>
     ```
 
-#### **4. Create Backend API for Sequences**
+*   **Task 3.2 (`src/templates/web/task-detail.ejs`):**
+    1.  Find the contextual link to the live view.
+    2.  Change the link text from "LIVE" to "View Live Activity" to be more descriptive for new users.
 
-*   **Objective:** Build the necessary server-side logic and API endpoints to aggregate and serve detailed data about all task sequences.
+*   **Code Snippet (`task-detail.ejs`):**
+    ```html
+    <!-- Before -->
+    <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
+        <i class="bi bi-broadcast me-1"></i>LIVE
+    </a>
 
-*   **Task (Backend - `src/tools/web.ts`):**
-    1.  **Create a `getSequenceDetails(sequenceId)` helper function.** This is the core logic. It will:
-        *   Read the main `sequence-....state.json` file for overall status, branch, and stats.
-        *   Scan the corresponding task folder (e.g., `claude-Tasks/my-feature`) to get a complete list of all `.md` task files (ignoring files starting with `_`).
-        *   For each task file, derive its `taskId` and attempt to read its corresponding `task-....state.json`.
-        *   Compile a list of all tasks in the sequence, including their individual statuses (e.g., `done`, `running`, `failed`, or `pending` if no state file exists).
-        *   Return a single, rich JSON object containing the sequence's overall status and the detailed list of its child tasks.
-    2.  **Create a `getAllSequenceStatuses()` helper function.** This will scan the `stateDir` for all `sequence-*.state.json` files and return a summary list for the main dashboard.
-    3.  **Create new API endpoints:**
-        *   `GET /api/sequences`: Uses `getAllSequenceStatuses` to return a JSON list of all sequences.
-        *   `GET /api/sequences/:sequenceId`: Uses `getSequenceDetails` to return the detailed JSON object for a single sequence.
+    <!-- After -->
+    <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">
+        <i class="bi bi-broadcast me-1"></i>View Live Activity
+    </a>
+    ```
 
-#### **5. Implement Frontend Views for Sequence Dashboard**
-
-*   **Objective:** Build the user interface for listing and viewing the details of task sequences.
-
-*   **Task (Frontend - EJS Templates):**
-    1.  **Add Navbar Link:** In `src/templates/web/partials/header.ejs`, add a new navigation link for "Sequences" that points to `/sequences`.
-    2.  **Create `sequences-dashboard.ejs`:** This new template will be served by a `GET /sequences` route. It will:
-        *   Fetch data from `/api/sequences`.
-        *   Display a table listing all sequences with their ID, overall status, total tasks, duration, and a link to the detail view.
-    3.  **Create `sequence-detail.ejs`:** This new template will be served by a `GET /sequence/:sequenceId` route. It will:
-        *   Display the overall sequence information (status, branch, stats) in a header card.
-        *   Render a list of all tasks belonging to the sequence.
-        *   Each task in the list should clearly show its own status (`done`, `running`, `failed`, `pending`) with a colored badge.
-        *   The currently running task should be visually highlighted.
-        *   Each task should have a link to its own detailed task view (`/task/:taskId`).
-
-*   **Task (Backend - `src/tools/web.ts`):**
-    1.  Add the Express routes to render the new EJS templates:
-        *   `GET /sequences`: Renders `sequences-dashboard.ejs`.
-        *   `GET /sequence/:sequenceId`: Renders `sequence-detail.ejs`, passing in the data from your `getSequenceDetails` helper.
-
-#### **6. Add Real-Time Updates to Sequence Views** ✅
-
-*   **Task (Frontend - `footer.ejs`):** ✅ COMPLETED
-    1.  ✅ Enhanced `updateSequenceSummaryCards()` to fetch actual sequence counts from `/api/sequences` and update summary cards in real-time.
-    2.  ✅ Added `updateTaskInSequenceDetail()` method to handle individual task status updates within sequence detail pages.
-    3.  ✅ Implemented comprehensive real-time updates for task statuses, including visual styling, LIVE badges, and completion counts.
-    4.  ✅ Added `refreshSequenceTaskCounts()` to dynamically update task completion statistics.
-    5.  ✅ Enhanced WebSocket message handling to route task updates to sequence detail views.
-
-#### **7. Update README.md Documentation**
-
-*   **Objective:** Document the new, fully real-time capabilities and the Sequence Dashboard.
-*   **Task (`README.md`):**
-    1.  Update the "Interactive Web Dashboard" section to reflect that the system is fully real-time for both tasks and sequences.
-    2.  Create the new "Sequence Monitoring" subsection as planned.
-    3.  In the "Live Activity Stream" description, explicitly state that it now shows when an entire sequence is complete, providing a clear end-to-end monitoring experience.
