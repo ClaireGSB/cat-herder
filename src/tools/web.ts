@@ -216,6 +216,15 @@ export async function startWebServer() {
     res.render("task-detail", { task: taskDetails });
   });
 
+  // Live activity route
+  app.get("/live", (req: Request, res: Response) => {
+    const allTasks = getAllTaskStatuses(stateDir);
+    const runningTask = allTasks.find(t => t.phase === 'running');
+    // Fetch full details for the running task to get log file names
+    const taskDetails = runningTask ? getTaskDetails(stateDir, logsDir, runningTask.taskId) : null;
+    res.render("live-activity", { runningTask: taskDetails });
+  });
+
   // Log file API route
   app.get("/log/:taskId/:logFile", (req: Request, res: Response) => {
     const { taskId, logFile } = req.params;
