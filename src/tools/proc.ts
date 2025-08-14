@@ -149,11 +149,14 @@ export function runStreaming(
           const timestamp = new Date().toISOString();
           try {
             const eventData = JSON.parse(line);
-            // Add timestamp as a top-level property to the JSON object
-            eventData.timestamp = timestamp;
-            rawJsonStream.write(JSON.stringify(eventData) + '\n');
+            // Create a new object with timestamp first, then spread the original data
+            const logEntry = {
+              timestamp: timestamp,
+              ...eventData
+            };
+            rawJsonStream.write(JSON.stringify(logEntry) + '\n');
           } catch (e) {
-            // If a line is not valid JSON, log it as an error object
+            // If a line is not valid JSON, log it as an error object with timestamp first
             const errorPayload = {
               timestamp: timestamp,
               error: "Log event was not valid JSON",
