@@ -12,7 +12,7 @@
 -   [x] **3. Add Contextual Link from Task Detail to Live View**
 -   [x] **4. Create Backend API for Sequences**
 -   [x] **5. Implement Frontend Views for Sequence Dashboard**
--   [ ] **6. Add Real-Time Updates to Sequence Views**
+-   [x] **6. Add Real-Time Updates to Sequence Views**
 -   [ ] **7. Update README.md Documentation**
 
 ---
@@ -172,11 +172,14 @@
         *   `GET /sequences`: Renders `sequences-dashboard.ejs`.
         *   `GET /sequence/:sequenceId`: Renders `sequence-detail.ejs`, passing in the data from your `getSequenceDetails` helper.
 
-#### **6. Add Real-Time Updates to Sequence Views**
+#### **6. Add Real-Time Updates to Sequence Views** ✅
 
-*   **Task (Frontend - `footer.ejs`):**
-    1.  On the sequence list and detail pages, listen for `sequence_update` messages.
-    2.  Update the status, duration, and other metrics on the page dynamically when a relevant update is received. This makes the entire sequence section fully real-time.
+*   **Task (Frontend - `footer.ejs`):** ✅ COMPLETED
+    1.  ✅ Enhanced `updateSequenceSummaryCards()` to fetch actual sequence counts from `/api/sequences` and update summary cards in real-time.
+    2.  ✅ Added `updateTaskInSequenceDetail()` method to handle individual task status updates within sequence detail pages.
+    3.  ✅ Implemented comprehensive real-time updates for task statuses, including visual styling, LIVE badges, and completion counts.
+    4.  ✅ Added `refreshSequenceTaskCounts()` to dynamically update task completion statistics.
+    5.  ✅ Enhanced WebSocket message handling to route task updates to sequence detail views.
 
 #### **7. Update README.md Documentation**
 

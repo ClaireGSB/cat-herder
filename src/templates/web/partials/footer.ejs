@@ -72,6 +72,9 @@
                         this.updateDashboardRow(data.data);
                     } else if (window.location.pathname.startsWith('/task/')) {
                         this.updateTaskDetail(data.data);
+                    } else if (window.location.pathname.startsWith('/sequence/')) {
+                        // Also handle task updates within sequence detail view
+                        this.updateTaskInSequenceDetail(data.data);
                     }
                 } else if (data.type === 'sequence_update') {
                     // Handle sequence state updates
@@ -208,19 +211,135 @@
                         durationElement.textContent = `${sequenceData.stats.totalDuration?.toFixed(2) || 'N/A'}s`;
                     }
                 }
+                
+                // Refresh task completion counts if available
+                this.refreshSequenceTaskCounts();
+            }
+            
+            // Update individual task status within sequence detail page
+            updateTaskInSequenceDetail(taskData) {
+                const taskElement = document.querySelector(`[data-task-id="${taskData.taskId}"]`);
+                if (taskElement) {
+                    // Update task status badge
+                    const statusBadge = taskElement.querySelector('.task-status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = `badge status-${taskData.phase} ms-2 task-status-badge`;
+                        
+                        // Update icon and text
+                        let iconHtml = '';
+                        if (taskData.phase === 'running') {
+                            iconHtml = '<i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>';
+                        } else if (taskData.phase === 'done') {
+                            iconHtml = '<i class="bi bi-check-circle-fill me-1"></i>';
+                        } else if (taskData.phase === 'failed') {
+                            iconHtml = '<i class="bi bi-exclamation-triangle-fill me-1"></i>';
+                        } else {
+                            iconHtml = '<i class="bi bi-clock me-1"></i>';
+                        }
+                        statusBadge.innerHTML = iconHtml + taskData.phase;
+                    }
+                    
+                    // Update task container classes for visual styling
+                    const container = taskElement.closest('.pipeline-step');
+                    if (container) {
+                        // Remove all status classes
+                        container.classList.remove('completed', 'running', 'failed');
+                        // Add current status class
+                        if (taskData.phase === 'done') {
+                            container.classList.add('completed');
+                        } else if (taskData.phase === 'running') {
+                            container.classList.add('running');
+                        } else if (taskData.phase === 'failed') {
+                            container.classList.add('failed');
+                        }
+                    }
+                    
+                    // Update last update time
+                    const lastUpdateElement = taskElement.querySelector('.small.text-muted:last-of-type');
+                    if (lastUpdateElement && taskData.lastUpdate) {
+                        lastUpdateElement.innerHTML = `<strong>Last Update:</strong> ${new Date(taskData.lastUpdate).toLocaleString()}`;
+                    }
+                    
+                    // Add/remove LIVE link
+                    const liveLink = taskElement.querySelector('.badge.bg-danger');
+                    if (taskData.phase === 'running' && !liveLink) {
+                        // Add LIVE link
+                        const taskTitle = taskElement.querySelector('h6');
+                        if (taskTitle) {
+                            taskTitle.insertAdjacentHTML('beforeend', 
+                                '<a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">' +
+                                '<i class="bi bi-broadcast me-1"></i>LIVE</a>'
+                            );
+                        }
+                    } else if (taskData.phase !== 'running' && liveLink) {
+                        // Remove LIVE link
+                        liveLink.remove();
+                    }
+                }
+                
+                // Update task completion counts in the info card
+                this.refreshSequenceTaskCounts();
+            }
+            
+            // Refresh task completion counts in sequence detail
+            refreshSequenceTaskCounts() {
+                if (window.location.pathname.startsWith('/sequence/')) {
+                    // Count current task statuses from DOM
+                    const completedTasks = document.querySelectorAll('.pipeline-step.completed').length;
+                    const totalTasks = document.querySelectorAll('.pipeline-step').length;
+                    
+                    // Update completion count display
+                    const completedCountElement = document.querySelector('.task-stats .text-success');
+                    if (completedCountElement) {
+                        completedCountElement.textContent = completedTasks;
+                    }
+                }
             }
             
             // Update summary cards on sequences dashboard
             updateSequenceSummaryCards(changedPhase) {
-                // This is a simplified approach - in a real implementation,
-                // we would want to fetch fresh counts from the server
-                // For now, we'll just trigger a subtle refresh indicator
+                // Fetch updated sequence counts from server
+                if (window.location.pathname === '/sequences') {
+                    this.refreshSequenceSummaryCards();
+                }
+                
+                // Also trigger visual feedback
                 const refreshIcon = document.querySelector('.bi-arrow-clockwise');
                 if (refreshIcon) {
                     refreshIcon.style.animation = 'spin 1s linear';
                     setTimeout(() => {
                         refreshIcon.style.animation = '';
                     }, 1000);
+                }
+            }
+            
+            // Refresh sequence summary cards with actual data
+            async refreshSequenceSummaryCards() {
+                try {
+                    const response = await fetch('/api/sequences');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                    const sequences = await response.json();
+                    
+                    // Update each summary card
+                    const completedCount = sequences.filter(s => s.phase === 'done').length;
+                    const runningCount = sequences.filter(s => s.phase === 'running').length;
+                    const failedCount = sequences.filter(s => s.phase === 'failed').length;
+                    const pendingCount = sequences.filter(s => ['pending', 'paused'].includes(s.phase)).length;
+                    
+                    // Update card values
+                    const cards = document.querySelectorAll('.card .card-body h3');
+                    if (cards.length >= 4) {
+                        cards[0].textContent = completedCount; // Completed
+                        cards[1].textContent = runningCount;   // Running
+                        cards[2].textContent = failedCount;    // Failed  
+                        cards[3].textContent = pendingCount;   // Pending/Paused
+                    }
+                    
+                } catch (error) {
+                    console.error('Failed to refresh sequence summary cards:', error);
                 }
             }
             
