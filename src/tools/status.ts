@@ -19,6 +19,7 @@ export type TaskStatus = {
   startTime: string;
   branch: string;
   pipeline?: string;
+  parentSequenceId?: string;
   currentStep: string;
   phase: Phase;
   steps: Record<string, Phase>;

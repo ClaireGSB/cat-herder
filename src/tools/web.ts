@@ -24,6 +24,7 @@ interface TaskStatus {
   tokenUsage?: Record<string, any>;
   branch?: string;
   pipeline?: string;
+  parentSequenceId?: string;
 }
 
 interface TaskDetails extends TaskStatus {
@@ -99,7 +100,8 @@ function getAllTaskStatuses(stateDir: string): TaskStatus[] {
         stats: state.stats,
         tokenUsage: state.tokenUsage,
         branch: state.branch,
-        pipeline: state.pipeline
+        pipeline: state.pipeline,
+        parentSequenceId: state.parentSequenceId
       });
     } catch (error) {
       console.error(`Error reading state file ${file}:`, error);
@@ -138,6 +140,7 @@ function getTaskDetails(stateDir: string, logsDir: string, taskId: string): Task
       tokenUsage: state.tokenUsage,
       branch: state.branch,
       pipeline: state.pipeline,
+      parentSequenceId: state.parentSequenceId,
       steps: state.steps
     };
 
@@ -212,38 +215,39 @@ function readLogFile(logsDir: string, taskId: string, logFile: string): string |
 
 // Helper function to find if a task is part of a sequence
 function findParentSequence(stateDir: string, taskId: string): SequenceInfo | null {
-  if (!fs.existsSync(stateDir)) {
+  const taskStateFile = path.join(stateDir, `${taskId}.state.json`);
+  
+  if (!fs.existsSync(taskStateFile)) {
     return null;
   }
 
   try {
-    // Look for sequence state files
-    const files = fs.readdirSync(stateDir).filter(f => f.startsWith('sequence-') && f.endsWith('.state.json'));
+    // Read the task's state file to get the parentSequenceId
+    const content = fs.readFileSync(taskStateFile, 'utf-8');
+    const taskState = JSON.parse(content);
     
-    for (const file of files) {
-      const sequenceStateFile = path.join(stateDir, file);
-      const content = fs.readFileSync(sequenceStateFile, 'utf-8');
-      const sequenceState = JSON.parse(content);
-      
-      // Extract the sequence folder name from sequenceId
-      // e.g., "sequence-my-feature" -> "my-feature"
-      const folderName = sequenceState.sequenceId?.replace('sequence-', '');
-      if (!folderName) continue;
-      
-      // Check if the task belongs to this sequence by looking at the taskId pattern
-      // Task IDs for sequences typically contain the folder name or follow a pattern
-      // that indicates they belong to the sequence folder
-      if (taskId.includes(folderName)) {
-        return {
-          sequenceId: sequenceState.sequenceId,
-          phase: sequenceState.phase,
-          folderPath: folderName,
-          branch: sequenceState.branch
-        };
-      }
+    if (!taskState.parentSequenceId) {
+      return null;
     }
+
+    // Read the corresponding sequence state file
+    const sequenceStateFile = path.join(stateDir, `${taskState.parentSequenceId}.state.json`);
+    if (!fs.existsSync(sequenceStateFile)) {
+      return null;
+    }
+
+    const sequenceContent = fs.readFileSync(sequenceStateFile, 'utf-8');
+    const sequenceState = JSON.parse(sequenceContent);
     
-    return null;
+    // Extract folder name from sequenceId (e.g., "sequence-my-feature" -> "my-feature")
+    const folderName = sequenceState.sequenceId?.replace('sequence-', '');
+    
+    return {
+      sequenceId: sequenceState.sequenceId,
+      phase: sequenceState.phase,
+      folderPath: folderName,
+      branch: sequenceState.branch
+    };
   } catch (error) {
     console.error('Error finding parent sequence:', error);
     return null;
@@ -323,70 +327,56 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
       tasks: []
     };
 
-    // Find all task files in the sequence folder
-    const projectRoot = getProjectRoot();
-    const taskFolderPath = path.resolve(projectRoot, config.taskFolder, folderName);
+    // Find all task state files that have this sequence as their parent
+    const allStateFiles = fs.readdirSync(stateDir)
+      .filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
     
-    if (fs.existsSync(taskFolderPath)) {
+    for (const stateFileName of allStateFiles) {
       try {
-        const taskFiles = fs.readdirSync(taskFolderPath)
-          .filter(f => f.endsWith('.md') && !f.startsWith('_'))
-          .sort(); // Alphabetical order
+        const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
+        const taskState = JSON.parse(taskStateContent);
         
-        for (const taskFile of taskFiles) {
-          // Derive task ID - this is a simplified approach
-          // In practice, the task ID might be more complex
-          const baseTaskName = path.basename(taskFile, '.md');
+        // Check if this task belongs to our sequence
+        if (taskState.parentSequenceId === sequenceId) {
+          const taskId = taskState.taskId || stateFileName.replace('.state.json', '');
           
-          // Look for corresponding task state files that might contain this folder name
-          const possibleTaskIds = fs.readdirSync(stateDir)
-            .filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'))
-            .map(f => f.replace('.state.json', ''))
-            .filter(taskId => taskId.includes(folderName) || taskId.includes(baseTaskName));
-          
+          // Determine status based on phase
           let taskStatus = 'pending';
-          let taskPhase = undefined;
-          let taskLastUpdate = undefined;
-          let matchedTaskId = `${folderName}-${baseTaskName}`;
+          if (taskState.phase === 'running') {
+            taskStatus = 'running';
+          } else if (taskState.phase === 'failed') {
+            taskStatus = 'failed';
+          } else if (taskState.phase === 'done') {
+            taskStatus = 'done';
+          } else if (taskState.phase) {
+            taskStatus = 'started'; // Any other phase means it's been started
+          }
           
-          // Try to find the actual task state
-          for (const possibleTaskId of possibleTaskIds) {
-            const taskStateFile = path.join(stateDir, `${possibleTaskId}.state.json`);
-            if (fs.existsSync(taskStateFile)) {
-              try {
-                const taskStateContent = fs.readFileSync(taskStateFile, 'utf8');
-                const taskState = JSON.parse(taskStateContent);
-                taskStatus = 'done'; // If state file exists, assume it's at least started
-                taskPhase = taskState.phase;
-                taskLastUpdate = taskState.lastUpdate;
-                matchedTaskId = possibleTaskId;
-                
-                if (taskState.phase === 'running') {
-                  taskStatus = 'running';
-                } else if (taskState.phase === 'failed') {
-                  taskStatus = 'failed';
-                } else if (taskState.phase === 'done') {
-                  taskStatus = 'done';
-                }
-                break;
-              } catch (e) {
-                console.error(`Error reading task state ${possibleTaskId}:`, e);
-              }
-            }
+          // Try to derive filename from task ID or use task ID as filename
+          let filename = taskId;
+          if (folderName && taskId.includes(folderName)) {
+            // Try to extract the filename part
+            const parts = taskId.split('-');
+            filename = parts[parts.length - 1] + '.md';
+          } else {
+            filename = taskId + '.md';
           }
           
           sequenceDetails.tasks.push({
-            taskId: matchedTaskId,
-            filename: taskFile,
+            taskId: taskId,
+            filename: filename,
             status: taskStatus,
-            phase: taskPhase,
-            lastUpdate: taskLastUpdate
+            phase: taskState.phase,
+            lastUpdate: taskState.lastUpdate
           });
         }
-      } catch (error) {
-        console.error(`Error reading task folder ${taskFolderPath}:`, error);
+      } catch (e) {
+        console.error(`Error reading task state ${stateFileName}:`, e);
       }
     }
+
+    // Sort tasks by filename for consistent ordering
+    sequenceDetails.tasks.sort((a, b) => a.filename.localeCompare(b.filename));
 
     return sequenceDetails;
   } catch (error) {

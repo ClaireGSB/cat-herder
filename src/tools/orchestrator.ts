@@ -434,6 +434,11 @@ async function executePipelineForTask(
     }
   }
 
+  // Extract sequence ID if this task is part of a sequence
+  const sequenceId = options.sequenceStatusFile
+    ? path.basename(options.sequenceStatusFile, '.state.json')
+    : undefined;
+
   // Update status with pipeline information (branch will be set by caller if needed)
   updateStatus(statusFile, s => {
     if (s.taskId === 'unknown') {
@@ -441,6 +446,9 @@ async function executePipelineForTask(
       s.startTime = new Date().toISOString();
     }
     s.pipeline = pipelineName;
+    if (sequenceId) {
+      s.parentSequenceId = sequenceId; // Explicitly set the link
+    }
   });
 
   const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
