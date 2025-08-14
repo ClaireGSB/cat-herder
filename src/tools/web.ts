@@ -48,6 +48,32 @@ interface SequenceInfo {
   branch?: string;
 }
 
+interface SequenceStatus {
+  sequenceId: string;
+  phase: string;
+  lastUpdate: string;
+  stats?: {
+    totalDuration?: number;
+    totalDurationExcludingPauses?: number;
+    totalPauseTime?: number;
+    totalTokenUsage?: Record<string, any>;
+  };
+  branch?: string;
+  folderPath?: string;
+}
+
+interface SequenceTaskInfo {
+  taskId: string;
+  filename: string;
+  status: string;
+  phase?: string;
+  lastUpdate?: string;
+}
+
+interface SequenceDetails extends SequenceStatus {
+  tasks: SequenceTaskInfo[];
+}
+
 // Helper function to get all task statuses
 function getAllTaskStatuses(stateDir: string): TaskStatus[] {
   if (!fs.existsSync(stateDir)) {
@@ -224,6 +250,151 @@ function findParentSequence(stateDir: string, taskId: string): SequenceInfo | nu
   }
 }
 
+// Helper function to get all sequence statuses
+function getAllSequenceStatuses(stateDir: string): SequenceStatus[] {
+  if (!fs.existsSync(stateDir)) {
+    return [];
+  }
+
+  const files = fs.readdirSync(stateDir).filter(f => f.startsWith('sequence-') && f.endsWith('.state.json'));
+  const sequences: SequenceStatus[] = [];
+
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(stateDir, file), "utf8");
+      const state = JSON.parse(content);
+      
+      // Get file modification time for lastUpdate if not in state
+      const fileStat = fs.statSync(path.join(stateDir, file));
+      
+      // Extract folder name from sequenceId
+      const folderName = state.sequenceId?.replace('sequence-', '');
+      
+      sequences.push({
+        sequenceId: state.sequenceId || file.replace('.state.json', ''),
+        phase: state.phase || "unknown",
+        lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
+        stats: state.stats,
+        branch: state.branch,
+        folderPath: folderName
+      });
+    } catch (error) {
+      console.error(`Error reading sequence state file ${file}:`, error);
+      // Add error entry so user knows about the corrupted file
+      sequences.push({
+        sequenceId: `ERROR: ${file}`,
+        phase: "error",
+        lastUpdate: new Date().toISOString()
+      });
+    }
+  }
+
+  // Sort by last update time (newest first)
+  return sequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
+}
+
+// Helper function to get detailed sequence information
+function getSequenceDetails(stateDir: string, config: any, sequenceId: string): SequenceDetails | null {
+  const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
+  
+  if (!fs.existsSync(stateFile)) {
+    return null;
+  }
+
+  try {
+    const content = fs.readFileSync(stateFile, "utf8");
+    const state = JSON.parse(content);
+    const fileStat = fs.statSync(stateFile);
+    
+    // Extract folder name from sequenceId
+    const folderName = state.sequenceId?.replace('sequence-', '');
+    if (!folderName) {
+      return null;
+    }
+
+    // Build the base sequence details
+    const sequenceDetails: SequenceDetails = {
+      sequenceId: state.sequenceId || sequenceId,
+      phase: state.phase || "unknown",
+      lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
+      stats: state.stats,
+      branch: state.branch,
+      folderPath: folderName,
+      tasks: []
+    };
+
+    // Find all task files in the sequence folder
+    const projectRoot = getProjectRoot();
+    const taskFolderPath = path.resolve(projectRoot, config.taskFolder, folderName);
+    
+    if (fs.existsSync(taskFolderPath)) {
+      try {
+        const taskFiles = fs.readdirSync(taskFolderPath)
+          .filter(f => f.endsWith('.md') && !f.startsWith('_'))
+          .sort(); // Alphabetical order
+        
+        for (const taskFile of taskFiles) {
+          // Derive task ID - this is a simplified approach
+          // In practice, the task ID might be more complex
+          const baseTaskName = path.basename(taskFile, '.md');
+          
+          // Look for corresponding task state files that might contain this folder name
+          const possibleTaskIds = fs.readdirSync(stateDir)
+            .filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'))
+            .map(f => f.replace('.state.json', ''))
+            .filter(taskId => taskId.includes(folderName) || taskId.includes(baseTaskName));
+          
+          let taskStatus = 'pending';
+          let taskPhase = undefined;
+          let taskLastUpdate = undefined;
+          let matchedTaskId = `${folderName}-${baseTaskName}`;
+          
+          // Try to find the actual task state
+          for (const possibleTaskId of possibleTaskIds) {
+            const taskStateFile = path.join(stateDir, `${possibleTaskId}.state.json`);
+            if (fs.existsSync(taskStateFile)) {
+              try {
+                const taskStateContent = fs.readFileSync(taskStateFile, 'utf8');
+                const taskState = JSON.parse(taskStateContent);
+                taskStatus = 'done'; // If state file exists, assume it's at least started
+                taskPhase = taskState.phase;
+                taskLastUpdate = taskState.lastUpdate;
+                matchedTaskId = possibleTaskId;
+                
+                if (taskState.phase === 'running') {
+                  taskStatus = 'running';
+                } else if (taskState.phase === 'failed') {
+                  taskStatus = 'failed';
+                } else if (taskState.phase === 'done') {
+                  taskStatus = 'done';
+                }
+                break;
+              } catch (e) {
+                console.error(`Error reading task state ${possibleTaskId}:`, e);
+              }
+            }
+          }
+          
+          sequenceDetails.tasks.push({
+            taskId: matchedTaskId,
+            filename: taskFile,
+            status: taskStatus,
+            phase: taskPhase,
+            lastUpdate: taskLastUpdate
+          });
+        }
+      } catch (error) {
+        console.error(`Error reading task folder ${taskFolderPath}:`, error);
+      }
+    }
+
+    return sequenceDetails;
+  } catch (error) {
+    console.error(`Error reading sequence details for ${sequenceId}:`, error);
+    return null;
+  }
+}
+
 // Wrap the server logic in an exported function
 export async function startWebServer() {
   const config = await getConfig();
@@ -294,6 +465,38 @@ export async function startWebServer() {
     
     res.setHeader("Content-Type", "text/plain");
     res.send(logContent);
+  });
+
+  // API endpoint to get all sequences
+  app.get("/api/sequences", (_req: Request, res: Response) => {
+    try {
+      const sequences = getAllSequenceStatuses(stateDir);
+      res.json(sequences);
+    } catch (error) {
+      console.error('Error fetching sequences:', error);
+      res.status(500).json({ error: 'Failed to fetch sequences' });
+    }
+  });
+
+  // API endpoint to get detailed sequence information
+  app.get("/api/sequences/:sequenceId", (req: Request, res: Response) => {
+    const { sequenceId } = req.params;
+    
+    if (!sequenceId || typeof sequenceId !== "string") {
+      return res.status(400).json({ error: "Invalid sequence ID" });
+    }
+    
+    try {
+      const sequenceDetails = getSequenceDetails(stateDir, config, sequenceId);
+      if (!sequenceDetails) {
+        return res.status(404).json({ error: `Sequence with ID '${sequenceId}' could not be found.` });
+      }
+      
+      res.json(sequenceDetails);
+    } catch (error) {
+      console.error(`Error fetching sequence details for ${sequenceId}:`, error);
+      res.status(500).json({ error: 'Failed to fetch sequence details' });
+    }
   });
 
   // Create WebSocket server
