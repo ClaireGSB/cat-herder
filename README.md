@@ -789,6 +789,56 @@ For example, if you add a `lint` step that needs to run `npm run lint:fix`, but 
 
 The validator ensures both your security settings and project configuration stay in sync with your workflow.
 
+## Interactive Web Dashboard
+
+`claude-project` includes a powerful web-based dashboard for visual monitoring and real-time task tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task information, and watch Claude's reasoning process in real-time.
+
+### Getting Started
+
+Start the web server using either command:
+
+```bash
+# Direct command
+claude-project web
+
+# Via npm script
+npm run claude:web
+```
+
+The dashboard will be available at `http://localhost:5177` in your browser.
+
+### Dashboard Overview
+
+The web interface provides two main views:
+
+- **Dashboard**: Overview of all tasks with their status, duration, token usage, and detailed information
+- **Live Activity**: Real-time stream of Claude's reasoning process during active tasks
+
+### Live Activity Stream
+
+The Live Activity feature provides an "as-if-CLI" monitoring experience, letting you watch Claude's thought process unfold in real-time as tasks execute.
+
+**Key Features:**
+- **Real-time Log Streaming**: See Claude's reasoning process as it happens, with automatic updates as new log content is written
+- **Task Information Display**: Shows current running task ID and the active pipeline step
+- **Auto-scrolling Interface**: Terminal-like experience that automatically scrolls to show the latest reasoning
+- **WebSocket Technology**: Efficient real-time updates with minimal overhead
+- **Graceful Fallback**: Clean interface when no tasks are currently running
+
+**How to Use:**
+1. Start a task using `claude-project run` or `npm run claude:run`
+2. Open the web dashboard at `http://localhost:5177`
+3. Click "Live Activity" in the navigation or go directly to `/live`
+4. Watch Claude's reasoning process unfold in real-time
+
+[Screenshot of the Live Activity stream]
+
+This feature is perfect for:
+- **Monitoring Long-running Tasks**: Keep an eye on complex implementations without switching to terminal
+- **Understanding Claude's Process**: See the step-by-step reasoning that leads to code decisions
+- **Debugging Workflows**: Identify where tasks might be struggling or taking unexpected approaches
+- **Team Collaboration**: Share live task progress with team members via a simple URL
+
 ## Commands Reference
 
 ### CLI Commands
@@ -803,7 +853,7 @@ All commands are available directly via the `claude-project` executable.
 -   `claude-project watch`: Watches the tasks directory and runs new tasks automatically.
 -   `claude-project status`: Displays the status of the most recent task as JSON.
 -   `claude-project tui`: Launches an interactive terminal UI to monitor task progress.
--   `claude-project web`: Starts a minimal web server to view task status.
+-   `claude-project web`: Starts the interactive web dashboard with real-time task monitoring and Live Activity streaming. See [Interactive Web Dashboard](#interactive-web-dashboard) for details.
 
 ### NPM Scripts
 
@@ -814,7 +864,7 @@ The `init` command adds these `claude:*` scripts to your project's `package.json
 -   `npm run claude:watch`: Watches for new tasks.
 -   `npm run claude:status`: Shows the latest task status.
 -   `npm run claude:tui`: Launches the terminal UI.
--   `npm run claude:web`: Starts the status web server.
+-   `npm run claude:web`: Starts the interactive web dashboard with real-time monitoring.
 
 **Note:** Test scripts (like `npm test`) are not automatically added. The default pipeline includes test steps that assume you have `test`, `test:watch`, and `coverage` scripts, but you can customize your pipeline to use any testing framework or remove testing steps entirely.
 

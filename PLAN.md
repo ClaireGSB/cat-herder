@@ -13,7 +13,7 @@
 -   [x] **2. Create a New "Live Activity" Page Template**
 -   [x] **3. Add Client-Side JavaScript for Log Streaming**
 -   [x] **4. Add New Routes and Navigation**
--   [ ] **5. Update README.md Documentation**
+-   [x] **5. Update README.md Documentation**
 
 ---
 
@@ -224,3 +224,10 @@
     1.  In the "Interactive Web Dashboard" section of `README.md`, add a new bullet point describing the "Live Activity" view.
     2.  Explain what it's for: "See a real-time stream of Claude's reasoning process, just like watching a terminal, perfect for monitoring active tasks."
     3.  Add a placeholder for a screenshot of the new live view page: `[Screenshot of the Live Activity stream]`.
+
+**✅ VERIFICATION COMPLETE:** Step 5 has been fully implemented and documented:
+- Added comprehensive "Interactive Web Dashboard" section with detailed feature explanations
+- Documented Live Activity stream with key features, usage instructions, and use cases
+- Updated command references in CLI Commands and NPM Scripts sections to link to new documentation
+- Included placeholder for Live Activity screenshot as specified
+- Enhanced web command descriptions from minimal to detailed with cross-references
