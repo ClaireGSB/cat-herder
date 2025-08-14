@@ -74,9 +74,13 @@
                         this.updateTaskDetail(data.data);
                     }
                 } else if (data.type === 'sequence_update') {
-                    // Handle sequence state updates (foundation for future steps)
+                    // Handle sequence state updates
                     console.log('Sequence update received:', data.data);
-                    // Future implementation will handle sequence updates
+                    if (window.location.pathname === '/sequences') {
+                        this.updateSequencesDashboardRow(data.data);
+                    } else if (window.location.pathname.startsWith('/sequence/')) {
+                        this.updateSequenceDetail(data.data);
+                    }
                 } else if (data.type === 'log_content' || data.type === 'log_update' || data.type === 'error') {
                     // These are handled by page-specific logic (live activity)
                     return;
@@ -130,6 +134,93 @@
                     if (durationElement) {
                         durationElement.textContent = `${taskData.stats.totalDuration?.toFixed(2) || 'N/A'}s`;
                     }
+                }
+            }
+            
+            // Update a specific row in the sequences dashboard table
+            updateSequencesDashboardRow(sequenceData) {
+                const row = document.querySelector(`tr[data-sequence-id="${sequenceData.sequenceId}"]`);
+                if (row) {
+                    // Update status badge
+                    const statusBadge = row.querySelector('.status-badge');
+                    if (statusBadge) {
+                        statusBadge.className = `badge status-${sequenceData.phase} status-badge`;
+                        
+                        // Update icon
+                        let iconHtml = '';
+                        if (sequenceData.phase === 'running') {
+                            iconHtml = '<i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>';
+                        } else if (sequenceData.phase === 'done') {
+                            iconHtml = '<i class="bi bi-check-circle-fill me-1"></i>';
+                        } else if (sequenceData.phase === 'failed') {
+                            iconHtml = '<i class="bi bi-exclamation-triangle-fill me-1"></i>';
+                        } else if (sequenceData.phase === 'paused') {
+                            iconHtml = '<i class="bi bi-pause-circle-fill me-1"></i>';
+                        }
+                        statusBadge.innerHTML = iconHtml + sequenceData.phase;
+                    }
+                    
+                    // Update duration
+                    const durationCell = row.querySelector('.duration-cell');
+                    if (durationCell && sequenceData.stats?.totalDuration) {
+                        durationCell.innerHTML = `${sequenceData.stats.totalDuration.toFixed(2)}s`;
+                        if (sequenceData.stats.totalPauseTime && sequenceData.stats.totalPauseTime > 0) {
+                            durationCell.innerHTML += `<br><small class="text-warning"><i class="bi bi-pause-fill"></i> ${sequenceData.stats.totalPauseTime.toFixed(2)}s paused</small>`;
+                        }
+                    }
+                    
+                    // Update last update time
+                    const updateCell = row.querySelector('.update-cell');
+                    if (updateCell) {
+                        updateCell.textContent = new Date(sequenceData.lastUpdate || Date.now()).toLocaleString();
+                    }
+                }
+                
+                // Update summary cards at top of page
+                this.updateSequenceSummaryCards(sequenceData.phase);
+            }
+            
+            // Update sequence detail page
+            updateSequenceDetail(sequenceData) {
+                // Update status in header
+                const statusElement = document.querySelector('.sequence-status');
+                if (statusElement && sequenceData.phase) {
+                    statusElement.className = `badge status-${sequenceData.phase} fs-6 sequence-status`;
+                    
+                    // Update icon
+                    let iconHtml = '';
+                    if (sequenceData.phase === 'running') {
+                        iconHtml = '<i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>';
+                    } else if (sequenceData.phase === 'done') {
+                        iconHtml = '<i class="bi bi-check-circle-fill me-1"></i>';
+                    } else if (sequenceData.phase === 'failed') {
+                        iconHtml = '<i class="bi bi-exclamation-triangle-fill me-1"></i>';
+                    } else if (sequenceData.phase === 'paused') {
+                        iconHtml = '<i class="bi bi-pause-circle-fill me-1"></i>';
+                    }
+                    statusElement.innerHTML = iconHtml + sequenceData.phase;
+                }
+                
+                // Update stats
+                if (sequenceData.stats) {
+                    const durationElement = document.querySelector('.sequence-duration');
+                    if (durationElement) {
+                        durationElement.textContent = `${sequenceData.stats.totalDuration?.toFixed(2) || 'N/A'}s`;
+                    }
+                }
+            }
+            
+            // Update summary cards on sequences dashboard
+            updateSequenceSummaryCards(changedPhase) {
+                // This is a simplified approach - in a real implementation,
+                // we would want to fetch fresh counts from the server
+                // For now, we'll just trigger a subtle refresh indicator
+                const refreshIcon = document.querySelector('.bi-arrow-clockwise');
+                if (refreshIcon) {
+                    refreshIcon.style.animation = 'spin 1s linear';
+                    setTimeout(() => {
+                        refreshIcon.style.animation = '';
+                    }, 1000);
                 }
             }
             

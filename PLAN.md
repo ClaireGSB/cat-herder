@@ -11,7 +11,7 @@
 -   [x] **2. Enhance Live Activity Page with Full Lifecycle Awareness**
 -   [x] **3. Add Contextual Link from Task Detail to Live View**
 -   [x] **4. Create Backend API for Sequences**
--   [ ] **5. Implement Frontend Views for Sequence Dashboard**
+-   [x] **5. Implement Frontend Views for Sequence Dashboard**
 -   [ ] **6. Add Real-Time Updates to Sequence Views**
 -   [ ] **7. Update README.md Documentation**
 

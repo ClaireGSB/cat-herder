@@ -450,6 +450,28 @@ export async function startWebServer() {
     });
   });
 
+  // Sequences dashboard route
+  app.get("/sequences", (_req: Request, res: Response) => {
+    const sequences = getAllSequenceStatuses(stateDir);
+    res.render("sequences-dashboard", { sequences });
+  });
+
+  // Sequence detail route
+  app.get("/sequence/:sequenceId", (req: Request, res: Response) => {
+    const { sequenceId } = req.params;
+    
+    if (!sequenceId || typeof sequenceId !== "string") {
+      return res.status(400).send("Invalid sequence ID");
+    }
+    
+    const sequenceDetails = getSequenceDetails(stateDir, config, sequenceId);
+    if (!sequenceDetails) {
+      return res.status(404).send(`Sequence with ID '${sequenceId}' could not be found.`);
+    }
+    
+    res.render("sequence-detail", { sequence: sequenceDetails });
+  });
+
   // Log file API route
   app.get("/log/:taskId/:logFile", (req: Request, res: Response) => {
     const { taskId, logFile } = req.params;

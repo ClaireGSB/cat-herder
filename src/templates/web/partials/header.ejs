@@ -83,6 +83,11 @@
             margin-right: 0.5rem;
             margin-bottom: 0.25rem;
         }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -96,6 +101,10 @@
                 <a class="nav-link" href="/" title="Dashboard">
                     <i class="bi bi-house-fill"></i>
                     Dashboard
+                </a>
+                <a class="nav-link" href="/sequences" title="Sequences">
+                    <i class="bi bi-collection"></i>
+                    Sequences
                 </a>
                 <a class="nav-link" href="/live" title="Live Activity">
                     <i class="bi bi-broadcast-pin"></i>
