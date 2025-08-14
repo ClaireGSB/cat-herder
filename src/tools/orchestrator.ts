@@ -134,6 +134,7 @@ ${content.trim()}\n\
 \
 \
 \
+\
 \n`;
   }
 
@@ -560,9 +561,9 @@ function findNextAvailableTask(folderPath: string, statusFile: string): string |
   const completedTasks = sequenceStatus.completedTasks;
 
   try {
-    // Read all .md files from the folder
+    // Read all .md files from the folder, ignoring files starting with _
     const files = readdirSync(folderPath)
-      .filter(file => file.endsWith('.md'))
+      .filter(file => file.endsWith('.md') && !file.startsWith('_'))
       .map(file => path.resolve(folderPath, file));
 
     // Filter out completed tasks
@@ -634,7 +635,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   const folderPathResolved = path.resolve(projectRoot, taskFolderPath);
   try {
-    const files = readdirSync(folderPathResolved).filter(file => file.endsWith('.md'));
+    const files = readdirSync(folderPathResolved).filter(file => file.endsWith('.md') && !file.startsWith('_'));
     if (files.length === 0) {
       throw new Error(`Error: No task files (.md) found in folder: ${taskFolderPath}`);
     }

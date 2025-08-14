@@ -80,11 +80,21 @@ Tasks are executed alphabetically by filename. For workflows requiring specific 
 
 ```
 claude-Tasks/my-feature/
+├── _PLAN.md
+├── _notes_on_api_changes.md
 ├── 01-analyze-requirements.md
 ├── 02-design-architecture.md
 ├── 03-implement-core.md
 └── 04-write-tests.md
 ```
+
+### Ignoring Files for Comments and Planning
+
+You can include notes, plans, or other context files within a sequence folder that shouldn't be executed as tasks. The sequence orchestrator will automatically ignore any file that is prefaced with an underscore (`_`).
+
+This allows you to keep your planning and execution in the same place.
+
+In the example above, `_PLAN.md` and `_notes_on_api_changes.md` will be ignored by the runner, and the sequence will execute starting with `01-analyze-requirements.md`.
 
 ### Example Dynamic Workflow
 
@@ -97,7 +107,7 @@ pipeline: default
 ---
 # Break Down PRD
 
-Analyze the product requirements document and create individual task files for each implementation step.
+Analyze the product requirements document (`_PRD.md`) and create individual task files for each implementation step.
 
 Use the Write tool to create:
 - `02-setup-database-schema.md`
