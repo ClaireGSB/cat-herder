@@ -1,145 +1,205 @@
 
-# PLAN.md
+# PLAN: Refactor Task and Sequence Identification
 
-### **Title: Refine Web Dashboard for Robustness and Maintainability**
+**Goal**: Rework the task and sequence identification logic to use unique, path-based IDs, preventing state collisions between different sequences.
 
-**Goal:** Refactor the web dashboard's backend logic for 100% reliable task-sequence association, improve the frontend code structure for better maintainability, and polish the UI text to reflect its real-time capabilities.
+## Description
 
-### **Description**
+Currently, the `taskId` is generated from the task's filename only (e.g., `01-create-plan.md`). This creates a critical bug where tasks with the same filename in different sequence folders (e.g., `sequence-A/01-create-plan.md` and `sequence-B/01-create-plan.md`) are treated as the same task. This causes state conflicts, incorrect branch naming, and results in the orchestrator improperly skipping tasks it believes are already complete.
 
-The web dashboard is now feature-complete, but its internal architecture can be made more robust and easier to maintain. Currently, the association between a task and its parent sequence relies on string pattern matching, which can be fragile. Additionally, all client-side JavaScript resides in a single large script tag, which will become difficult to manage as the application grows.
+This refactor will change the identification logic to be based on the task's full relative path, ensuring every task and its associated state, logs, and git branch are unique across the entire project.
 
-This plan outlines three key refinements:
-1.  **Explicit Linking:** We will modify the orchestrator to explicitly write a `parentSequenceId` into a task's state file, making the relationship between tasks and sequences unambiguous.
-2.  **Code Modularization:** We will refactor the frontend JavaScript into separate, page-specific files for better organization and readability.
-3.  **UI Polish:** We will update minor UI text to accurately reflect the new, fully real-time nature of the dashboard.
+## Summary Checklist
 
-### **Summary Checklist**
-
--   [x] **1. Implement Explicit Task-to-Sequence Linking**
--   [x] **2. Refactor Client-Side JavaScript into Modular Files**
--   [x] **3. Polish UI Text and Contextual Links**
+-   [ ] **Update `status.ts`**: Introduce a new `taskPathToTaskId` function and update the `TaskStatus` interface.
+-   [ ] **Update `orchestrator.ts`**: Integrate the new ID generation logic for tasks and git branches.
+-   [ ] **Update `web.ts`**: Refactor the web dashboard to use the new unique IDs and display correct task information.
+-   [ ] **Test the changes**: Manually run two separate sequences with identically named task files to confirm they are treated as distinct tasks.
+-   [ ] **Update Documentation**: Update `README.md` to reflect any user-facing changes or developer-facing concepts related to the new identification scheme.
 
 ---
 
-### **Detailed Implementation Steps**
+## Detailed Implementation Steps
 
-#### **1. Implement Explicit Task-to-Sequence Linking**
+### 1. Update `status.ts` for Unique, Path-Based IDs
 
-*   **Objective:** To create an explicit, immutable link between a task and its parent sequence within the state files, removing the need for fragile string-matching logic.
+**Objective**: Modify the core status management file to generate unique IDs and store additional path information in the state.
 
-*   **Task 1.1 (Backend - `src/tools/status.ts`):**
-    1.  Update the `TaskStatus` type definition to include an optional `parentSequenceId` field.
+**Tasks**:
 
-*   **Code Snippet (`src/tools/status.ts`):**
-    ```typescript
-    export type TaskStatus = {
-      // ... existing fields
-      pipeline?: string;
-      parentSequenceId?: string; // Add this new optional field
-      currentStep: string;
-      // ... rest of the fields
-    };
-    ```
+1.  **Create `taskPathToTaskId` function**: This new function will accept a task's file path and the project root to generate a consistent, unique ID.
+2.  **Update `TaskStatus` Interface**: Add a `taskPath: string;` property to store the task's relative path, providing a persistent reference to its location.
+3.  **Update ID Generation in `folderPathToSequenceId`**: Sanitize the sequence folder name to prevent invalid characters in filenames.
+4.  **Update `readStatus`**: Add backward compatibility to handle old state files that do not have the new `taskPath` property.
 
-*   **Task 1.2 (Backend - `src/tools/orchestrator.ts`):**
-    1.  In the `executePipelineForTask` function, detect if the task is being run as part of a sequence (the `options.sequenceStatusFile` will be defined).
-    2.  If it is, extract the `sequenceId` from the filename.
-    3.  When calling `updateStatus` for the task, write the extracted `sequenceId` to the new `parentSequenceId` field.
+**Code Snippet (`src/tools/status.ts`)**:
 
-*   **Code Snippet (`src/tools/orchestrator.ts`):**
-    ```typescript
-    // Inside executePipelineForTask function
-    const sequenceId = options.sequenceStatusFile
-      ? path.basename(options.sequenceStatusFile, '.state.json')
-      : undefined;
+```typescript
+// New function to generate a unique task ID from its path
+export function taskPathToTaskId(taskPath: string, projectRoot: string): string {
+    const relativePath = path.isAbsolute(taskPath)
+        ? path.relative(projectRoot, taskPath)
+        : taskPath;
 
-    updateStatus(statusFile, s => {
-      if (s.taskId === 'unknown') {
-        s.taskId = taskId;
-        s.startTime = new Date().toISOString();
-      }
-      s.pipeline = pipelineName;
-      if (sequenceId) {
-        s.parentSequenceId = sequenceId; // Explicitly set the link
-      }
-    });
-    ```
+    const taskId = relativePath
+        .replace(/\.md$/, '') // remove extension
+        .replace(/[\\/]/g, '-') // replace path separators
+        .replace(/[^a-z0-9-]/gi, '-'); // sanitize
+    return `task-${taskId}`;
+}
 
-*   **Task 1.3 (Backend - `src/tools/web.ts`):**
-    1.  Rewrite the `getSequenceDetails` helper function. Instead of scanning folders and matching filenames, it will now scan all task state files and filter them where `parentSequenceId` matches the requested `sequenceId`. This is much faster and more reliable.
-    2.  Rewrite the `findParentSequence` helper. It will now simply read a task's state file and return the value of the `parentSequenceId` field if it exists.
+// Updated function to sanitize sequence folder names
+export function folderPathToSequenceId(folderPath: string): string {
+    const folderName = path.basename(path.resolve(folderPath));
+    // Sanitize to make it a safe filename component
+    const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');
+    return `sequence-${sanitizedName}`;
+}
 
-#### **2. Refactor Client-Side JavaScript into Modular Files**
 
-*   **Objective:** To modularize the client-side JavaScript by moving it from a single `<script>` block into separate files, improving code organization and maintainability.
+// Updated TaskStatus interface
+export type TaskStatus = {
+  version: number;
+  taskId: string;
+  taskPath: string; // <-- Add this new property
+  startTime: string;
+  branch: string;
+  // ... other properties
+};
 
-*   **Task 2.1 (Project Structure):**
-    1.  Create a new directory: `src/public/js/`.
-    2.  Move the `ClaudeDashboard` class and its related logic from `footer.ejs` into a new file: `src/public/js/dashboard.js`.
-    3.  Move the page-specific initialization logic (like `initializeLiveActivity`) into separate files: `src/public/js/live-activity.js`, `src/public/js/sequence-detail.js`, etc.
+// Update readStatus for backward compatibility
+export function readStatus(file: string): TaskStatus {
+    if (fs.existsSync(file)) {
+        try {
+            const data = JSON.parse(fs.readFileSync(file, "utf8"));
+            // Simple migration for old status files
+            if (!data.taskPath) data.taskPath = "unknown";
+            return data;
+        } catch {
+            return defaultStatus;
+        }
+    }
+    return defaultStatus;
+}
+```
 
-*   **Task 2.2 (Build Process - `package.json`):**
-    1.  Ensure the build script copies the entire `src/public` directory (which now contains `index.html` and the new `js/` subdirectory) to the `dist` folder.
-    *Note: Your current build script `cp -r src/templates dist/` seems to handle this already if we place `public` inside `templates`, but creating a dedicated `public` folder is cleaner. Let's assume a new `cp -r src/public dist/` command might be needed.*
+### 2. Update `orchestrator.ts` to Use New IDs
 
-*   **Task 2.3 (Frontend - `footer.ejs`):**
-    1.  Replace the large inline `<script>` block with individual `<script>` tags that load the new JavaScript files.
-    2.  Use a pattern to conditionally load page-specific scripts.
+**Objective**: Modify the orchestrator to use the new `taskPathToTaskId` function for all task-related operations, including state management, logging, and branch naming.
 
-*   **Code Snippet (New file structure and loading in `footer.ejs`):**
-    ```
-    <!-- In footer.ejs -->
-    <script src="/js/dashboard.js"></script> <!-- Main class -->
+**Tasks**:
 
-    <% if (page === 'dashboard') { %>
-        <script src="/js/dashboard-page.js"></script>
-    <% } else if (page === 'sequence_detail') { %>
-        <script src="/js/sequence-detail-page.js"></script>
-    <% } else if (page === 'live_activity') { %>
-        <script src="/js/live-activity-page.js"></script>
-    <% } %>
-    ```
-    *(This requires passing a `page` variable from each Express route when rendering the template.)*
+1.  **Import `taskPathToTaskId`**: Import the new function from `status.ts`.
+2.  **Update `taskPathToBranchName`**: Modify this function to use the new `taskPathToTaskId` function, ensuring branch names are as unique as the task IDs.
+3.  **Update `runTask` and `executePipelineForTask`**: Replace all instances where a `taskId` is generated from `path.basename` with calls to the new `taskPathToTaskId` function.
+4.  **Persist `taskPath`**: When creating or updating a task's state, ensure the `taskPath` property is saved with its relative path.
 
-#### **3. Polish UI Text and Contextual Links**
+**Code Snippet (`src/tools/orchestrator.ts`)**:
 
-*   **Objective:** To update UI text to align with the new real-time capabilities and improve the clarity of contextual links.
+```typescript
+// Before
+function taskPathToBranchName(taskPath: string): string {
+  const taskFileName = path.basename(taskPath, '.md');
+  // ... (sanitization)
+  return `claude/${sanitized}`;
+}
 
-*   **Task 3.1 (`src/templates/web/dashboard.ejs`):**
-    1.  Locate the text "Auto-refreshes every 30s".
-    2.  Change it to "Status updates in real-time".
-    3.  Change the icon from `bi-arrow-clockwise` to something like `bi-reception-4` or `bi-broadcast` to better represent a live connection.
+// After
+function taskPathToBranchName(taskPath: string, projectRoot: string): string {
+    const taskId = taskPathToTaskId(taskPath, projectRoot);
+    // remove the "task-" prefix for the branch name for brevity
+    const branchNameSegment = taskId.startsWith('task-') ? taskId.substring(5) : taskId;
+    return `claude/${branchNameSegment}`;
+}
 
-*   **Code Snippet (`dashboard.ejs`):**
-    ```html
-    <!-- Before -->
-    <div class="d-flex align-items-center text-muted">
-        <i class="bi bi-arrow-clockwise me-1"></i>
-        <small>Auto-refreshes every 30s</small>
-    </div>
+// In runTask() and executePipelineForTask()
+// Before
+const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
 
-    <!-- After -->
-    <div class="d-flex align-items-center text-muted">
-        <i class="bi bi-broadcast-pin me-1"></i>
-        <small>Status updates in real-time</small>
-    </div>
-    ```
+// After
+const taskId = taskPathToTaskId(taskRelativePath, projectRoot);
 
-*   **Task 3.2 (`src/templates/web/task-detail.ejs`):**
-    1.  Find the contextual link to the live view.
-    2.  Change the link text from "LIVE" to "View Live Activity" to be more descriptive for new users.
+// When updating status
+updateStatus(statusFile, s => {
+  s.taskId = taskId;
+  s.taskPath = relativeTaskPath; // <-- Make sure to save the path
+  //...
+});
+```
 
-*   **Code Snippet (`task-detail.ejs`):**
-    ```html
-    <!-- Before -->
-    <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
-        <i class="bi bi-broadcast me-1"></i>LIVE
-    </a>
+### 3. Update `web.ts` for UI Consistency
 
-    <!-- After -->
-    <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">
-        <i class="bi bi-broadcast me-1"></i>View Live Activity
-    </a>
-    ```
+**Objective**: Refactor the web dashboard's backend to correctly identify and display task data using the new unique IDs and path information.
 
+**Tasks**:
+
+1.  **Filter Tasks**: In `getAllTaskStatuses`, ensure you are only reading task state files by filtering out files that start with `sequence-`.
+2.  **Pass `taskPath` to Templates**: Ensure the `taskPath` property is available in the data passed to the EJS templates for the dashboard and sequence detail views.
+3.  **Update `getSequenceDetails`**: When listing tasks within a sequence, use the stored `taskPath` for display and linking, ensuring the correct file is referenced.
+4.  **Sort Tasks by Path**: In the sequence detail view, sort tasks alphabetically by `taskPath` to ensure a consistent and predictable order.
+
+**Code Snippet (`src/tools/web.ts`)**:
+
+```typescript
+// In getAllTaskStatuses()
+// Before
+const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json"));
+
+// After
+const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json") && !f.startsWith("sequence-"));
+
+
+// In getSequenceDetails()
+// Before
+// ... logic to derive filename from taskId
+sequenceDetails.tasks.push({
+    taskId: taskId,
+    filename: filename, // <-- This was a guess
+    // ...
+});
+
+// After
+sequenceDetails.tasks.push({
+    taskId: taskId,
+    taskPath: taskState.taskPath || 'unknown', // <-- Use the reliable path
+    status: taskStatus,
+    phase: taskState.phase,
+    lastUpdate: taskState.lastUpdate
+});
+
+// At the end of getSequenceDetails()
+sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
+```
+
+### 4. Testing the Changes
+
+**Objective**: Verify that the refactoring has fixed the state collision bug.
+
+**Tasks**:
+
+1.  **Create Test Structure**:
+    -   Create two sequence folders: `claude-Tasks/sequence-A` and `claude-Tasks/sequence-B`.
+    -   Inside each folder, create a task file with the exact same name, for example `01-do-something.md`.
+2.  **Run First Sequence**:
+    -   Execute `claude-project run-sequence claude-Tasks/sequence-A`.
+    -   Confirm it runs successfully.
+3.  **Run Second Sequence**:
+    -   Execute `claude-project run-sequence claude-Tasks/sequence-B`.
+    -   **Crucially, verify that it does NOT skip the `01-do-something.md` task.** It should run it as a new, distinct task.
+4.  **Check State Files**:
+    -   Inspect the `.claude/state/` directory. You should see two different state files, for example:
+        -   `task-claude-Tasks-sequence-A-01-do-something.state.json`
+        -   `task-claude-Tasks-sequence-B-01-do-something.state.json`
+
+## Error Handling & Warnings
+
+-   **Old State Files**: The `readStatus` function should gracefully handle old state files by populating the `taskPath` with a default value (`"unknown"`). This ensures the tool doesn't crash if it encounters state from a previous version. No CLI warnings are necessary for this, as it's a silent, backward-compatible upgrade.
+-   **Invalid Paths**: The use of `path.relative` and sanitization in the ID generation functions should inherently handle most path-related edge cases. No new error handling is expected.
+
+## Documentation Changes
+
+**Objective**: Update the `README.md` to ensure all information is current.
+
+**Task**:
+
+-   Review the `README.md` file, especially sections related to state management, logging, and branch naming. While this change is mostly internal, double-check that no examples or explanations are now misleading. For instance, if branch names are shown as examples, they should be updated to reflect the new, longer format (e.g., `claude/sequence-A-01-do-something` instead of `claude/01-do-something`).
