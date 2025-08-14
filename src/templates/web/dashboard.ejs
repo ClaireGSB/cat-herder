@@ -1,0 +1,195 @@
+<%- include('partials/header', { title: 'Dashboard' }) %>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h2 mb-0">
+        <i class="bi bi-speedometer2 me-2 text-primary"></i>
+        Task Dashboard
+    </h1>
+    <div class="d-flex align-items-center text-muted">
+        <i class="bi bi-arrow-clockwise me-1"></i>
+        <small>Auto-refreshes every 30s</small>
+    </div>
+</div>
+
+<% if (tasks && tasks.length > 0) { %>
+    <div class="row mb-3">
+        <div class="col-md-3">
+            <div class="card border-0 bg-success bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="text-success mb-1"><%= tasks.filter(t => t.phase === 'done').length %></h3>
+                    <small class="text-muted">Completed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-primary bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="text-primary mb-1"><%= tasks.filter(t => t.phase === 'running').length %></h3>
+                    <small class="text-muted">Running</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-danger bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-1"><%= tasks.filter(t => t.phase === 'failed').length %></h3>
+                    <small class="text-muted">Failed</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 bg-secondary bg-opacity-10">
+                <div class="card-body text-center">
+                    <h3 class="text-secondary mb-1"><%= tasks.filter(t => ['pending', 'paused'].includes(t.phase)).length %></h3>
+                    <small class="text-muted">Pending/Paused</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-transparent">
+            <h5 class="card-title mb-0">
+                <i class="bi bi-list-task me-2"></i>
+                Recent Tasks
+            </h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Task ID</th>
+                            <th>Status</th>
+                            <th>Pipeline</th>
+                            <th>Duration</th>
+                            <th>Token Usage</th>
+                            <th>Last Update</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% tasks.forEach(task => { %>
+                            <tr data-task-id="<%= task.taskId %>">
+                                <td>
+                                    <a href="/task/<%= task.taskId %>" class="text-decoration-none">
+                                        <strong><%= task.taskId %></strong>
+                                    </a>
+                                    <% if (task.branch) { %>
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="bi bi-git"></i>
+                                            <%= task.branch %>
+                                        </small>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <span class="badge status-<%= task.phase %> status-badge">
+                                        <% if (task.phase === 'running') { %>
+                                            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                                        <% } else if (task.phase === 'done') { %>
+                                            <i class="bi bi-check-circle-fill me-1"></i>
+                                        <% } else if (task.phase === 'failed') { %>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                        <% } else if (task.phase === 'paused') { %>
+                                            <i class="bi bi-pause-circle-fill me-1"></i>
+                                        <% } %>
+                                        <%= task.phase %>
+                                    </span>
+                                    <% if (task.currentStep && task.phase === 'running') { %>
+                                        <br>
+                                        <small class="text-muted">Step: <%= task.currentStep %></small>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <%= task.pipeline || 'default' %>
+                                    </span>
+                                </td>
+                                <td class="duration-cell">
+                                    <% if (task.stats?.totalDuration) { %>
+                                        <%= task.stats.totalDuration.toFixed(2) %>s
+                                    <% } else { %>
+                                        <span class="text-muted">N/A</span>
+                                    <% } %>
+                                    
+                                    <% if (task.stats?.totalPauseTime && task.stats.totalPauseTime > 0) { %>
+                                        <br>
+                                        <small class="text-warning">
+                                            <i class="bi bi-pause-fill"></i>
+                                            <%= task.stats.totalPauseTime.toFixed(2) %>s paused
+                                        </small>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <% if (task.tokenUsage && Object.keys(task.tokenUsage).length > 0) { %>
+                                        <% Object.entries(task.tokenUsage).forEach(([model, usage]) => { %>
+                                            <div class="token-usage">
+                                                <small class="text-muted d-block"><%= model.split('-').pop() %></small>
+                                                <% if (usage.inputTokens) { %>
+                                                    <span class="badge bg-info">In: <%= usage.inputTokens.toLocaleString() %></span>
+                                                <% } %>
+                                                <% if (usage.outputTokens) { %>
+                                                    <span class="badge bg-success">Out: <%= usage.outputTokens.toLocaleString() %></span>
+                                                <% } %>
+                                            </div>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <span class="text-muted">N/A</span>
+                                    <% } %>
+                                </td>
+                                <td class="update-cell">
+                                    <% if (task.lastUpdate) { %>
+                                        <%= new Date(task.lastUpdate).toLocaleString() %>
+                                    <% } else { %>
+                                        <span class="text-muted">Unknown</span>
+                                    <% } %>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="/task/<%= task.taskId %>" class="btn btn-outline-primary" title="View Details">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <% if (task.phase === 'failed') { %>
+                                            <button type="button" class="btn btn-outline-secondary" title="Retry" disabled>
+                                                <i class="bi bi-arrow-clockwise"></i>
+                                            </button>
+                                        <% } %>
+                                    </div>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <% if (tasks.length > 10) { %>
+        <div class="text-center mt-3">
+            <small class="text-muted">
+                Showing recent tasks. Use filters or search for specific tasks.
+            </small>
+        </div>
+    <% } %>
+
+<% } else { %>
+    <div class="empty-state">
+        <div class="text-center">
+            <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+            <h3 class="text-muted mb-3">No Tasks Found</h3>
+            <p class="text-muted mb-4">
+                No tasks have been run yet. Start by running a task with:<br>
+                <code>claude-project run your-task.md</code>
+            </p>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="/" class="btn btn-outline-primary" onclick="window.location.reload()">
+                    <i class="bi bi-arrow-clockwise me-1"></i>
+                    Refresh
+                </a>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<%- include('partials/footer') %>
