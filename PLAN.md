@@ -11,7 +11,7 @@
 
 -   [x] **1. Enhance Backend for Live Log Tailing**
 -   [x] **2. Create a New "Live Activity" Page Template**
--   [ ] **3. Add Client-Side JavaScript for Log Streaming**
+-   [x] **3. Add Client-Side JavaScript for Log Streaming**
 -   [ ] **4. Add New Routes and Navigation**
 -   [ ] **5. Update README.md Documentation**
 

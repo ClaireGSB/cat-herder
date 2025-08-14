@@ -224,7 +224,7 @@
         // Live Activity page initialization
         function initializeLiveActivity() {
             // Get running task data from the server-rendered template
-            const runningTaskData = <%-JSON.stringify(runningTask) %>;
+            const runningTaskData = <%- runningTask ? JSON.stringify(runningTask) : 'null' %>;
             
             if (runningTaskData && runningTaskData.taskId && runningTaskData.currentStep) {
                 // Show task info
@@ -233,68 +233,99 @@
                 document.getElementById('live-task-id').textContent = runningTaskData.taskId;
                 document.getElementById('live-task-step').textContent = runningTaskData.currentStep;
                 
-                // Initialize WebSocket
-                window.dashboard.initWebSocket();
+                // Validate log data exists before attempting to connect
+                const stepLog = runningTaskData.logs && runningTaskData.logs[runningTaskData.currentStep];
+                if (!stepLog || !stepLog.reasoning) {
+                    const logContainer = document.getElementById('live-log-content');
+                    logContainer.textContent = 'No reasoning log available for current step: ' + runningTaskData.currentStep;
+                    return;
+                }
                 
-                // Set up custom message handler for live activity
-                const originalOnOpen = window.dashboard.websocket ? window.dashboard.websocket.onopen : null;
-                const originalOnMessage = window.dashboard.websocket ? window.dashboard.websocket.onmessage : null;
-                
-                // Wait for WebSocket to be initialized, then set up handlers
-                setTimeout(() => {
-                    if (window.dashboard.websocket) {
-                        window.dashboard.websocket.onopen = function() {
-                            console.log('WebSocket connected for live activity');
-                            
-                            // Find the reasoning log file for the current step
-                            const stepLog = runningTaskData.logs && runningTaskData.logs[runningTaskData.currentStep];
-                            if (stepLog && stepLog.reasoning) {
-                                const message = {
-                                    type: 'watch_log',
-                                    taskId: runningTaskData.taskId,
-                                    logFile: stepLog.reasoning
-                                };
-                                window.dashboard.websocket.send(JSON.stringify(message));
-                            }
-                        };
-
-                        window.dashboard.websocket.onmessage = function(event) {
-                            try {
-                                const data = JSON.parse(event.data);
-                                const logContainer = document.getElementById('live-log-content');
-
-                                if (data.type === 'log_content') {
-                                    // Initial log content
-                                    logContainer.textContent = data.content;
-                                    // Auto-scroll to the bottom
-                                    logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
-                                } else if (data.type === 'log_update') {
-                                    // New log content
-                                    logContainer.textContent += data.content;
-                                    // Auto-scroll to the bottom
-                                    logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
-                                } else if (data.type === 'error') {
-                                    console.error('WebSocket error:', data.message);
-                                    logContainer.textContent += '\n[ERROR: ' + data.message + ']\n';
-                                }
-                            } catch (e) {
-                                console.error('Failed to parse WebSocket message:', e);
-                            }
-                        };
-                        
-                        // Trigger connection if not already connected
-                        if (window.dashboard.websocket.readyState === WebSocket.CONNECTING || window.dashboard.websocket.readyState === WebSocket.OPEN) {
-                            if (window.dashboard.websocket.readyState === WebSocket.OPEN) {
-                                window.dashboard.websocket.onopen();
-                            }
-                        }
-                    }
-                }, 100);
+                // Initialize WebSocket with live activity setup
+                initLiveActivityWebSocket(runningTaskData, stepLog.reasoning);
             } else {
                 // No running task, show message
                 document.getElementById('task-info-card').style.display = 'none';
                 document.getElementById('no-running-task').style.display = 'block';
                 document.getElementById('live-log-content').textContent = 'No active task to monitor.\n\nStart a task with:\nclaud-project run your-task.md\n\nThen refresh this page to see live logs.';
+            }
+        }
+        
+        // Initialize WebSocket specifically for live activity log streaming
+        function initLiveActivityWebSocket(runningTaskData, reasoningLogFile) {
+            try {
+                // Initialize the WebSocket connection
+                window.dashboard.initWebSocket();
+                
+                // Wait for WebSocket to be ready, then set up live activity handlers
+                const waitForConnection = () => {
+                    if (window.dashboard.websocket && window.dashboard.websocket.readyState === WebSocket.OPEN) {
+                        setupLiveActivityHandlers(runningTaskData, reasoningLogFile);
+                    } else if (window.dashboard.websocket && window.dashboard.websocket.readyState === WebSocket.CONNECTING) {
+                        // Wait for connection to open
+                        window.dashboard.websocket.addEventListener('open', () => {
+                            setupLiveActivityHandlers(runningTaskData, reasoningLogFile);
+                        });
+                    } else {
+                        // Retry after a short delay
+                        setTimeout(waitForConnection, 100);
+                    }
+                };
+                
+                waitForConnection();
+                
+            } catch (error) {
+                console.error('Failed to initialize WebSocket for live activity:', error);
+                const logContainer = document.getElementById('live-log-content');
+                logContainer.textContent = 'Failed to connect to live log stream: ' + error.message;
+            }
+        }
+        
+        // Set up WebSocket message handlers for live activity
+        function setupLiveActivityHandlers(runningTaskData, reasoningLogFile) {
+            const logContainer = document.getElementById('live-log-content');
+            
+            // Override the WebSocket message handler for live activity
+            window.dashboard.websocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === 'log_content') {
+                        // Initial log content
+                        logContainer.textContent = data.content;
+                        autoScrollToBottom();
+                    } else if (data.type === 'log_update') {
+                        // New log content
+                        logContainer.textContent += data.content;
+                        autoScrollToBottom();
+                    } else if (data.type === 'error') {
+                        console.error('WebSocket error:', data.message);
+                        logContainer.textContent += '\n[ERROR: ' + data.message + ']\n';
+                        autoScrollToBottom();
+                    }
+                } catch (e) {
+                    console.error('Failed to parse WebSocket message:', e);
+                    logContainer.textContent += '\n[ERROR: Failed to parse message]\n';
+                    autoScrollToBottom();
+                }
+            };
+            
+            // Request to start watching the log file
+            const watchMessage = {
+                type: 'watch_log',
+                taskId: runningTaskData.taskId,
+                logFile: reasoningLogFile
+            };
+            
+            window.dashboard.websocket.send(JSON.stringify(watchMessage));
+            console.log('Watching log file:', reasoningLogFile, 'for task:', runningTaskData.taskId);
+        }
+        
+        // Helper function to auto-scroll to bottom of log content
+        function autoScrollToBottom() {
+            const logContainer = document.getElementById('live-log-content');
+            if (logContainer && logContainer.parentElement) {
+                logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
             }
         }
         
