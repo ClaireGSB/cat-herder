@@ -41,6 +41,13 @@ interface TaskDetails extends TaskStatus {
   };
 }
 
+interface SequenceInfo {
+  sequenceId: string;
+  phase: string;
+  folderPath?: string;
+  branch?: string;
+}
+
 // Helper function to get all task statuses
 function getAllTaskStatuses(stateDir: string): TaskStatus[] {
   if (!fs.existsSync(stateDir)) {
@@ -177,6 +184,46 @@ function readLogFile(logsDir: string, taskId: string, logFile: string): string |
   }
 }
 
+// Helper function to find if a task is part of a sequence
+function findParentSequence(stateDir: string, taskId: string): SequenceInfo | null {
+  if (!fs.existsSync(stateDir)) {
+    return null;
+  }
+
+  try {
+    // Look for sequence state files
+    const files = fs.readdirSync(stateDir).filter(f => f.startsWith('sequence-') && f.endsWith('.state.json'));
+    
+    for (const file of files) {
+      const sequenceStateFile = path.join(stateDir, file);
+      const content = fs.readFileSync(sequenceStateFile, 'utf-8');
+      const sequenceState = JSON.parse(content);
+      
+      // Extract the sequence folder name from sequenceId
+      // e.g., "sequence-my-feature" -> "my-feature"
+      const folderName = sequenceState.sequenceId?.replace('sequence-', '');
+      if (!folderName) continue;
+      
+      // Check if the task belongs to this sequence by looking at the taskId pattern
+      // Task IDs for sequences typically contain the folder name or follow a pattern
+      // that indicates they belong to the sequence folder
+      if (taskId.includes(folderName)) {
+        return {
+          sequenceId: sequenceState.sequenceId,
+          phase: sequenceState.phase,
+          folderPath: folderName,
+          branch: sequenceState.branch
+        };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error finding parent sequence:', error);
+    return null;
+  }
+}
+
 // Wrap the server logic in an exported function
 export async function startWebServer() {
   const config = await getConfig();
@@ -222,7 +269,14 @@ export async function startWebServer() {
     const runningTask = allTasks.find(t => t.phase === 'running');
     // Fetch full details for the running task to get log file names
     const taskDetails = runningTask ? getTaskDetails(stateDir, logsDir, runningTask.taskId) : null;
-    res.render("live-activity", { runningTask: taskDetails });
+    
+    // Check if the running task is part of a sequence
+    const parentSequence = runningTask ? findParentSequence(stateDir, runningTask.taskId) : null;
+    
+    res.render("live-activity", { 
+      runningTask: taskDetails, 
+      parentSequence: parentSequence 
+    });
   });
 
   // Log file API route
@@ -349,6 +403,43 @@ export async function startWebServer() {
       }
     }
   });
+
+  // Handle state file changes and broadcast updates to all clients
+  const handleStateChange = (filePath: string) => {
+    if (!filePath.endsWith('.state.json')) return;
+
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const stateData = JSON.parse(content);
+      let messageType: string;
+
+      if (path.basename(filePath).startsWith('sequence-')) {
+        messageType = 'sequence_update';
+      } else {
+        messageType = 'task_update';
+      }
+
+      // Broadcast the update to all connected clients with the correct type
+      for (const ws of wss.clients) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: messageType, data: stateData }));
+        }
+      }
+      
+      console.log(`[State Watcher] Broadcasted ${messageType} for ${path.basename(filePath)}`);
+    } catch (e) {
+      console.error(`[State Watcher] Failed to process state change for ${filePath}`, e);
+    }
+  };
+
+  // Set up file watcher for state files
+  const stateWatcher = chokidar.watch(path.join(stateDir, '*.state.json'), { 
+    persistent: true,
+    awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+    ignoreInitial: true
+  });
+  
+  stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
 
   const port = 5177;
   server.listen(port, () => {

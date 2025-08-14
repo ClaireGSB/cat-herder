@@ -63,14 +63,30 @@
             
             // Handle real-time updates from WebSocket
             handleRealtimeUpdate(data) {
-                // This will be implemented in Step 4
                 console.log('Received real-time update:', data);
                 
-                // For now, just refresh the current page if we're on the dashboard
-                if (window.location.pathname === '/') {
-                    this.updateDashboardRow(data);
-                } else if (window.location.pathname.startsWith('/task/')) {
-                    this.updateTaskDetail(data);
+                // Handle different message types
+                if (data.type === 'task_update') {
+                    // Handle task state updates
+                    if (window.location.pathname === '/') {
+                        this.updateDashboardRow(data.data);
+                    } else if (window.location.pathname.startsWith('/task/')) {
+                        this.updateTaskDetail(data.data);
+                    }
+                } else if (data.type === 'sequence_update') {
+                    // Handle sequence state updates (foundation for future steps)
+                    console.log('Sequence update received:', data.data);
+                    // Future implementation will handle sequence updates
+                } else if (data.type === 'log_content' || data.type === 'log_update' || data.type === 'error') {
+                    // These are handled by page-specific logic (live activity)
+                    return;
+                } else {
+                    // Legacy support - treat as task update for backwards compatibility
+                    if (window.location.pathname === '/') {
+                        this.updateDashboardRow(data);
+                    } else if (window.location.pathname.startsWith('/task/')) {
+                        this.updateTaskDetail(data);
+                    }
                 }
             }
             
@@ -212,8 +228,8 @@
                 }, 30000);
             }
             
-            // Initialize WebSocket for real-time updates (Step 4)
-            // window.dashboard.initWebSocket();
+            // Initialize WebSocket for real-time updates
+            window.dashboard.initWebSocket();
             
             // Live Activity page specific logic
             if (window.location.pathname === '/live') {
@@ -225,6 +241,7 @@
         function initializeLiveActivity() {
             // Get running task data from the server-rendered template
             const runningTaskData = <%- typeof runningTask !== 'undefined' && runningTask ? JSON.stringify(runningTask) : 'null' %>;
+            const parentSequenceData = <%- typeof parentSequence !== 'undefined' && parentSequence ? JSON.stringify(parentSequence) : 'null' %>;
             
             if (runningTaskData && runningTaskData.taskId && runningTaskData.currentStep) {
                 // Show task info
@@ -232,6 +249,26 @@
                 document.getElementById('no-running-task').style.display = 'none';
                 document.getElementById('live-task-id').textContent = runningTaskData.taskId;
                 document.getElementById('live-task-step').textContent = runningTaskData.currentStep;
+                
+                // Show sequence info if task is part of a sequence
+                if (parentSequenceData && parentSequenceData.sequenceId) {
+                    document.getElementById('sequence-info-card').style.display = 'block';
+                    document.getElementById('live-sequence-id').textContent = parentSequenceData.sequenceId;
+                    document.getElementById('live-sequence-status').textContent = parentSequenceData.phase || 'unknown';
+                    
+                    // Update sequence status badge color
+                    const statusBadge = document.getElementById('live-sequence-status');
+                    statusBadge.className = 'badge bg-secondary';
+                    if (parentSequenceData.phase === 'running') {
+                        statusBadge.className = 'badge bg-primary';
+                    } else if (parentSequenceData.phase === 'done') {
+                        statusBadge.className = 'badge bg-success';
+                    } else if (parentSequenceData.phase === 'failed') {
+                        statusBadge.className = 'badge bg-danger';
+                    }
+                } else {
+                    document.getElementById('sequence-info-card').style.display = 'none';
+                }
                 
                 // Validate log data exists before attempting to connect
                 const stepLog = runningTaskData.logs && runningTaskData.logs[runningTaskData.currentStep];
@@ -242,17 +279,18 @@
                 }
                 
                 // Initialize WebSocket with live activity setup
-                initLiveActivityWebSocket(runningTaskData, stepLog.reasoning);
+                initLiveActivityWebSocket(runningTaskData, parentSequenceData, stepLog.reasoning);
             } else {
                 // No running task, show message
                 document.getElementById('task-info-card').style.display = 'none';
+                document.getElementById('sequence-info-card').style.display = 'none';
                 document.getElementById('no-running-task').style.display = 'block';
                 document.getElementById('live-log-content').textContent = 'No active task to monitor.\n\nStart a task with:\nclaud-project run your-task.md\n\nThen refresh this page to see live logs.';
             }
         }
         
         // Initialize WebSocket specifically for live activity log streaming
-        function initLiveActivityWebSocket(runningTaskData, reasoningLogFile) {
+        function initLiveActivityWebSocket(runningTaskData, parentSequenceData, reasoningLogFile) {
             try {
                 // Initialize the WebSocket connection
                 window.dashboard.initWebSocket();
@@ -260,11 +298,11 @@
                 // Wait for WebSocket to be ready, then set up live activity handlers
                 const waitForConnection = () => {
                     if (window.dashboard.websocket && window.dashboard.websocket.readyState === WebSocket.OPEN) {
-                        setupLiveActivityHandlers(runningTaskData, reasoningLogFile);
+                        setupLiveActivityHandlers(runningTaskData, parentSequenceData, reasoningLogFile);
                     } else if (window.dashboard.websocket && window.dashboard.websocket.readyState === WebSocket.CONNECTING) {
                         // Wait for connection to open
                         window.dashboard.websocket.addEventListener('open', () => {
-                            setupLiveActivityHandlers(runningTaskData, reasoningLogFile);
+                            setupLiveActivityHandlers(runningTaskData, parentSequenceData, reasoningLogFile);
                         });
                     } else {
                         // Retry after a short delay
@@ -282,7 +320,7 @@
         }
         
         // Set up WebSocket message handlers for live activity
-        function setupLiveActivityHandlers(runningTaskData, reasoningLogFile) {
+        function setupLiveActivityHandlers(runningTaskData, parentSequenceData, reasoningLogFile) {
             const logContainer = document.getElementById('live-log-content');
             
             // Override the WebSocket message handler for live activity
@@ -298,6 +336,56 @@
                         // New log content
                         logContainer.textContent += data.content;
                         autoScrollToBottom();
+                    } else if (data.type === 'task_update' && data.data.taskId === runningTaskData.taskId) {
+                        // Handle task status updates
+                        if (data.data.phase !== 'running') {
+                            logContainer.textContent += `\n\n--- TASK FINISHED with status: ${data.data.phase} ---`;
+                            autoScrollToBottom();
+                            
+                            // Show task finished banner if no sequence is involved
+                            if (!parentSequenceData) {
+                                const taskBanner = document.getElementById('task-finished-banner');
+                                const taskDetailsLink = document.getElementById('view-task-details-link');
+                                taskDetailsLink.href = `/task/${runningTaskData.taskId}`;
+                                taskBanner.style.display = 'block';
+                            }
+                        }
+                        
+                        // Update current step if provided
+                        if (data.data.currentStep) {
+                            document.getElementById('live-task-step').textContent = data.data.currentStep;
+                        }
+                    } else if (parentSequenceData && data.type === 'sequence_update' && data.data.sequenceId === parentSequenceData.sequenceId) {
+                        // Handle sequence status updates
+                        const sequenceStatusBadge = document.getElementById('live-sequence-status');
+                        if (sequenceStatusBadge) {
+                            sequenceStatusBadge.textContent = data.data.phase || 'unknown';
+                            
+                            // Update badge color
+                            sequenceStatusBadge.className = 'badge bg-secondary';
+                            if (data.data.phase === 'running') {
+                                sequenceStatusBadge.className = 'badge bg-primary';
+                            } else if (data.data.phase === 'done') {
+                                sequenceStatusBadge.className = 'badge bg-success';
+                            } else if (data.data.phase === 'failed') {
+                                sequenceStatusBadge.className = 'badge bg-danger';
+                            }
+                        }
+                        
+                        // Handle sequence completion
+                        if (data.data.phase !== 'running') {
+                            logContainer.textContent += `\n\n--- SEQUENCE FINISHED with status: ${data.data.phase} ---`;
+                            autoScrollToBottom();
+                            
+                            // Show sequence finished banner and hide task banner
+                            const seqBanner = document.getElementById('sequence-finished-banner');
+                            const seqDetailsLink = document.getElementById('view-sequence-details-link');
+                            seqDetailsLink.href = `/sequence/${parentSequenceData.sequenceId}`;
+                            seqBanner.style.display = 'block';
+                            
+                            // Hide the individual task finished banner
+                            document.getElementById('task-finished-banner').style.display = 'none';
+                        }
                     } else if (data.type === 'error') {
                         console.error('WebSocket error:', data.message);
                         logContainer.textContent += '\n[ERROR: ' + data.message + ']\n';

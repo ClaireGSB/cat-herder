@@ -7,8 +7,8 @@
 
 ### **Summary Checklist**
 
--   [ ] **1. Implement Real-Time State Updates for Tasks & Sequences**
--   [ ] **2. Enhance Live Activity Page with Full Lifecycle Awareness**
+-   [x] **1. Implement Real-Time State Updates for Tasks & Sequences**
+-   [x] **2. Enhance Live Activity Page with Full Lifecycle Awareness**
 -   [ ] **3. Add Contextual Link from Task Detail to Live View**
 -   [ ] **4. Create Backend API for Sequences**
 -   [ ] **5. Implement Frontend Views for Sequence Dashboard**
