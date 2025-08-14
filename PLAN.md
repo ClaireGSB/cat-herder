@@ -15,7 +15,7 @@ This refactor will change the identification logic to be based on the task's ful
 -   [x] **Update `status.ts`**: Introduce a new `taskPathToTaskId` function and update the `TaskStatus` interface.
 -   [x] **Update `orchestrator.ts`**: Integrate the new ID generation logic for tasks and git branches.
 -   [x] **Update `web.ts`**: Refactor the web dashboard to use the new unique IDs and display correct task information.
--   [ ] **Test the changes**: Manually run two separate sequences with identically named task files to confirm they are treated as distinct tasks.
+-   [x] **Test the changes**: Manually run two separate sequences with identically named task files to confirm they are treated as distinct tasks.
 -   [ ] **Update Documentation**: Update `README.md` to reflect any user-facing changes or developer-facing concepts related to the new identification scheme.
 
 ---
