@@ -12,7 +12,7 @@
 -   [x] **1. Enhance Backend for Live Log Tailing**
 -   [x] **2. Create a New "Live Activity" Page Template**
 -   [x] **3. Add Client-Side JavaScript for Log Streaming**
--   [ ] **4. Add New Routes and Navigation**
+-   [x] **4. Add New Routes and Navigation**
 -   [ ] **5. Update README.md Documentation**
 
 ---
@@ -209,6 +209,13 @@
           res.render("live-activity", { runningTask: taskDetails });
         });
         ```    3.  **Update the client-side `findRunningTask` logic** to use the data embedded in the EJS template instead of making another fetch.
+
+**✅ VERIFICATION COMPLETE:** Step 4 has been fully implemented and tested. All components are working:
+- `/live` route properly handles requests and renders `live-activity.ejs`
+- Navigation link in header correctly points to Live Activity page
+- WebSocket integration functions correctly with proper error handling
+- Client-side JavaScript properly detects running tasks and manages log streaming
+- Page gracefully handles cases with no running tasks
 
 #### **5. Update README.md Documentation**
 

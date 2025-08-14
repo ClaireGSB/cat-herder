@@ -224,7 +224,7 @@
         // Live Activity page initialization
         function initializeLiveActivity() {
             // Get running task data from the server-rendered template
-            const runningTaskData = <%- runningTask ? JSON.stringify(runningTask) : 'null' %>;
+            const runningTaskData = <%- typeof runningTask !== 'undefined' && runningTask ? JSON.stringify(runningTask) : 'null' %>;
             
             if (runningTaskData && runningTaskData.taskId && runningTaskData.currentStep) {
                 // Show task info
