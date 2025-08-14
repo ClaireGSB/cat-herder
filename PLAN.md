@@ -1,233 +1,187 @@
 
+# PLAN.md
 
-### **PLAN.md**
+### **Title: Enhance Web Dashboard with Real-Time State Updates and Sequence Monitoring**
 
-
-### **Title: Add a Real-Time "Live Activity" Log Stream**
-
-**Goal:** Create a new dashboard view that streams the content of a running task's `reasoning.log` in real time, providing an "as-if-CLI" monitoring experience.
+**Goal:** Evolve the web dashboard into a fully real-time monitoring tool by implementing global state updates for both tasks *and sequences*, and adding a dedicated dashboard for monitoring multi-task sequences.
 
 ### **Summary Checklist**
 
--   [x] **1. Enhance Backend for Live Log Tailing**
--   [x] **2. Create a New "Live Activity" Page Template**
--   [x] **3. Add Client-Side JavaScript for Log Streaming**
--   [x] **4. Add New Routes and Navigation**
--   [x] **5. Update README.md Documentation**
+-   [ ] **1. Implement Real-Time State Updates for Tasks & Sequences**
+-   [ ] **2. Enhance Live Activity Page with Full Lifecycle Awareness**
+-   [ ] **3. Add Contextual Link from Task Detail to Live View**
+-   [ ] **4. Create Backend API for Sequences**
+-   [ ] **5. Implement Frontend Views for Sequence Dashboard**
+-   [ ] **6. Add Real-Time Updates to Sequence Views**
+-   [ ] **7. Update README.md Documentation**
 
 ---
 
 ### **Detailed Implementation Steps**
 
-#### **1. Enhance Backend for Live Log Tailing (`web.ts`)**
+#### **1. Implement Real-Time State Updates for Tasks & Sequences (Revised)**
 
-*   **Objective:** Modify the WebSocket server to handle subscriptions to specific log files and broadcast new content as it's written.
-*   **Task:**
-    1.  **Track Watched Files:** We need to know which client is watching which log. A `Map` is perfect for this. We also need to track the last known size of the file to only send new data.
-        ```typescript
-        // At the top of web.ts
-        import { WebSocketServer, WebSocket } from 'ws';
-        import chokidar from 'chokidar';
+*   **Objective:** Make the server watch for changes in **both** task and sequence state files and broadcast appropriately typed updates, making the entire application aware of the full workflow state.
 
-        const watchedLogs = new Map<WebSocket, { filePath: string; lastSize: number }>();
-        ```
-    2.  **Handle Subscription Messages:** When a client connects via WebSocket, it will send a message to subscribe to a log.
-        ```typescript
-        // Inside your WebSocket 'connection' handler
-        ws.on('message', (message) => {
-          try {
-            const data = JSON.parse(message.toString());
-            if (data.type === 'watch_log') {
-              const { taskId, logFile } = data;
-              const filePath = path.join(logsDir, taskId, logFile);
+*   **Task (Backend - `src/tools/web.ts`):**
+    1.  Use a single `chokidar` watcher for the entire `stateDir`.
+    2.  Modify the `handleStateChange(filePath)` function to be smarter. It needs to check the filename to determine if the update is for a single task or a sequence.
+    3.  If the file is `task-....state.json`, broadcast a `{ type: 'task_update', ... }` message.
+    4.  If the file is `sequence-....state.json`, broadcast a **new message type**: `{ type: 'sequence_update', data: sequenceStatus }`. This is the key change.
 
-              if (fs.existsSync(filePath)) {
-                const stats = fs.statSync(filePath);
-                watchedLogs.set(ws, { filePath, lastSize: stats.size });
-                // Send initial full content
-                ws.send(JSON.stringify({ type: 'log_content', content: fs.readFileSync(filePath, 'utf-8') }));
-              }
+*   **Code Snippet (Backend - `src/tools/web.ts`):**
+    ```typescript
+    // Revised handleStateChange function
+    const handleStateChange = (filePath: string) => {
+        if (!filePath.endsWith('.state.json')) return;
+
+        try {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            const stateData = JSON.parse(content);
+            let messageType;
+
+            if (path.basename(filePath).startsWith('sequence-')) {
+                messageType = 'sequence_update';
+            } else {
+                messageType = 'task_update';
             }
-          } catch (e) { console.error('Error parsing WS message', e); }
-        });
-        ```
-    3.  **Use Chokidar to Watch for Changes:** Set up a single `chokidar` watcher for the entire logs directory. When a file changes, check if any client is watching it.
-        ```typescript
-        // In startWebServer, after defining logsDir
-        const watcher = chokidar.watch(logsDir, { persistent: true, awaitWriteFinish: true });
 
-        watcher.on('change', (filePath) => {
-          for (const [ws, watchInfo] of watchedLogs.entries()) {
-            if (watchInfo.filePath === filePath && ws.readyState === WebSocket.OPEN) {
-              const stats = fs.statSync(filePath);
-              const newSize = stats.size;
-
-              if (newSize > watchInfo.lastSize) {
-                const stream = fs.createReadStream(filePath, {
-                  start: watchInfo.lastSize,
-                  end: newSize,
-                  encoding: 'utf-8'
-                });
-
-                stream.on('data', (chunk) => {
-                  ws.send(JSON.stringify({ type: 'log_update', content: chunk }));
-                });
-
-                watchInfo.lastSize = newSize; // Update the size
-              }
+            // Broadcast the update to all connected clients with the correct type
+            for (const ws of wss.clients) {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: messageType, data: stateData }));
+                }
             }
-          }
-        });
-        ```
-    4.  **Handle Disconnections:** Clean up the `watchedLogs` map when a client disconnects.
-        ```typescript
-        // Inside your WebSocket 'connection' handler
-        ws.on('close', () => {
-          watchedLogs.delete(ws);
-        });
-        ```
-
-#### **2. Create a New "Live Activity" Page Template**
-
-*   **Objective:** Create a dedicated EJS template for the live log stream view.
-*   **Task:**
-    1.  Create a new file: `src/templates/web/live-activity.ejs`.
-    2.  This page will display details of the currently running task at the top (Task ID, Current Step).
-    3.  Below the header, add a large, styled `<pre>` block that will serve as the terminal/log viewer.
-
-*   **Code Snippet (`src/templates/web/live-activity.ejs`):**
-    ```html
-    <%- include('partials/header', { title: 'Live Activity' }) %>
-
-    <div id="live-header" class="mb-3">
-        <h1 class="h3">
-            <i class="bi bi-broadcast-pin text-danger me-2"></i>Live Activity
-        </h1>
-        <div class="card bg-light border-0" id="task-info-card" style="display: none;">
-            <div class="card-body">
-                <h5 class="card-title mb-1" id="live-task-id"></h5>
-                <p class="card-text text-muted mb-0">
-                    Current Step: <strong id="live-task-step"></strong>
-                </p>
-            </div>
-        </div>
-        <p id="no-running-task" class="text-muted">No task is currently running. Start a task to see live logs.</p>
-    </div>
-
-    <div class="log-viewer" style="height: 60vh;">
-        <pre id="live-log-content" class="log-content"></pre>
-    </div>
-
-    <%- include('partials/footer') %>
-    ```
-
-#### **3. Add Client-Side JavaScript for Log Streaming**
-
-*   **Objective:** Write the JavaScript to connect to the WebSocket and handle the live log stream on the new page.
-*   **Task:**
-    1.  Add a new section to the `<script>` in `footer.ejs` that only runs on the `/live` page.
-    2.  This script will find the *most recent running task* by fetching from the dashboard data.
-    3.  It will then connect to the WebSocket and send the `watch_log` message for that task's reasoning log.
-    4.  It will handle incoming `log_content` (for the initial load) and `log_update` (for new chunks) messages, appending the text to the `<pre>` tag and auto-scrolling to the bottom.
-
-*   **Code Snippet (to be added inside the script tag in `footer.ejs`):**
-    ```javascript
-    document.addEventListener('DOMContentLoaded', function() {
-        if (window.location.pathname === '/live') {
-            const dashboard = window.dashboard;
-            dashboard.initWebSocket(); // Ensure WebSocket is connected
-
-            dashboard.websocket.onopen = () => {
-                // Find the running task and subscribe to its log
-                const runningTask = findRunningTask(); // You need to implement this
-                if (runningTask && runningTask.taskId && runningTask.currentStep) {
-                    document.getElementById('task-info-card').style.display = 'block';
-                    document.getElementById('no-running-task').style.display = 'none';
-                    document.getElementById('live-task-id').textContent = runningTask.taskId;
-                    document.getElementById('live-task-step').textContent = runningTask.currentStep;
-
-                    // Figure out the reasoning log file name
-                    const stepLog = runningTask.logs[runningTask.currentStep];
-                    if (stepLog && stepLog.reasoning) {
-                         const message = {
-                            type: 'watch_log',
-                            taskId: runningTask.taskId,
-                            logFile: stepLog.reasoning
-                        };
-                        dashboard.websocket.send(JSON.stringify(message));
-                    }
-                }
-            };
-
-            // Override the default onmessage handler for this page
-            dashboard.websocket.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                const logContainer = document.getElementById('live-log-content');
-
-                if (data.type === 'log_content' || data.type === 'log_update') {
-                    logContainer.textContent += data.content;
-                    // Auto-scroll to the bottom
-                    logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
-                }
-            };
+        } catch (e) {
+            console.error(`[State Watcher] Failed to process state change for ${filePath}`, e);
         }
-    });
+    };
 
-    // Helper to find running task (could be based on data embedded in the page or another API call)
-    // This part needs the data from the dashboard page. We can pass it or fetch it.
-    // For simplicity, let's assume we can fetch all tasks.
-    async function findRunningTask() {
-        // This is a simplified example; you'll need the task data from your backend.
-        // Let's assume you have an API endpoint to get all tasks.
-        const response = await fetch('/tasks'); // This endpoint needs to be created or data passed differently.
-        const tasks = await response.json();
-        return tasks.find(t => t.phase === 'running');
-    }
+    const stateWatcher = chokidar.watch(path.join(stateDir, '*.state.json'), { persistent: true });
+    stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
     ```
-    *Note: The `findRunningTask` logic is tricky. The easiest way is to modify the `GET /live` route in `web.ts` to find the running task and pass its data directly to the `live-activity.ejs` template.*
 
-#### **4. Add New Routes and Navigation**
+#### **2. Enhance Live Activity Page with Full Lifecycle Awareness (Revised)**
 
-*   **Objective:** Make the new page accessible to the user.
-*   **Task:**
-    1.  **Add Navbar Link:** In `src/templates/web/partials/header.ejs`, add a link to the new "Live Activity" page in the navbar.
-        ```html
-        <!-- In header.ejs inside the navbar -->
-        <a class="nav-link" href="/live" title="Live Activity">
-            <i class="bi bi-broadcast"></i>
-            Live Activity
-        </a>
-        ```
-    2.  **Create Server Route:** In `src/tools/web.ts`, add the route to render the new EJS template. This route should find the currently running task and pass its details to the template.
-        ```typescript
-        // In web.ts
-        app.get("/live", (req: Request, res: Response) => {
-          const allTasks = getAllTaskStatuses(stateDir);
-          const runningTask = allTasks.find(t => t.phase === 'running');
-          // Fetch full details for the running task to get log file names
-          const taskDetails = runningTask ? getTaskDetails(stateDir, logsDir, runningTask.taskId) : null;
-          res.render("live-activity", { runningTask: taskDetails });
-        });
-        ```    3.  **Update the client-side `findRunningTask` logic** to use the data embedded in the EJS template instead of making another fetch.
+*   **Objective:** Make the `/live` page aware of the sequence context, allowing it to display sequence completion status in addition to task status.
 
-**✅ VERIFICATION COMPLETE:** Step 4 has been fully implemented and tested. All components are working:
-- `/live` route properly handles requests and renders `live-activity.ejs`
-- Navigation link in header correctly points to Live Activity page
-- WebSocket integration functions correctly with proper error handling
-- Client-side JavaScript properly detects running tasks and manages log streaming
-- Page gracefully handles cases with no running tasks
+*   **Task (Backend - `src/tools/web.ts`):**
+    1.  When rendering the `/live` route, the server logic must not only find the running task but also determine if it's part of a sequence.
+    2.  You can infer the `sequenceId` from the task's folder structure or by finding a sequence state file that lists the running task.
+    3.  Pass both the `runningTask` and the `parentSequence` (if it exists) to the `live-activity.ejs` template.
 
-#### **5. Update README.md Documentation**
+*   **Task (Frontend - `live-activity.ejs` & `footer.ejs`):**
+    1.  The `live-activity.ejs` template should now display the parent sequence ID if it exists (e.g., "Monitoring Sequence: `sequence-my-feature`").
+    2.  Add a separate, hidden banner for "Sequence Complete".
+    3.  The client-side JavaScript for the live page must now listen for both `task_update` and `sequence_update` messages.
+    4.  When a `sequence_update` message is received for the parent sequence, and its `phase` is `done` or `failed`, display the "Sequence Complete" banner with a link to the sequence detail page. This provides a more definitive and satisfying conclusion for the user.
 
-*   **Objective:** Document the powerful new live monitoring feature.
-*   **Task:**
-    1.  In the "Interactive Web Dashboard" section of `README.md`, add a new bullet point describing the "Live Activity" view.
-    2.  Explain what it's for: "See a real-time stream of Claude's reasoning process, just like watching a terminal, perfect for monitoring active tasks."
-    3.  Add a placeholder for a screenshot of the new live view page: `[Screenshot of the Live Activity stream]`.
+*   **Code Snippet (Frontend - update `initLiveActivityWebSocket` in `footer.ejs`):**
+    ```javascript
+    // This logic now needs to be aware of the parent sequence
+    const runningTaskData = <%- typeof runningTask !== 'undefined' && runningTask ? JSON.stringify(runningTask) : 'null' %>;
+    const parentSequenceData = <%- typeof parentSequence !== 'undefined' && parentSequence ? JSON.stringify(parentSequence) : 'null' %>;
 
-**✅ VERIFICATION COMPLETE:** Step 5 has been fully implemented and documented:
-- Added comprehensive "Interactive Web Dashboard" section with detailed feature explanations
-- Documented Live Activity stream with key features, usage instructions, and use cases
-- Updated command references in CLI Commands and NPM Scripts sections to link to new documentation
-- Included placeholder for Live Activity screenshot as specified
-- Enhanced web command descriptions from minimal to detailed with cross-references
+    // ... inside the setupLiveActivityHandlers function ...
+    window.dashboard.websocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        const logContainer = document.getElementById('live-log-content');
+
+        if (data.type === 'log_content' || data.type === 'log_update') {
+            // ... same as before ...
+        } else if (data.type === 'task_update' && data.data.taskId === runningTaskData.taskId) {
+            // ... same as before, update the step name, show task finished banner ...
+        } else if (parentSequenceData && data.type === 'sequence_update' && data.data.sequenceId === parentSequenceData.sequenceId) {
+            // NEW: Handle sequence completion
+            if (data.data.phase !== 'running') {
+                logContainer.textContent += `\n\n--- SEQUENCE FINISHED with status: ${data.data.phase} ---`;
+                autoScrollToBottom();
+
+                // Show a more prominent "Sequence Finished" banner
+                const seqBanner = document.getElementById('sequence-finished-banner'); // A new banner
+                const seqDetailsLink = document.getElementById('view-sequence-details-link');
+                seqDetailsLink.href = `/sequence/${parentSequenceData.sequenceId}`;
+                seqBanner.style.display = 'block';
+
+                // Hide the individual task finished banner if it's showing
+                document.getElementById('task-finished-banner').style.display = 'none';
+            }
+        }
+    };
+    ```
+
+#### **3. Add Contextual Link from Task Detail to Live View**
+
+*   **Objective:** Provide an easy and intuitive way for users to jump from a running task's detail page directly to the live log stream.
+
+*   **Task (`src/templates/web/task-detail.ejs`):**
+    1.  In the pipeline steps loop, add an EJS conditional to check if the `task.phase` is `"running"` and the current `step.status` is also `"running"`.
+    2.  If both are true, render a styled link or badge next to the step name that points to the `/live` page.
+
+*   **Code Snippet (`src/templates/web/task-detail.ejs`):**
+    ```html
+    <!-- Inside the forEach loop for task.steps -->
+    <h6 class="mb-1">
+        <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
+        <%= step.name %>
+        
+        <!-- ... existing status icons ... -->
+
+        <% if (task.phase === 'running' && step.status === 'running') { %>
+            <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
+                <i class="bi bi-broadcast me-1"></i>LIVE
+            </a>
+        <% } %>
+    </h6>
+    ```
+
+#### **4. Create Backend API for Sequences**
+
+*   **Objective:** Build the necessary server-side logic and API endpoints to aggregate and serve detailed data about all task sequences.
+
+*   **Task (Backend - `src/tools/web.ts`):**
+    1.  **Create a `getSequenceDetails(sequenceId)` helper function.** This is the core logic. It will:
+        *   Read the main `sequence-....state.json` file for overall status, branch, and stats.
+        *   Scan the corresponding task folder (e.g., `claude-Tasks/my-feature`) to get a complete list of all `.md` task files (ignoring files starting with `_`).
+        *   For each task file, derive its `taskId` and attempt to read its corresponding `task-....state.json`.
+        *   Compile a list of all tasks in the sequence, including their individual statuses (e.g., `done`, `running`, `failed`, or `pending` if no state file exists).
+        *   Return a single, rich JSON object containing the sequence's overall status and the detailed list of its child tasks.
+    2.  **Create a `getAllSequenceStatuses()` helper function.** This will scan the `stateDir` for all `sequence-*.state.json` files and return a summary list for the main dashboard.
+    3.  **Create new API endpoints:**
+        *   `GET /api/sequences`: Uses `getAllSequenceStatuses` to return a JSON list of all sequences.
+        *   `GET /api/sequences/:sequenceId`: Uses `getSequenceDetails` to return the detailed JSON object for a single sequence.
+
+#### **5. Implement Frontend Views for Sequence Dashboard**
+
+*   **Objective:** Build the user interface for listing and viewing the details of task sequences.
+
+*   **Task (Frontend - EJS Templates):**
+    1.  **Add Navbar Link:** In `src/templates/web/partials/header.ejs`, add a new navigation link for "Sequences" that points to `/sequences`.
+    2.  **Create `sequences-dashboard.ejs`:** This new template will be served by a `GET /sequences` route. It will:
+        *   Fetch data from `/api/sequences`.
+        *   Display a table listing all sequences with their ID, overall status, total tasks, duration, and a link to the detail view.
+    3.  **Create `sequence-detail.ejs`:** This new template will be served by a `GET /sequence/:sequenceId` route. It will:
+        *   Display the overall sequence information (status, branch, stats) in a header card.
+        *   Render a list of all tasks belonging to the sequence.
+        *   Each task in the list should clearly show its own status (`done`, `running`, `failed`, `pending`) with a colored badge.
+        *   The currently running task should be visually highlighted.
+        *   Each task should have a link to its own detailed task view (`/task/:taskId`).
+
+*   **Task (Backend - `src/tools/web.ts`):**
+    1.  Add the Express routes to render the new EJS templates:
+        *   `GET /sequences`: Renders `sequences-dashboard.ejs`.
+        *   `GET /sequence/:sequenceId`: Renders `sequence-detail.ejs`, passing in the data from your `getSequenceDetails` helper.
+
+#### **6. Add Real-Time Updates to Sequence Views**
+
+*   **Task (Frontend - `footer.ejs`):**
+    1.  On the sequence list and detail pages, listen for `sequence_update` messages.
+    2.  Update the status, duration, and other metrics on the page dynamically when a relevant update is received. This makes the entire sequence section fully real-time.
+
+#### **7. Update README.md Documentation**
+
+*   **Objective:** Document the new, fully real-time capabilities and the Sequence Dashboard.
+*   **Task (`README.md`):**
+    1.  Update the "Interactive Web Dashboard" section to reflect that the system is fully real-time for both tasks and sequences.
+    2.  Create the new "Sequence Monitoring" subsection as planned.
+    3.  In the "Live Activity Stream" description, explicitly state that it now shows when an entire sequence is complete, providing a clear end-to-end monitoring experience.
