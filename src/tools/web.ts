@@ -13,6 +13,7 @@ const watchedLogs = new Map<WebSocket, { filePath: string; lastSize: number }>()
 
 interface TaskStatus {
   taskId: string;
+  taskPath: string;
   phase: string;
   currentStep?: string;
   lastUpdate: string;
@@ -65,7 +66,7 @@ interface SequenceStatus {
 
 interface SequenceTaskInfo {
   taskId: string;
-  filename: string;
+  taskPath: string;
   status: string;
   phase?: string;
   lastUpdate?: string;
@@ -81,7 +82,7 @@ function getAllTaskStatuses(stateDir: string): TaskStatus[] {
     return [];
   }
 
-  const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json"));
+  const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json") && !f.startsWith("sequence-"));
   const tasks: TaskStatus[] = [];
 
   for (const file of files) {
@@ -94,6 +95,7 @@ function getAllTaskStatuses(stateDir: string): TaskStatus[] {
       
       tasks.push({
         taskId: state.taskId || file.replace(".state.json", ""),
+        taskPath: state.taskPath || "unknown",
         phase: state.phase || "unknown",
         currentStep: state.currentStep,
         lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
@@ -108,6 +110,7 @@ function getAllTaskStatuses(stateDir: string): TaskStatus[] {
       // Add error entry so user knows about the corrupted file
       tasks.push({
         taskId: `ERROR: ${file}`,
+        taskPath: "unknown",
         phase: "error",
         lastUpdate: new Date().toISOString()
       });
@@ -133,6 +136,7 @@ function getTaskDetails(stateDir: string, logsDir: string, taskId: string): Task
     
     const taskDetails: TaskDetails = {
       taskId: state.taskId || taskId,
+      taskPath: state.taskPath || "unknown",
       phase: state.phase || "unknown",
       currentStep: state.currentStep,
       lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
@@ -352,19 +356,9 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
             taskStatus = 'started'; // Any other phase means it's been started
           }
           
-          // Try to derive filename from task ID or use task ID as filename
-          let filename = taskId;
-          if (folderName && taskId.includes(folderName)) {
-            // Try to extract the filename part
-            const parts = taskId.split('-');
-            filename = parts[parts.length - 1] + '.md';
-          } else {
-            filename = taskId + '.md';
-          }
-          
           sequenceDetails.tasks.push({
             taskId: taskId,
-            filename: filename,
+            taskPath: taskState.taskPath || 'unknown',
             status: taskStatus,
             phase: taskState.phase,
             lastUpdate: taskState.lastUpdate
@@ -375,8 +369,8 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
       }
     }
 
-    // Sort tasks by filename for consistent ordering
-    sequenceDetails.tasks.sort((a, b) => a.filename.localeCompare(b.filename));
+    // Sort tasks by taskPath for consistent ordering
+    sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
 
     return sequenceDetails;
   } catch (error) {
