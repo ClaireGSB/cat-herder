@@ -401,11 +401,14 @@ export async function startWebServer() {
   // Set view engine
   app.set("view engine", "ejs");
   app.set("views", path.resolve(new URL("../templates/web", import.meta.url).pathname));
+  
+  // Serve static files from public directory
+  app.use(express.static(path.resolve(new URL("../public", import.meta.url).pathname)));
 
   // Dashboard route
   app.get("/", (_req: Request, res: Response) => {
     const tasks = getAllTaskStatuses(stateDir);
-    res.render("dashboard", { tasks });
+    res.render("dashboard", { tasks, page: 'dashboard' });
   });
 
   // Task detail route
@@ -421,7 +424,7 @@ export async function startWebServer() {
       return res.status(404).send(`Task with ID '${taskId}' could not be found.`);
     }
     
-    res.render("task-detail", { task: taskDetails });
+    res.render("task-detail", { task: taskDetails, page: 'task-detail' });
   });
 
   // Live activity route
@@ -436,14 +439,15 @@ export async function startWebServer() {
     
     res.render("live-activity", { 
       runningTask: taskDetails, 
-      parentSequence: parentSequence 
+      parentSequence: parentSequence,
+      page: 'live-activity'
     });
   });
 
   // Sequences dashboard route
   app.get("/sequences", (_req: Request, res: Response) => {
     const sequences = getAllSequenceStatuses(stateDir);
-    res.render("sequences-dashboard", { sequences });
+    res.render("sequences-dashboard", { sequences, page: 'sequences-dashboard' });
   });
 
   // Sequence detail route
@@ -459,7 +463,7 @@ export async function startWebServer() {
       return res.status(404).send(`Sequence with ID '${sequenceId}' could not be found.`);
     }
     
-    res.render("sequence-detail", { sequence: sequenceDetails });
+    res.render("sequence-detail", { sequence: sequenceDetails, page: 'sequence-detail' });
   });
 
   // Log file API route

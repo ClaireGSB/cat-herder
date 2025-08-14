@@ -17,7 +17,7 @@ This plan outlines three key refinements:
 ### **Summary Checklist**
 
 -   [x] **1. Implement Explicit Task-to-Sequence Linking**
--   [ ] **2. Refactor Client-Side JavaScript into Modular Files**
+-   [x] **2. Refactor Client-Side JavaScript into Modular Files**
 -   [ ] **3. Polish UI Text and Contextual Links**
 
 ---
