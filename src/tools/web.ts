@@ -246,25 +246,32 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
 
 // Helper function to find the currently active task from journal events
 function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
-  const finishedIds = new Set<string>();
-  // Iterate backwards to find the last finished events efficiently
-  for (let i = journal.length - 1; i >= 0; i--) {
-    const event = journal[i];
-    if (event.eventType.endsWith('_finished')) {
-      finishedIds.add(event.id);
+  // Use a Map to track tasks that have started but not yet finished.
+  // The key is the task ID, the value is the 'task_started' event object.
+  const activeTasks = new Map<string, JournalEvent>();
+
+  for (const event of journal) {
+    if (event.eventType === 'task_started') {
+      // When a task starts, add it to our set of active tasks.
+      // If the same task ID was active before (from a failed run), this updates it
+      // to the latest "started" event, which is correct.
+      activeTasks.set(event.id, event);
+    } else if (event.eventType === 'task_finished') {
+      // When a task finishes, it's no longer active. Remove it from the map.
+      activeTasks.delete(event.id);
     }
   }
 
-  // Iterate backwards again to find the most recent 'task_started'
-  // event for a task that has not been finished.
-  for (let i = journal.length - 1; i >= 0; i--) {
-    const event = journal[i];
-    if (event.eventType === 'task_started' && !finishedIds.has(event.id)) {
-      return event; // This is our active task
-    }
+  // If there are any tasks left in the map after processing the whole journal,
+  // they are the ones that are currently running.
+  if (activeTasks.size > 0) {
+    // The map preserves insertion order. The "last" value in the map is the
+    // most recently started, currently active task.
+    // We convert the map values to an array and return the last element.
+    return Array.from(activeTasks.values()).pop() || null;
   }
 
-  return null; // No active task found
+  return null; // No active tasks found.
 }
 
 // =================================================================
@@ -414,12 +421,19 @@ export async function startWebServer() {
   // --- JOURNAL-BASED /live ROUTE LOGIC ---
   // =================================================================
   app.get("/live", async (req: Request, res: Response) => {
+    console.log(pc.cyan("--- [DEBUG] Executing NEW /live route handler ---")); // <-- ADD THIS
+    
     const journal = await readJournal();
+    console.log(pc.yellow("[DEBUG] Journal content:"), journal); // <-- ADD THIS
+    
     const activeTaskEvent = findActiveTaskFromJournal(journal);
+    console.log(pc.yellow("[DEBUG] Result from findActiveTaskFromJournal:"), activeTaskEvent); // <-- ADD THIS
     
     const taskDetails = activeTaskEvent 
       ? getTaskDetails(stateDir, logsDir, activeTaskEvent.id) 
       : null;
+  
+    console.log(pc.yellow("[DEBUG] Final taskDetails being sent to UI:"), taskDetails?.taskId || null); // <-- ADD THIS
       
     const parentSequence = activeTaskEvent?.parentId 
       ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)

@@ -96,18 +96,20 @@ const defaultStatus: TaskStatus = {
 };
 
 export function readStatus(file: string): TaskStatus {
-    if (fs.existsSync(file)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(file, "utf8"));
-            // Simple migration for old status files
-            if (!data.taskPath) data.taskPath = "unknown";
-            if (!data.version || data.version < 2) data.version = 2;
-            return data;
-        } catch {
-            return defaultStatus;
-        }
-    }
-    return defaultStatus;
+  if (fs.existsSync(file)) {
+      try {
+          const data = JSON.parse(fs.readFileSync(file, "utf8"));
+          // Simple migration for old status files
+          if (!data.taskPath) data.taskPath = "unknown";
+          if (!data.version || data.version < 2) data.version = 2;
+          return data;
+      } catch {
+          // Return a NEW copy if parsing fails
+          return { ...defaultStatus };
+      }
+  }
+  // Return a NEW copy if the file doesn't exist
+  return { ...defaultStatus };
 }
 
 
@@ -131,14 +133,14 @@ const defaultSequenceStatus: SequenceStatus = {
 };
 
 export function readSequenceStatus(file: string): SequenceStatus {
-    if (fs.existsSync(file)) {
-        try {
-            return JSON.parse(fs.readFileSync(file, "utf8"));
-        } catch {
-            return defaultSequenceStatus;
-        }
-    }
-    return defaultSequenceStatus;
+  if (fs.existsSync(file)) {
+      try {
+          return JSON.parse(fs.readFileSync(file, "utf8"));
+      } catch {
+          return { ...defaultSequenceStatus };
+      }
+  }
+  return { ...defaultSequenceStatus };
 }
 
 export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => void) {
