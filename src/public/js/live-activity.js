@@ -48,6 +48,12 @@ function setupLogStream(taskId, logFile) {
             } else if (data.type === 'error') {
                 logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
                 autoScrollToBottom();
+            } else if (data.type === 'journal_updated') {
+                // Only reload if we are currently on the "No Task Running" screen
+                if (document.querySelector('.empty-state')) {
+                    console.log('New activity detected, reloading page...');
+                    window.location.reload();
+                }
             }
         } catch (e) {
             console.error('Error processing WebSocket message:', e);

@@ -551,6 +551,24 @@ export async function startWebServer() {
     };
     stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
 
+    // Journal file watcher for auto-refresh functionality
+    const journalPath = path.join(stateDir, 'run-journal.json');
+    const journalWatcher = chokidar.watch(journalPath, {
+        persistent: true,
+        awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
+        ignoreInitial: true
+    });
+
+    journalWatcher.on('change', () => {
+        console.log(`[Journal Watcher] Detected change in run-journal.json. Broadcasting update.`);
+        const message = JSON.stringify({ type: 'journal_updated' });
+        for (const ws of wss.clients) {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(message);
+            }
+        }
+    });
+
   const port = 5177;
   server.listen(port, () => {
     console.log(pc.green(`Status web server running.`));

@@ -19,8 +19,8 @@ This plan outlines two key improvements:
 -   [x] **1. Backend: Find the Last Finished Task:** Create a new helper function in `src/tools/web.ts` to find the most recently completed task from the run journal.
 -   [x] **2. Backend: Update the Live Activity Route:** Modify the `/live` route in `src/tools/web.ts` to use the new function and pass the last finished task's data to the UI when no task is active.
 -   [x] **3. Frontend: Display Last Finished Task:** Update the `live-activity.ejs` template to render the summary of the last finished task in the "empty state" view.
--   [ ] **4. Backend: Implement Journal Watcher:** Add a `chokidar` watcher in `src/tools/web.ts` to monitor `run-journal.json` for changes and broadcast a WebSocket message.
--   [ ] **5. Frontend: Implement Auto-Refresh:** Update the client-side `live-activity.js` to listen for the new WebSocket message and trigger a page reload if it's currently in the "no task running" state.
+-   [x] **4. Backend: Implement Journal Watcher:** Add a `chokidar` watcher in `src/tools/web.ts` to monitor `run-journal.json` for changes and broadcast a WebSocket message.
+-   [x] **5. Frontend: Implement Auto-Refresh:** Update the client-side `live-activity.js` to listen for the new WebSocket message and trigger a page reload if it's currently in the "no task running" state.
 
 ---
 
