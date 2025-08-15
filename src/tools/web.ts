@@ -274,6 +274,20 @@ function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null
   return null; // No active tasks found.
 }
 
+/**
+ * Finds the most recently finished task from the journal.
+ */
+function findLastFinishedTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
+  // Iterate backwards through the journal to find the newest event first.
+  for (let i = journal.length - 1; i >= 0; i--) {
+    const event = journal[i];
+    if (event.eventType === 'task_finished') {
+      return event; // Found the most recent finished task.
+    }
+  }
+  return null; // No finished tasks in the journal.
+}
+
 // =================================================================
 // --- JOURNAL-BASED HISTORY RECONSTRUCTION FUNCTIONS ---
 // =================================================================
