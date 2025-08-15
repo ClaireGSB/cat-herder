@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import pc from "picocolors";
+import { getConfig, getProjectRoot } from "../config.js";
 
 export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
 
@@ -13,6 +15,15 @@ export type TokenUsage = {
 export type ModelTokenUsage = {
   [modelName: string]: TokenUsage;
 };
+
+// Journal Event interface for run-journal.json
+export interface JournalEvent {
+  timestamp: string;
+  eventType: 'task_started' | 'task_finished' | 'sequence_started' | 'sequence_finished';
+  id: string; // taskId or sequenceId
+  parentId?: string; // The sequenceId if it's a task within a sequence
+  status?: 'done' | 'failed' | 'interrupted'; // Only for 'finished' events
+}
 export type TaskStatus = {
   version: number;
   taskId: string;
@@ -156,4 +167,44 @@ export function folderPathToSequenceId(folderPath: string): string {
     // Sanitize to make it a safe filename component
     const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');
     return `sequence-${sanitizedName}`;
+}
+
+// Journal utility functions for run-journal.json
+
+// Helper to get the journal file path
+async function getJournalPath(): Promise<string> {
+    const projectRoot = getProjectRoot();
+    const config = await getConfig();
+    return path.join(projectRoot, config.statePath, 'run-journal.json');
+}
+
+// New function to read the journal
+export async function readJournal(): Promise<JournalEvent[]> {
+    const journalPath = await getJournalPath();
+    if (!fs.existsSync(journalPath)) {
+        return [];
+    }
+    try {
+        const content = fs.readFileSync(journalPath, 'utf-8');
+        return JSON.parse(content) as JournalEvent[];
+    } catch (error: any) {
+        console.warn(pc.yellow(`Warning: Could not read or parse run-journal.json. Starting fresh. Error: ${error.message}`));
+        return [];
+    }
+}
+
+// New function to log an event
+export async function logJournalEvent(event: Omit<JournalEvent, 'timestamp'>): Promise<void> {
+    const journalPath = await getJournalPath();
+    const journal = await readJournal();
+    const newEvent: JournalEvent = {
+        timestamp: new Date().toISOString(),
+        ...event,
+    };
+    journal.push(newEvent);
+    try {
+        writeJsonAtomic(journalPath, journal);
+    } catch (error: any) {
+        console.error(pc.red(`Fatal: Could not write to run-journal.json. Error: ${error.message}`));
+    }
 }
