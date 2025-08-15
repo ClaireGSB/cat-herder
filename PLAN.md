@@ -16,7 +16,7 @@ This plan outlines the creation of a new file, `run-journal.json`, which will lo
 -   [x] **1. Create the Journal Utility:** Implement new functions in `src/tools/status.ts` to create, read, and write to a `run-journal.json` file.
 -   [x] **2. Integrate Journal Logging into the Orchestrator:** Modify `src/tools/orchestrator.ts` to log events to the journal at the start and end of tasks and sequences.
 -   [x] **3. Refactor the Live Activity Route:** Update the `/live` route in `src/tools/web.ts` to use the new journal for identifying the currently running task.
--   [ ] **4. Refactor the History Page Logic:** Update the `/history` route in `src/tools/web.ts` to source its data from the journal, ensuring a consistent and chronologically accurate view.
+-   [x] **4. Refactor the History Page Logic:** Update the `/history` route in `src/tools/web.ts` to source its data from the journal, ensuring a consistent and chronologically accurate view.
 -   [ ] **5. Update Documentation:** Review and update `README.md` to ensure no internal implementation details have leaked and that the developer experience remains accurately described.
 
 ---

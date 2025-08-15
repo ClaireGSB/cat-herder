@@ -267,6 +267,125 @@ function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null
   return null; // No active task found
 }
 
+// =================================================================
+// --- JOURNAL-BASED HISTORY RECONSTRUCTION FUNCTIONS ---
+// =================================================================
+
+/**
+ * Builds task history from journal events, maintaining chronological accuracy.
+ * Enriches with details from state files when available.
+ */
+function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: string): TaskStatus[] {
+  const taskMap = new Map<string, TaskStatus>();
+  
+  // Process journal events chronologically to build task states
+  for (const event of journal) {
+    if (event.eventType === 'task_started') {
+      taskMap.set(event.id, {
+        taskId: event.id,
+        taskPath: "unknown", // Will be enriched from state file
+        phase: "running",
+        lastUpdate: event.timestamp,
+        parentSequenceId: event.parentId
+      });
+    } else if (event.eventType === 'task_finished') {
+      const existingTask = taskMap.get(event.id);
+      if (existingTask) {
+        existingTask.phase = event.status || 'done';
+        existingTask.lastUpdate = event.timestamp;
+      }
+    }
+  }
+  
+  // Enrich with details from state files
+  const enrichedTasks: TaskStatus[] = [];
+  for (const [taskId, taskStatus] of taskMap.entries()) {
+    const stateFile = path.join(stateDir, `${taskId}.state.json`);
+    if (fs.existsSync(stateFile)) {
+      try {
+        const content = fs.readFileSync(stateFile, "utf8");
+        const state = JSON.parse(content);
+        enrichedTasks.push({
+          ...taskStatus,
+          taskPath: state.taskPath || taskStatus.taskPath,
+          currentStep: state.currentStep,
+          stats: state.stats,
+          tokenUsage: state.tokenUsage,
+          branch: state.branch,
+          pipeline: state.pipeline,
+          // Keep journal-based phase and timestamp as authoritative
+        });
+      } catch (error) {
+        console.error(`Error reading state file for ${taskId}:`, error);
+        enrichedTasks.push(taskStatus);
+      }
+    } else {
+      enrichedTasks.push(taskStatus);
+    }
+  }
+  
+  // Sort by lastUpdate descending (most recent first)
+  return enrichedTasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
+}
+
+/**
+ * Builds sequence history from journal events, maintaining chronological accuracy.
+ * Enriches with details from state files when available.
+ */
+function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDir: string): SequenceStatus[] {
+  const sequenceMap = new Map<string, SequenceStatus>();
+  
+  // Process journal events chronologically to build sequence states
+  for (const event of journal) {
+    if (event.eventType === 'sequence_started') {
+      sequenceMap.set(event.id, {
+        sequenceId: event.id,
+        phase: "running",
+        lastUpdate: event.timestamp
+      });
+    } else if (event.eventType === 'sequence_finished') {
+      const existingSequence = sequenceMap.get(event.id);
+      if (existingSequence) {
+        existingSequence.phase = event.status || 'done';
+        existingSequence.lastUpdate = event.timestamp;
+      }
+    }
+  }
+  
+  // Enrich with details from state files
+  const enrichedSequences: SequenceStatus[] = [];
+  for (const [sequenceId, sequenceStatus] of sequenceMap.entries()) {
+    const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
+    if (fs.existsSync(stateFile)) {
+      try {
+        const content = fs.readFileSync(stateFile, "utf8");
+        const state = JSON.parse(content);
+        const folderName = state.sequenceId?.replace('sequence-', '');
+        enrichedSequences.push({
+          ...sequenceStatus,
+          stats: state.stats,
+          branch: state.branch,
+          folderPath: folderName,
+          currentTaskPath: state.currentTaskPath,
+          // Keep journal-based phase and timestamp as authoritative
+        });
+      } catch (error) {
+        console.error(`Error reading sequence state file for ${sequenceId}:`, error);
+        enrichedSequences.push(sequenceStatus);
+      }
+    } else {
+      enrichedSequences.push(sequenceStatus);
+    }
+  }
+  
+  // Sort by lastUpdate descending (most recent first)
+  return enrichedSequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
+}
+
+// =================================================================
+// --- END OF JOURNAL-BASED HISTORY RECONSTRUCTION FUNCTIONS ---
+// =================================================================
+
 
 export async function startWebServer() {
   const config = await getConfig();
@@ -283,10 +402,11 @@ export async function startWebServer() {
 
   app.get("/", (_req: Request, res: Response) => res.redirect("/live"));
 
-  app.get("/history", (_req: Request, res: Response) => {
-    const allTasks = getAllTaskStatuses(stateDir);
+  app.get("/history", async (_req: Request, res: Response) => {
+    const journal = await readJournal();
+    const allTasks = buildTaskHistoryFromJournal(journal, stateDir);
     const standaloneTasks = allTasks.filter(t => !t.parentSequenceId);
-    const sequences = getAllSequenceStatuses(stateDir);
+    const sequences = buildSequenceHistoryFromJournal(journal, stateDir);
     res.render("history", { sequences, standaloneTasks, page: 'history' });
   });
 
