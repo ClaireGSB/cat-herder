@@ -23,7 +23,7 @@ Here is the corrected code. It's a cleaner architecture that will solve all the 
 ## Summary Checklist
 
 -   [x] **1. Update the EJS template** to add IDs for easier DOM manipulation.
--   [ ] **2. Centralize all WebSocket message handling** in `dashboard.js` to ensure all message types are processed correctly.
+-   [x] **2. Centralize all WebSocket message handling** in `dashboard.js` to ensure all message types are processed correctly.
 -   [ ] **3. Simplify `live-activity.js`** to only handle the initial log request.
 
 ---

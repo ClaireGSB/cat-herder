@@ -62,38 +62,88 @@ class ClaudeDashboard {
     handleRealtimeUpdate(data) {
         console.log('Received real-time update:', data);
         
-        // Handle different message types
-        if (data.type === 'task_update') {
-            // Handle task state updates
-            if (window.location.pathname === '/') {
-                this.updateDashboardRow(data.data);
-            } else if (window.location.pathname.startsWith('/task/')) {
-                this.updateTaskDetail(data.data);
-            } else if (window.location.pathname.startsWith('/sequence/')) {
-                // Also handle task updates within sequence detail view
-                this.updateTaskInSequenceDetail(data.data);
-            } else if (window.location.pathname.endsWith('/live')) {
-                // Handle live activity page updates
-                this.updateLiveActivityPage(data.data);
+        // --- Global Handlers ---
+        if (data.type === 'task_update') this.updateTaskState(data.data);
+        if (data.type === 'sequence_update') this.updateSequenceState(data.data);
+        if (data.type === 'journal_updated') {
+             if (document.querySelector('.empty-state')) window.location.reload();
+        }
+
+        // --- Page-Specific Handlers ---
+        if (window.location.pathname.endsWith('/live')) {
+            this.handleLiveActivityUpdates(data);
+        }
+    }
+
+    // --- State Update Logic ---
+    updateTaskState(task) {
+        // For /history page
+        if (window.location.pathname === '/') {
+            this.updateDashboardRow(task);
+        }
+        // For /task/... detail page
+        if (window.location.pathname.startsWith('/task/')) {
+            this.updateTaskDetail(task);
+        }
+        // For /sequence/... detail page
+        this.updateTaskInSequenceDetail(task);
+    }
+    
+    updateSequenceState(sequence) {
+         // For /sequences page
+        if (window.location.pathname === '/sequences') {
+            this.updateSequencesDashboardRow(sequence);
+        }
+        // For /sequence/... detail page
+        if (window.location.pathname.startsWith('/sequence/')) {
+            this.updateSequenceDetail(sequence);
+        }
+    }
+
+    // --- Live Activity Page Specific Logic ---
+    handleLiveActivityUpdates(data) {
+        const logContainer = document.getElementById('live-log-content');
+        if (!logContainer) return;
+
+        if (data.type === 'log_content') {
+            logContainer.textContent = data.content;
+            this.autoScroll(logContainer);
+        } else if (data.type === 'log_update') {
+            logContainer.textContent += data.content;
+            this.autoScroll(logContainer);
+        } else if (data.type === 'error') {
+            logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
+            this.autoScroll(logContainer);
+        } else if (data.type === 'task_update') {
+            this.updateLiveActivityHeader(data.data);
+            const runningTask = window.liveActivityData?.runningTask;
+            if (runningTask && runningTask.taskId === data.data.taskId && data.data.phase !== 'running') {
+                setTimeout(() => window.location.reload(), 1000);
             }
         } else if (data.type === 'sequence_update') {
-            // Handle sequence state updates
-            console.log('Sequence update received:', data.data);
-            if (window.location.pathname === '/sequences') {
-                this.updateSequencesDashboardRow(data.data);
-            } else if (window.location.pathname.startsWith('/sequence/')) {
-                this.updateSequenceDetail(data.data);
+            this.updateLiveActivityHeader(null, data.data);
+            if (['done', 'failed', 'interrupted'].includes(data.data.phase)) {
+                 setTimeout(() => window.location.href = `/history`, 1500);
             }
-        } else if (data.type === 'log_content' || data.type === 'log_update' || data.type === 'error') {
-            // These are handled by page-specific logic (live activity)
-            return;
-        } else {
-            // Legacy support - treat as task update for backwards compatibility
-            if (window.location.pathname === '/') {
-                this.updateDashboardRow(data);
-            } else if (window.location.pathname.startsWith('/task/')) {
-                this.updateTaskDetail(data);
-            }
+        }
+    }
+
+    updateLiveActivityHeader(taskData, sequenceData) {
+        if (taskData) {
+            const taskIdElement = document.querySelector('#running-task-id');
+            const stepNameElement = document.querySelector('#running-step-name');
+            if (taskIdElement) taskIdElement.textContent = taskData.taskId;
+            if (stepNameElement) stepNameElement.textContent = taskData.currentStep;
+        }
+        if (sequenceData) {
+            const sequenceStatusElement = document.querySelector('#running-sequence-status');
+            if (sequenceStatusElement) sequenceStatusElement.textContent = `(${sequenceData.phase})`;
+        }
+    }
+
+    autoScroll(logContainer) {
+        if (logContainer) {
+            logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
         }
     }
     
@@ -140,21 +190,6 @@ class ClaudeDashboard {
         }
     }
     
-    // Update live activity page
-    updateLiveActivityPage(taskData) {
-        // Update the running step name if the element exists
-        const stepElement = document.querySelector('#running-step-name');
-        if (stepElement && taskData.currentStep) {
-            stepElement.textContent = taskData.currentStep;
-        }
-        
-        // Check if the task we were watching has finished
-        const runningTask = window.liveActivityData?.runningTask;
-        if (runningTask && runningTask.taskId === taskData.taskId && taskData.phase !== 'running') {
-            // Task has finished, reload the page to show the "no task running" state
-            window.location.reload();
-        }
-    }
     
     // Update a specific row in the sequences dashboard table
     updateSequencesDashboardRow(sequenceData) {
@@ -442,8 +477,11 @@ class ClaudeDashboard {
     }
 }
 
-// Global dashboard instance
+// --- Initialize Global Dashboard ---
 window.dashboard = new ClaudeDashboard();
+document.addEventListener('DOMContentLoaded', () => {
+    window.dashboard.initWebSocket();
+});
 
 // Expose utility functions globally for inline event handlers
 window.loadLog = function(taskId, logFile, targetElementId) {

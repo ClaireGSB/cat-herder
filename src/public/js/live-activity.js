@@ -1,56 +1,33 @@
 function initializeLiveActivity() {
     const runningTask = window.liveActivityData?.runningTask || null;
+    if (!runningTask) {
+        // Nothing to do. The main handler in dashboard.js will listen for 'journal_updated'.
+        return;
+    }
+
     const logContainer = document.getElementById('live-log-content');
-    
-    // Store the original handler
-    const originalOnMessage = window.dashboard.globalOnMessage;
+    const currentStep = runningTask.currentStep;
+    const reasoningLog = runningTask.logs?.[currentStep]?.reasoning;
 
-    // Create a new, combined message handler
-    window.dashboard.globalOnMessage = (data) => {
-        // First, let the original handler do its work (for task_update, etc.)
-        originalOnMessage(data);
+    if (!reasoningLog) {
+        if (logContainer) logContainer.textContent = `Error: Could not find reasoning log for step: ${currentStep}`;
+        return;
+    }
 
-        // Now, add the logic specific to this page
-        if (data.type === 'log_content') {
-            logContainer.textContent = data.content;
-            autoScrollToBottom();
-        } else if (data.type === 'log_update') {
-            logContainer.textContent += data.content;
-            autoScrollToBottom();
-        } else if (data.type === 'error') {
-            logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
-        } else if (data.type === 'journal_updated') {
-            if (document.querySelector('.empty-state')) {
-                window.location.reload();
-            }
+    // This function repeatedly tries to send the watch request until the WebSocket is ready.
+    const sendWatchRequest = () => {
+        if (window.dashboard.websocket && window.dashboard.websocket.readyState === WebSocket.OPEN) {
+            const watchMessage = { type: 'watch_log', taskId: runningTask.taskId, logFile: reasoningLog };
+            window.dashboard.websocket.send(JSON.stringify(watchMessage));
+            if (logContainer) logContainer.textContent = 'Connecting to log stream...\n';
+        } else {
+            // If the socket isn't open yet, wait and try again.
+            setTimeout(sendWatchRequest, 200);
         }
     };
 
-    if (!runningTask) {
-        // No need for listenForNextTask anymore, the new handler covers it
-        return;
-    }
-    
-    // Request the initial log stream
-    const currentStep = runningTask.currentStep;
-    const reasoningLog = runningTask.logs?.[currentStep]?.reasoning;
-    if (reasoningLog) {
-        // We just need to request the stream, the handler is already set up
-        const watchMessage = { type: 'watch_log', taskId: runningTask.taskId, logFile: reasoningLog };
-        // Small delay to ensure websocket is connected
-        setTimeout(() => {
-             window.dashboard.websocket.send(JSON.stringify(watchMessage));
-             logContainer.textContent = 'Connecting to log stream...\n';
-        }, 200);
-    } else {
-         logContainer.textContent = `Error: Could not find reasoning log for step: ${currentStep}`;
-    }
+    sendWatchRequest();
 }
 
-
-function autoScrollToBottom() {
-    const logContainer = document.getElementById('live-log-content');
-    if (logContainer) {
-        logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
-    }
-}
+// Hook into the main dashboard initializer
+document.addEventListener('DOMContentLoaded', initializeLiveActivity);
