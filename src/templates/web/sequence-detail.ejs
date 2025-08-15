@@ -151,7 +151,7 @@
                                     <div class="flex-grow-1">
                                         <h6 class="mb-1">
                                             <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-                                            <%= task.filename %>
+                                            <%= task.filename || 'Unknown File' %>
                                             
                                             <!-- Status badge -->
                                             <span class="badge status-<%= task.status %> ms-2 task-status-badge">
@@ -187,7 +187,7 @@
                                     </div>
                                     
                                     <div class="ms-3">
-                                        <% if (task.taskId && task.taskId !== `${sequence.folderPath}-${task.filename.replace('.md', '')}`) { %>
+                                        <% if (task.taskId) { %>
                                             <a href="/task/<%= task.taskId %>" class="btn btn-sm btn-outline-primary" title="View Task Details">
                                                 <i class="bi bi-eye me-1"></i>
                                                 Details

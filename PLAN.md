@@ -16,7 +16,7 @@ The fix involves updating the backend to correctly populate the `filename` prope
 ## Summary Checklist
 
 -   [x] **1. Backend: Add `filename` to Task Data:** Modify the `getSequenceDetails` function in `src/tools/web.ts` to properly extract and include the task's filename.
--   [ ] **2. Frontend: Improve Template Robustness:** Update the `sequence-detail.ejs` template to simplify its logic and add a fallback for displaying the filename.
+-   [x] **2. Frontend: Improve Template Robustness:** Update the `sequence-detail.ejs` template to simplify its logic and add a fallback for displaying the filename.
 
 ---
 
