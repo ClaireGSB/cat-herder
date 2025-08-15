@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { WebSocketServer, WebSocket } from 'ws';
-import chokidar from 'chokidar';
+import chokidar, { FSWatcher } from 'chokidar';
 import { createServer } from 'node:http';
 import { getConfig, getProjectRoot } from "../config.js";
 import { readJournal, JournalEvent } from "./status.js";
@@ -494,8 +494,9 @@ export async function startWebServer() {
     res.send(logContent);
   });
   
-  // WebSocket and file watchers remain the same...
+  // WebSocket and file watchers with real-time log streaming
     const wss = new WebSocketServer({ server, path: '/ws' });
+    const clientWatchers = new Map<WebSocket, FSWatcher>();
   
     wss.on('connection', (ws: WebSocket) => {
         console.log('WebSocket client connected');
@@ -515,9 +516,40 @@ export async function startWebServer() {
                         ws.send(JSON.stringify({ type: 'error', message: 'Access denied' }));
                         return;
                     }
+
+                    // Clean up any previous watcher for this client
+                    if (clientWatchers.has(ws)) {
+                        clientWatchers.get(ws)?.close();
+                    }
+
                     if (fs.existsSync(filePath)) {
+                        // Send initial content
                         const content = fs.readFileSync(filePath, 'utf-8');
                         ws.send(JSON.stringify({ type: 'log_content', content }));
+
+                        // Create a new watcher for this file
+                        const watcher = chokidar.watch(filePath, { persistent: true });
+                        let lastSize = content.length;
+
+                        watcher.on('change', (watchedPath) => {
+                            try {
+                                const newContent = fs.readFileSync(watchedPath, 'utf-8');
+                                if (newContent.length > lastSize) {
+                                    const chunk = newContent.substring(lastSize);
+                                    ws.send(JSON.stringify({ type: 'log_update', content: chunk }));
+                                    lastSize = newContent.length;
+                                }
+                            } catch (error) {
+                                console.error('Error reading file during watch:', error);
+                            }
+                        });
+
+                        watcher.on('error', (error) => {
+                            console.error('File watcher error:', error);
+                            ws.send(JSON.stringify({ type: 'error', message: 'File watcher error' }));
+                        });
+
+                        clientWatchers.set(ws, watcher);
                     } else {
                         ws.send(JSON.stringify({ type: 'error', message: 'Log file not found' }));
                     }
@@ -527,8 +559,24 @@ export async function startWebServer() {
                 ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
             }
         });
-        ws.on('close', () => console.log('WebSocket client disconnected'));
-        ws.on('error', (error) => console.error('WebSocket error:', error));
+
+        ws.on('close', () => {
+            console.log('WebSocket client disconnected');
+            // IMPORTANT: Clean up the watcher to prevent memory leaks
+            if (clientWatchers.has(ws)) {
+                clientWatchers.get(ws)?.close();
+                clientWatchers.delete(ws);
+            }
+        });
+
+        ws.on('error', (error) => {
+            console.error('WebSocket error:', error);
+            // Clean up watcher on error as well
+            if (clientWatchers.has(ws)) {
+                clientWatchers.get(ws)?.close();
+                clientWatchers.delete(ws);
+            }
+        });
     });
     const stateWatcher = chokidar.watch(path.join(stateDir, '*.state.json'), {
         persistent: true,

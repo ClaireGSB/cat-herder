@@ -1,91 +1,144 @@
 
-# PLAN: Fix `TypeError` Crash on Sequence Detail Page
+# PLAN: Implement Real-Time Log Streaming and Step Updates
 
 ## Goal
 
-To resolve the server crash that occurs when viewing a sequence's detail page by ensuring the backend provides the necessary data to the frontend template.
+To fix the Live Activity page so that it streams log output in real-time and automatically updates the UI to reflect the currently running pipeline step as it changes.
 
 ## Description
 
-When a user navigates to the detail page for a task sequence, the web server crashes with a `TypeError: Cannot read properties of undefined (reading 'replace')`.
+Currently, the Live Activity page loads the correct initial state of a running task but never updates. The log output is static, and the "RUNNING STEP" display remains fixed on the step that was active when the page was loaded. This creates a confusing and misleading user experience.
 
-The root cause is a data mismatch: the backend logic in `src/tools/web.ts` was assembling a list of tasks for the sequence but failed to include a `filename` property for each task. The frontend template, `sequence-detail.ejs`, explicitly tries to access `task.filename`, causing a crash when this property is `undefined`.
-
-The fix involves updating the backend to correctly populate the `filename` property and making the frontend template more robust to prevent similar issues.
+This plan will fix the two underlying bugs:
+1.  **On the backend,** we will implement a file watcher that actively monitors the log file being streamed and pushes new content to the client as it's written.
+2.  **On the frontend,** we will refactor the WebSocket message handler to correctly process *all* types of real-time messages (log updates, task step changes, etc.) instead of ignoring them.
 
 ## Summary Checklist
 
--   [x] **1. Backend: Add `filename` to Task Data:** Modify the `getSequenceDetails` function in `src/tools/web.ts` to properly extract and include the task's filename.
--   [x] **2. Frontend: Improve Template Robustness:** Update the `sequence-detail.ejs` template to simplify its logic and add a fallback for displaying the filename.
+-   [x] **1. Backend: Implement Real-Time Log File Watching:** In `src/tools/web.ts`, upgrade the WebSocket server to create a dedicated file watcher for each client that requests a log stream.
+-   [ ] **2. Frontend: Unify the WebSocket Message Handler:** In `src/public/js/live-activity.js`, refactor the code to use a single, comprehensive message handler that can process both log updates and task state changes.
+-   [ ] **3. Frontend: Implement DOM Updates for Step Changes:** Add the client-side JavaScript to update the UI (the sequence status and current step name) when a `task_update` message is received.
+-   [ ] **4. Verification:** Confirm that logs now stream in real-time and the displayed step name changes automatically.
 
 ---
 
 ## Detailed Implementation Steps
 
-### 1. Backend: Add `filename` to Task Data
+### 1. Backend: Implement Real-Time Log File Watching
 
-*   **Objective:** To ensure the backend provides all necessary data (`filename`) to the frontend template, which will fix the root cause of the crash.
-*   **Task:**
-    1.  Open the file `src/tools/web.ts`.
-    2.  Locate the `getSequenceDetails` function.
-    3.  Inside the `for` loop that builds the `tasks` array, use `path.basename()` to extract the filename from the `taskPath` and add it to the object being pushed to the `sequenceDetails.tasks` array.
+*   **Objective:** To have the server actively push log updates to the client instead of only sending the initial file content.
+*   **Task:** Modify the `wss.on('connection', ...)` handler in `src/tools/web.ts`. We will store each client's log file watcher in a `Map` and ensure it's properly created on request and cleaned up on disconnect.
 
 *   **Code Snippet (`src/tools/web.ts`):**
 
     ```typescript
-    // Inside the getSequenceDetails function...
-    // ...inside the for...of loop...
-    try {
-        const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
-        const taskState = JSON.parse(taskStateContent);
-        if (taskState.parentSequenceId === sequenceId) {
-            // ... (status logic is correct)
-            
-            // --- The Fix is Here ---
-            const taskPath = taskState.taskPath || 'unknown'; // Get the taskPath
-            sequenceDetails.tasks.push({
-                taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
-                taskPath: taskPath,
-                filename: path.basename(taskPath), // <<< ADD THIS LINE
-                status: taskStatus,
-                phase: taskState.phase,
-                lastUpdate: taskState.lastUpdate
-            });
-        }
-    } catch (e) { /* ... */ }
+    // At the top of startWebServer(), before the wss is created:
+    const clientWatchers = new Map<WebSocket, chokidar.FSWatcher>();
+
     // ...
+
+    // Replace the entire existing wss.on('connection', ...) block with this new version:
+    wss.on('connection', (ws: WebSocket) => {
+        console.log('WebSocket client connected');
+
+        ws.on('message', (message: Buffer) => {
+            try {
+                const data = JSON.parse(message.toString());
+                if (data.type === 'watch_log') {
+                    const { taskId, logFile } = data;
+                    if (!taskId || !logFile || typeof taskId !== "string" || typeof logFile !== "string") {
+                        // ... error handling
+                        return;
+                    }
+                    const filePath = path.join(logsDir, taskId, logFile);
+                    // ... security checks
+
+                    // Clean up any previous watcher for this client
+                    if (clientWatchers.has(ws)) {
+                        clientWatchers.get(ws)?.close();
+                    }
+
+                    if (fs.existsSync(filePath)) {
+                        // Send initial content
+                        const content = fs.readFileSync(filePath, 'utf-8');
+                        ws.send(JSON.stringify({ type: 'log_content', content }));
+
+                        // Create a new watcher for this file
+                        const watcher = chokidar.watch(filePath, { persistent: true });
+                        let lastSize = content.length;
+
+                        watcher.on('change', (path) => {
+                            const newContent = fs.readFileSync(path, 'utf-8');
+                            if (newContent.length > lastSize) {
+                                const chunk = newContent.substring(lastSize);
+                                ws.send(JSON.stringify({ type: 'log_update', content: chunk }));
+                                lastSize = newContent.length;
+                            }
+                        });
+                        clientWatchers.set(ws, watcher);
+
+                    } else {
+                        ws.send(JSON.stringify({ type: 'error', message: 'Log file not found' }));
+                    }
+                }
+            } catch (e) { /* ... error handling */ }
+        });
+
+        ws.on('close', () => {
+            console.log('WebSocket client disconnected');
+            // IMPORTANT: Clean up the watcher to prevent memory leaks
+            if (clientWatchers.has(ws)) {
+                clientWatchers.get(ws)?.close();
+                clientWatchers.delete(ws);
+            }
+        });
+
+        ws.on('error', (error) => console.error('WebSocket error:', error));
+    });
     ```
 
-### 2. Frontend: Improve Template Robustness
+### 2. Frontend: Unify the WebSocket Message Handler
 
-*   **Objective:** To simplify the EJS template logic, making it less likely to crash in the future and providing better fallbacks.
-*   **Task:**
-    1.  Open the file `src/templates/web/sequence-detail.ejs`.
-    2.  Simplify the `if` condition that checks whether to show a "Details" button.
-    3.  Add a fallback to the line that displays the filename.
+*   **Objective:** To fix the bug where `task_update` messages were being ignored by creating a single message handler that understands all message types.
+*   **Task:** In `src/public/js/live-activity.js`, we will refactor the logic so that `setupLogStream` no longer overwrites `onmessage`. Instead, we will use the main handler from `dashboard.js` and add the live-activity-specific logic to it.
 
-*   **Code Snippets (`src/templates/web/sequence-detail.ejs`):**
+*   **Code Snippets:**
 
-    **Change 1: Simplify the "Details" button logic.**
-    *   **FROM (Current):**
-        ```html
-        <% if (task.taskId && task.taskId !== `${sequence.folderPath}-${task.filename.replace('.md', '')}`) { %>
-        ```
-    *   **TO (Robust):** A simple check for `taskId` is sufficient and safer.
-        ```html
-        <% if (task.taskId) { %>
-        ```
+    **A) In `src/public/js/dashboard.js`:**
+    Make the main `handleRealtimeUpdate` function globally accessible from other scripts.
 
-    **Change 2: Add a fallback for the filename display.**
-    *   **FROM (Current):**
-        ```html
-        <h6 class="mb-1">
-            <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-            <%= task.filename %>
-        ```
-    *   **TO (Robust):**
-        ```html
-        <h6 class="mb-1">
-            <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-            <%= task.filename || 'Unknown File' %>
-        ```
+    ```javascript
+    // In the ClaudeDashboard class constructor:
+    this.globalOnMessage = this.handleRealtimeUpdate.bind(this);
+
+    // In the initWebSocket method, change onmessage:
+    this.websocket.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            // Call the globally accessible handler
+            this.globalOnMessage(data);
+        } catch (e) {
+            console.error('Failed to parse WebSocket message:', e);
+        }
+    };
+    ```
+
+    **B) In `src/public/js/live-activity.js`:**
+    Now, instead of overwriting `onmessage`, we will *extend* the global handler.
+
+    ```javascript
+    function initializeLiveActivity() {
+        const runningTask = window.liveActivityData?.runningTask || null;
+        const logContainer = document.getElementById('live-log-content');
+        
+        // Store the original handler
+        const originalOnMessage = window.dashboard.globalOnMessage;
+
+        // Create a new, combined message handler
+        window.dashboard.globalOnMessage = (data) => {
+            // First, let the original handler do its work (for task_update, etc.)
+            originalOnMessage(data);
+
+            // Now, add the logic specific to this page
+            if (data.type === 'log_content') {
+                logContainer.textContent =
