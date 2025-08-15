@@ -47,6 +47,7 @@ interface SequenceStatus {
 interface SequenceTaskInfo {
   taskId: string;
   taskPath: string;
+  filename: string;
   status: string;
   phase?: string;
   lastUpdate?: string;
@@ -226,9 +227,11 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
                     else if (taskState.phase === 'failed') taskStatus = 'failed';
                     else if (taskState.phase === 'done') taskStatus = 'done';
                     else if (taskState.phase) taskStatus = 'started';
+                    const taskPath = taskState.taskPath || 'unknown';
                     sequenceDetails.tasks.push({
                         taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
-                        taskPath: taskState.taskPath || 'unknown',
+                        taskPath: taskPath,
+                        filename: path.basename(taskPath),
                         status: taskStatus,
                         phase: taskState.phase,
                         lastUpdate: taskState.lastUpdate
