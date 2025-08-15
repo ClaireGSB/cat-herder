@@ -72,6 +72,9 @@ class ClaudeDashboard {
             } else if (window.location.pathname.startsWith('/sequence/')) {
                 // Also handle task updates within sequence detail view
                 this.updateTaskInSequenceDetail(data.data);
+            } else if (window.location.pathname.endsWith('/live')) {
+                // Handle live activity page updates
+                this.updateLiveActivityPage(data.data);
             }
         } else if (data.type === 'sequence_update') {
             // Handle sequence state updates
@@ -134,6 +137,22 @@ class ClaudeDashboard {
             if (durationElement) {
                 durationElement.textContent = `${taskData.stats.totalDuration?.toFixed(2) || 'N/A'}s`;
             }
+        }
+    }
+    
+    // Update live activity page
+    updateLiveActivityPage(taskData) {
+        // Update the running step name if the element exists
+        const stepElement = document.querySelector('#running-step-name');
+        if (stepElement && taskData.currentStep) {
+            stepElement.textContent = taskData.currentStep;
+        }
+        
+        // Check if the task we were watching has finished
+        const runningTask = window.liveActivityData?.runningTask;
+        if (runningTask && runningTask.taskId === taskData.taskId && taskData.phase !== 'running') {
+            // Task has finished, reload the page to show the "no task running" state
+            window.location.reload();
         }
     }
     

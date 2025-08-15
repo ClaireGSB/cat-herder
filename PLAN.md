@@ -17,7 +17,7 @@ This plan will fix the two underlying bugs:
 
 -   [x] **1. Backend: Implement Real-Time Log File Watching:** In `src/tools/web.ts`, upgrade the WebSocket server to create a dedicated file watcher for each client that requests a log stream.
 -   [x] **2. Frontend: Unify the WebSocket Message Handler:** In `src/public/js/live-activity.js`, refactor the code to use a single, comprehensive message handler that can process both log updates and task state changes.
--   [ ] **3. Frontend: Implement DOM Updates for Step Changes:** Add the client-side JavaScript to update the UI (the sequence status and current step name) when a `task_update` message is received.
+-   [x] **3. Frontend: Implement DOM Updates for Step Changes:** Add the client-side JavaScript to update the UI (the sequence status and current step name) when a `task_update` message is received.
 
 ---
 
