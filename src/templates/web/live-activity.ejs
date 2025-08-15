@@ -7,12 +7,12 @@
             <% if (parentSequence) { %>
                 <h6 class="card-subtitle mb-2 text-muted">
                     <i class="bi bi-collection me-1"></i>
-                    SEQUENCE: <%= parentSequence.sequenceId %> (<%= parentSequence.phase %>)
+                    SEQUENCE: <%= parentSequence.sequenceId %> <span id="running-sequence-status">(<%= parentSequence.phase %>)</span>
                 </h6>
             <% } %>
             <h5 class="card-title mb-1">
                 <i class="bi bi-gear-fill me-1"></i>
-                TASK: <%= runningTask.taskId %>
+                TASK: <span id="running-task-id"><%= runningTask.taskId %></span>
             </h5>
             <p class="card-text text-primary mb-0">
                 <strong>
