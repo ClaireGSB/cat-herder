@@ -1,206 +1,202 @@
 
+# PLAN: Implement a Run Journal for Reliable State Tracking
 
-# PLAN: Refactor Task and Sequence Identification
+## Goal
 
-**Goal**: Rework the task and sequence identification logic to use unique, path-based IDs, preventing state collisions between different sequences.
+To replace the complex and brittle task-state inference logic with a simple, chronological "Run Journal" that serves as the single source of truth for the application's state.
 
 ## Description
 
-Currently, the `taskId` is generated from the task's filename only (e.g., `01-create-plan.md`). This creates a critical bug where tasks with the same filename in different sequence folders (e.g., `sequence-A/01-create-plan.md` and `sequence-B/01-create-plan.md`) are treated as the same task. This causes state conflicts, incorrect branch naming, and results in the orchestrator improperly skipping tasks it believes are already complete.
+Currently, the web dashboard determines the "live" running task by scanning all individual state files and applying a set of rules. This logic is fragile; for example, if a task fails unexpectedly, its state file might remain as "running," leading the UI to display incorrect information.
 
-This refactor will change the identification logic to be based on the task's full relative path, ensuring every task and its associated state, logs, and git branch are unique across the entire project.
+This plan outlines the creation of a new file, `run-journal.json`, which will log key events in chronological order (e.g., `task_started`, `task_finished`). The web server will now read this journal to reliably identify the currently active task and display a correct history. This simplifies the logic, improves reliability, and makes the system's state explicit.
 
 ## Summary Checklist
 
--   [x] **Update `status.ts`**: Introduce a new `taskPathToTaskId` function and update the `TaskStatus` interface.
--   [x] **Update `orchestrator.ts`**: Integrate the new ID generation logic for tasks and git branches.
--   [x] **Update `web.ts`**: Refactor the web dashboard to use the new unique IDs and display correct task information.
--   [x] **Test the changes**: Manually run two separate sequences with identically named task files to confirm they are treated as distinct tasks.
--   [x] **Update Documentation**: Update `README.md` to reflect any user-facing changes or developer-facing concepts related to the new identification scheme.
+-   [ ] **1. Create the Journal Utility:** Implement new functions in `src/tools/status.ts` to create, read, and write to a `run-journal.json` file.
+-   [ ] **2. Integrate Journal Logging into the Orchestrator:** Modify `src/tools/orchestrator.ts` to log events to the journal at the start and end of tasks and sequences.
+-   [ ] **3. Refactor the Live Activity Route:** Update the `/live` route in `src/tools/web.ts` to use the new journal for identifying the currently running task.
+-   [ ] **4. Refactor the History Page Logic:** Update the `/history` route in `src/tools/web.ts` to source its data from the journal, ensuring a consistent and chronologically accurate view.
+-   [ ] **5. Update Documentation:** Review and update `README.md` to ensure no internal implementation details have leaked and that the developer experience remains accurately described.
 
 ---
 
 ## Detailed Implementation Steps
 
-### 1. Update `status.ts` for Unique, Path-Based IDs
+### 1. Create the Journal Utility
 
-**Objective**: Modify the core status management file to generate unique IDs and store additional path information in the state.
+*   **Objective:** To create a centralized module for all interactions with the new `run-journal.json` file, abstracting away the file system operations.
+*   **Task:**
+    1.  Go to `src/tools/status.ts`.
+    2.  Define a new interface for journal events.
+    3.  Add three new functions: `getJournalPath`, `readJournal`, and `logJournalEvent`.
 
-**Tasks**:
+*   **Code Snippet (`src/tools/status.ts`):**
 
-1.  **Create `taskPathToTaskId` function**: This new function will accept a task's file path and the project root to generate a consistent, unique ID.
-2.  **Update `TaskStatus` Interface**: Add a `taskPath: string;` property to store the task's relative path, providing a persistent reference to its location.
-3.  **Update ID Generation in `folderPathToSequenceId`**: Sanitize the sequence folder name to prevent invalid characters in filenames.
-4.  **Update `readStatus`**: Add backward compatibility to handle old state files that do not have the new `taskPath` property.
-
-**Code Snippet (`src/tools/status.ts`)**:
-
-```typescript
-// New function to generate a unique task ID from its path
-export function taskPathToTaskId(taskPath: string, projectRoot: string): string {
-    const relativePath = path.isAbsolute(taskPath)
-        ? path.relative(projectRoot, taskPath)
-        : taskPath;
-
-    const taskId = relativePath
-        .replace(/\.md$/, '') // remove extension
-        .replace(/[\\/]/g, '-') // replace path separators
-        .replace(/[^a-z0-9-]/gi, '-'); // sanitize
-    return `task-${taskId}`;
-}
-
-// Updated function to sanitize sequence folder names
-export function folderPathToSequenceId(folderPath: string): string {
-    const folderName = path.basename(path.resolve(folderPath));
-    // Sanitize to make it a safe filename component
-    const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');
-    return `sequence-${sanitizedName}`;
-}
-
-
-// Updated TaskStatus interface
-export type TaskStatus = {
-  version: number;
-  taskId: string;
-  taskPath: string; // <-- Add this new property
-  startTime: string;
-  branch: string;
-  // ... other properties
-};
-
-// Update readStatus for backward compatibility
-export function readStatus(file: string): TaskStatus {
-    if (fs.existsSync(file)) {
-        try {
-            const data = JSON.parse(fs.readFileSync(file, "utf8"));
-            // Simple migration for old status files
-            if (!data.taskPath) data.taskPath = "unknown";
-            return data;
-        } catch {
-            return defaultStatus;
-        }
+    ```typescript
+    // Add this interface at the top of the file
+    export interface JournalEvent {
+      timestamp: string;
+      eventType: 'task_started' | 'task_finished' | 'sequence_started' | 'sequence_finished';
+      id: string; // taskId or sequenceId
+      parentId?: string; // The sequenceId if it's a task within a sequence
+      status?: 'done' | 'failed' | 'interrupted'; // Only for 'finished' events
     }
-    return defaultStatus;
-}
-```
 
-### 2. Update `orchestrator.ts` to Use New IDs
+    // Helper to get the journal file path
+    function getJournalPath(): string {
+      // This function should be implemented to return the absolute path
+      // to `.claude/state/run-journal.json` by using getConfig().
+      // For now, we'll assume it exists.
+      const projectRoot = getProjectRoot(); // You already have this utility
+      const config = await getConfig();
+      return path.join(projectRoot, config.statePath, 'run-journal.json');
+    }
 
-**Objective**: Modify the orchestrator to use the new `taskPathToTaskId` function for all task-related operations, including state management, logging, and branch naming.
+    // New function to read the journal
+    export function readJournal(): JournalEvent[] {
+      const journalPath = getJournalPath();
+      if (!fs.existsSync(journalPath)) {
+        return [];
+      }
+      try {
+        const content = fs.readFileSync(journalPath, 'utf-8');
+        return JSON.parse(content) as JournalEvent[];
+      } catch (error) {
+        console.warn(pc.yellow(`Warning: Could not read or parse run-journal.json. Starting fresh. Error: ${error.message}`));
+        return [];
+      }
+    }
 
-**Tasks**:
+    // New function to log an event
+    export function logJournalEvent(event: Omit<JournalEvent, 'timestamp'>): void {
+      const journalPath = getJournalPath();
+      const journal = readJournal();
+      const newEvent: JournalEvent = {
+        timestamp: new Date().toISOString(),
+        ...event,
+      };
+      journal.push(newEvent);
+      try {
+        fs.writeFileSync(journalPath, JSON.stringify(journal, null, 2));
+      } catch (error) {
+        console.error(pc.red(`Fatal: Could not write to run-journal.json. Error: ${error.message}`));
+      }
+    }
+    ```
 
-1.  **Import `taskPathToTaskId`**: Import the new function from `status.ts`.
-2.  **Update `taskPathToBranchName`**: Modify this function to use the new `taskPathToTaskId` function, ensuring branch names are as unique as the task IDs.
-3.  **Update `runTask` and `executePipelineForTask`**: Replace all instances where a `taskId` is generated from `path.basename` with calls to the new `taskPathToTaskId` function.
-4.  **Persist `taskPath`**: When creating or updating a task's state, ensure the `taskPath` property is saved with its relative path.
+### 2. Integrate Journal Logging into the Orchestrator
 
-**Code Snippet (`src/tools/orchestrator.ts`)**:
+*   **Objective:** To ensure the journal is accurately populated by logging events at critical points in the task and sequence lifecycles.
+*   **Task:** In `src/tools/orchestrator.ts`, import `logJournalEvent` and call it in the following places:
+    1.  **`runTask`:** At the beginning and end.
+    2.  **`runTaskSequence`:** At the beginning and end.
+    3.  **`runTaskSequence` loop:** When a new task within the sequence starts and finishes.
 
-```typescript
-// Before
-function taskPathToBranchName(taskPath: string): string {
-  const taskFileName = path.basename(taskPath, '.md');
-  // ... (sanitization)
-  return `claude/${sanitized}`;
-}
+*   **Code Snippets (`src/tools/orchestrator.ts`):**
 
-// After
-function taskPathToBranchName(taskPath: string, projectRoot: string): string {
-    const taskId = taskPathToTaskId(taskPath, projectRoot);
-    // remove the "task-" prefix for the branch name for brevity
-    const branchNameSegment = taskId.startsWith('task-') ? taskId.substring(5) : taskId;
-    return `claude/${branchNameSegment}`;
-}
+    ```typescript
+    // In runTask() function, after getting the taskId
+    logJournalEvent({ eventType: 'task_started', id: taskId });
 
-// In runTask() and executePipelineForTask()
-// Before
-const taskId = path.basename(taskRelativePath, '.md').replace(/[^a-z0-9-]/gi, '-');
+    // In runTask() function, at the very end (inside a try/finally block to capture failures)
+    // You will need to determine the final status.
+    // Example:
+    // let finalStatus: 'done' | 'failed' = 'done';
+    // try { ... } catch { finalStatus = 'failed'; } finally {
+    //   logJournalEvent({ eventType: 'task_finished', id: taskId, status: finalStatus });
+    // }
 
-// After
-const taskId = taskPathToTaskId(taskRelativePath, projectRoot);
+    // In runTaskSequence() function, after getting the sequenceId
+    logJournalEvent({ eventType: 'sequence_started', id: sequenceId });
 
-// When updating status
-updateStatus(statusFile, s => {
-  s.taskId = taskId;
-  s.taskPath = relativeTaskPath; // <-- Make sure to save the path
-  //...
-});
-```
+    // Inside the `while (nextTaskPath)` loop in runTaskSequence()
+    const nextTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
+    logJournalEvent({ eventType: 'task_started', id: nextTaskId, parentId: sequenceId });
 
-### 3. Update `web.ts` for UI Consistency
+    // After a task completes successfully inside the loop
+    const completedTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
+    logJournalEvent({ eventType: 'task_finished', id: completedTaskId, status: 'done' });
+    
+    // At the end of runTaskSequence(), similar to runTask()
+    // let finalSequenceStatus: 'done' | 'failed' = ...;
+    // logJournalEvent({ eventType: 'sequence_finished', id: sequenceId, status: finalSequenceStatus });
+    ```
 
-**Objective**: Refactor the web dashboard's backend to correctly identify and display task data using the new unique IDs and path information.
+### 3. Refactor the Live Activity Route
 
-**Tasks**:
+*   **Objective:** To replace the old, unreliable "live task" detection logic with a simple and robust method that uses the run journal.
+*   **Task:**
+    1.  Go to `src/tools/web.ts`.
+    2.  In the `app.get("/live", ...)` route handler, replace the existing logic with a new function that reads the journal.
 
-1.  **Filter Tasks**: In `getAllTaskStatuses`, ensure you are only reading task state files by filtering out files that start with `sequence-`.
-2.  **Pass `taskPath` to Templates**: Ensure the `taskPath` property is available in the data passed to the EJS templates for the dashboard and sequence detail views.
-3.  **Update `getSequenceDetails`**: When listing tasks within a sequence, use the stored `taskPath` for display and linking, ensuring the correct file is referenced.
-4.  **Sort Tasks by Path**: In the sequence detail view, sort tasks alphabetically by `taskPath` to ensure a consistent and predictable order.
+*   **Code Snippet (`src/tools/web.ts`):**
 
-**Code Snippet (`src/tools/web.ts`)**:
+    ```typescript
+    // This helper function will replace the complex file-scanning logic
+    function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
+      const finishedIds = new Set<string>();
+      // Iterate backwards to find the last finished events efficiently
+      for (let i = journal.length - 1; i >= 0; i--) {
+        const event = journal[i];
+        if (event.eventType.endsWith('_finished')) {
+          finishedIds.add(event.id);
+        }
+      }
 
-```typescript
-// In getAllTaskStatuses()
-// Before
-const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json"));
+      // Iterate backwards again to find the most recent 'task_started'
+      // event for a task that has not been finished.
+      for (let i = journal.length - 1; i >= 0; i--) {
+        const event = journal[i];
+        if (event.eventType === 'task_started' && !finishedIds.has(event.id)) {
+          return event; // This is our active task
+        }
+      }
 
-// After
-const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json") && !f.startsWith("sequence-"));
+      return null; // No active task found
+    }
 
-
-// In getSequenceDetails()
-// Before
-// ... logic to derive filename from taskId
-sequenceDetails.tasks.push({
-    taskId: taskId,
-    filename: filename, // <-- This was a guess
+    // Inside the app.get('/live', ...) handler:
     // ...
-});
+    const journal = readJournal(); // Your new utility function from status.ts
+    const activeTaskEvent = findActiveTaskFromJournal(journal);
+    
+    const taskDetails = activeTaskEvent 
+      ? getTaskDetails(stateDir, logsDir, activeTaskEvent.id) 
+      : null;
+      
+    const parentSequence = activeTaskEvent?.parentId 
+      ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)
+      : null;
+      
+    res.render("live-activity", { 
+      runningTask: taskDetails, 
+      parentSequence: parentSequence, // Pass sequence details if available
+      page: 'live-activity'
+    });
+    ```
 
-// After
-sequenceDetails.tasks.push({
-    taskId: taskId,
-    taskPath: taskState.taskPath || 'unknown', // <-- Use the reliable path
-    status: taskStatus,
-    phase: taskState.phase,
-    lastUpdate: taskState.lastUpdate
-});
+### 4. Refactor the History Page Logic
 
-// At the end of getSequenceDetails()
-sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
-```
+*   **Objective:** To unify the data source for the application, ensuring the history page is also driven by the reliable run journal.
+*   **Task:** In `src/tools/web.ts`, update the `app.get("/history", ...)` route to build its task and sequence lists from the journal instead of scanning the state directory.
 
-### 4. Testing the Changes
+*   **Guidance (`src/tools/web.ts`):**
+    The logic here will involve processing the journal to reconstruct the history.
+    1.  Read the journal using `readJournal()`.
+    2.  Create maps to hold the latest state of each task and sequence (`Map<string, TaskInfo>`).
+    3.  Iterate through the journal events and update the maps. For example, a `task_started` event creates an entry, and a `task_finished` event updates its status.
+    4.  Convert the maps to arrays and pass them to the `history.ejs` template. This ensures the history page reflects the exact sequence of events as they happened.
 
-**Objective**: Verify that the refactoring has fixed the state collision bug.
+### 5. Update Documentation
 
-**Tasks**:
-
-1.  **Create Test Structure**:
-    -   Create two sequence folders: `claude-Tasks/sequence-A` and `claude-Tasks/sequence-B`.
-    -   Inside each folder, create a task file with the exact same name, for example `01-do-something.md`.
-2.  **Run First Sequence**:
-    -   Execute `claude-project run-sequence claude-Tasks/sequence-A`.
-    -   Confirm it runs successfully.
-3.  **Run Second Sequence**:
-    -   Execute `claude-project run-sequence claude-Tasks/sequence-B`.
-    -   **Crucially, verify that it does NOT skip the `01-do-something.md` task.** It should run it as a new, distinct task.
-4.  **Check State Files**:
-    -   Inspect the `.claude/state/` directory. You should see two different state files, for example:
-        -   `task-claude-Tasks-sequence-A-01-do-something.state.json`
-        -   `task-claude-Tasks-sequence-B-01-do-something.state.json`
+*   **Objective:** To ensure the project's `README.md` is accurate and does not contain outdated information about internal implementation.
+*   **Task:**
+    1.  Thoroughly read `README.md`.
+    2.  This change is primarily an internal refactor, so user-facing documentation should not need significant changes.
+    3.  Confirm that no implementation details about how the "live" status is determined are mentioned. If they are, remove them to keep the documentation focused on user interaction rather than internal mechanics.
 
 ## Error Handling & Warnings
 
--   **Old State Files**: The `readStatus` function should gracefully handle old state files by populating the `taskPath` with a default value (`"unknown"`). This ensures the tool doesn't crash if it encounters state from a previous version. No CLI warnings are necessary for this, as it's a silent, backward-compatible upgrade.
--   **Invalid Paths**: The use of `path.relative` and sanitization in the ID generation functions should inherently handle most path-related edge cases. No new error handling is expected.
-
-## Documentation Changes
-
-**Objective**: Update the `README.md` to ensure all information is current.
-
-**Task**:
-
--   Review the `README.md` file, especially sections related to state management, logging, and branch naming. While this change is mostly internal, double-check that no examples or explanations are now misleading. For instance, if branch names are shown as examples, they should be updated to reflect the new, longer format (e.g., `claude/sequence-A-01-do-something` instead of `claude/01-do-something`).
+*   **Corrupt Journal File:** The `readJournal()` function should be wrapped in a `try...catch` block. If `run-journal.json` is malformed or unreadable, the function should log a clear warning to the console and return an empty array `[]`. The application should gracefully handle this by showing "No tasks running" or an empty history.
+*   **Write Failures:** If `logJournalEvent()` fails to write to the file, it should log a critical error. This is a more serious condition, as it means the state of the application can no longer be tracked reliably.
