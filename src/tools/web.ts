@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import chokidar from 'chokidar';
 import { createServer } from 'node:http';
 import { getConfig, getProjectRoot } from "../config.js";
+import { readJournal, JournalEvent } from "./status.js";
 
 // Interfaces remain the same...
 interface TaskStatus {
@@ -243,6 +244,29 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
     }
 }
 
+// Helper function to find the currently active task from journal events
+function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
+  const finishedIds = new Set<string>();
+  // Iterate backwards to find the last finished events efficiently
+  for (let i = journal.length - 1; i >= 0; i--) {
+    const event = journal[i];
+    if (event.eventType.endsWith('_finished')) {
+      finishedIds.add(event.id);
+    }
+  }
+
+  // Iterate backwards again to find the most recent 'task_started'
+  // event for a task that has not been finished.
+  for (let i = journal.length - 1; i >= 0; i--) {
+    const event = journal[i];
+    if (event.eventType === 'task_started' && !finishedIds.has(event.id)) {
+      return event; // This is our active task
+    }
+  }
+
+  return null; // No active task found
+}
+
 
 export async function startWebServer() {
   const config = await getConfig();
@@ -267,42 +291,20 @@ export async function startWebServer() {
   });
 
   // =================================================================
-  // --- NEW /live ROUTE LOGIC IMPLEMENTING YOUR SPECIFICATION ---
+  // --- JOURNAL-BASED /live ROUTE LOGIC ---
   // =================================================================
-  app.get("/live", (req: Request, res: Response) => {
-    const allTasks = getAllTaskStatuses(stateDir);
-    const allSequences = getAllSequenceStatuses(stateDir); // Already sorted by most recent
+  app.get("/live", async (req: Request, res: Response) => {
+    const journal = await readJournal();
+    const activeTaskEvent = findActiveTaskFromJournal(journal);
     
-    let activeTask: TaskStatus | null = null;
-
-    // Priority 1: Find an active sequence and use its current task
-    const activeSequence = allSequences.find(s => s.phase !== 'done');
-    if (activeSequence && activeSequence.currentTaskPath) {
-        // Find the task object that matches the absolute path from the sequence state
-        activeTask = allTasks.find(t => path.resolve(projectRoot, t.taskPath) === activeSequence.currentTaskPath) || null;
-    }
-
-    // Priority 2: If no active sequence task, look for a standalone active task
-    if (!activeTask) {
-        const standaloneTasks = allTasks.filter(t => !t.parentSequenceId);
-        
-        // Prioritize 'running' among standalone tasks
-        const runningStandalone = standaloneTasks.find(t => t.phase === 'running');
-        if (runningStandalone) {
-            activeTask = runningStandalone;
-        } else {
-            // Fallback to the most recent standalone task that isn't 'done' or 'failed'
-            const otherActiveStandalone = standaloneTasks.find(t => t.phase !== 'done' && t.phase !== 'failed');
-            if (otherActiveStandalone) {
-                activeTask = otherActiveStandalone;
-            }
-        }
-    }
-    
-    const taskDetails = activeTask ? getTaskDetails(stateDir, logsDir, activeTask.taskId) : null;
-    const parentSequence = activeTask ? findParentSequence(stateDir, activeTask.taskId) : null;
-    
-    // The EJS template uses 'runningTask' as the variable name for simplicity
+    const taskDetails = activeTaskEvent 
+      ? getTaskDetails(stateDir, logsDir, activeTaskEvent.id) 
+      : null;
+      
+    const parentSequence = activeTaskEvent?.parentId 
+      ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)
+      : null;
+      
     res.render("live-activity", { 
       runningTask: taskDetails, 
       parentSequence: parentSequence,
@@ -310,7 +312,7 @@ export async function startWebServer() {
     });
   });
   // =================================================================
-  // --- END OF NEW /live ROUTE LOGIC ---
+  // --- END OF JOURNAL-BASED /live ROUTE LOGIC ---
   // =================================================================
 
   app.get("/task/:taskId", (req: Request, res: Response) => {
