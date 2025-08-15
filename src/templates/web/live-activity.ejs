@@ -28,9 +28,27 @@
         <div class="text-center">
             <i class="bi bi-moon-stars display-1 text-muted mb-3"></i>
             <h3 class="text-muted mb-3">No Task is Currently Running</h3>
-            <p class="text-muted mb-4">
-                When a task starts, its live logs will appear here automatically.
-            </p>
+            
+            <% if (lastFinishedTask) { %>
+                <p class="text-muted">The last task to run has completed.</p>
+                <div class="card d-inline-block p-3 bg-light" style="max-width: 600px; text-align: left;">
+                    <h6 class="mb-1">Last Activity:</h6>
+                    <p class="mb-1">
+                        <strong>Task ID:</strong> <%= lastFinishedTask.taskId %>
+                    </p>
+                    <p class="mb-2">
+                        <strong>Status:</strong> 
+                        <span class="badge status-<%= lastFinishedTask.phase %>"><%= lastFinishedTask.phase %></span>
+                    </p>
+                    <a href="/task/<%= lastFinishedTask.taskId %>" class="btn btn-sm btn-outline-secondary">
+                        View Details
+                    </a>
+                </div>
+            <% } else { %>
+                <p class="text-muted mb-4">
+                    When a task starts, its live logs will appear here automatically.
+                </p>
+            <% } %>
         </div>
     </div>
 <% } %>
@@ -45,13 +63,16 @@
     // 1. Render the server-side data into a JavaScript string literal.
     // The linter sees a valid string assignment, and the EJS tag is safely inside the quotes.
     const runningTaskJSON = '<%- JSON.stringify(runningTask || null) %>';
+    const lastFinishedTaskJSON = '<%- JSON.stringify(lastFinishedTask || null) %>';
 
     // 2. Safely parse the JSON string into a JavaScript object.
     const runningTaskObject = JSON.parse(runningTaskJSON);
+    const lastFinishedTaskObject = JSON.parse(lastFinishedTaskJSON);
 
     // 3. Assign it to the global object. This is clean and error-free.
     window.liveActivityData = {
-        runningTask: runningTaskObject
+        runningTask: runningTaskObject,
+        lastFinishedTask: lastFinishedTaskObject
     };
 </script>
 
