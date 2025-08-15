@@ -435,27 +435,30 @@ export async function startWebServer() {
   // --- JOURNAL-BASED /live ROUTE LOGIC ---
   // =================================================================
   app.get("/live", async (req: Request, res: Response) => {
-    console.log(pc.cyan("--- [DEBUG] Executing NEW /live route handler ---")); // <-- ADD THIS
-    
     const journal = await readJournal();
-    console.log(pc.yellow("[DEBUG] Journal content:"), journal); // <-- ADD THIS
-    
     const activeTaskEvent = findActiveTaskFromJournal(journal);
-    console.log(pc.yellow("[DEBUG] Result from findActiveTaskFromJournal:"), activeTaskEvent); // <-- ADD THIS
     
-    const taskDetails = activeTaskEvent 
-      ? getTaskDetails(stateDir, logsDir, activeTaskEvent.id) 
-      : null;
-  
-    console.log(pc.yellow("[DEBUG] Final taskDetails being sent to UI:"), taskDetails?.taskId || null); // <-- ADD THIS
-      
-    const parentSequence = activeTaskEvent?.parentId 
-      ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)
-      : null;
+    let taskDetails = null;
+    let parentSequence = null;
+    let lastFinishedTaskDetails = null; // New variable
+
+    if (activeTaskEvent) {
+      taskDetails = getTaskDetails(stateDir, logsDir, activeTaskEvent.id);
+      parentSequence = activeTaskEvent.parentId 
+        ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)
+        : null;
+    } else {
+      // If no task is running, find the last one that finished.
+      const lastFinishedTaskEvent = findLastFinishedTaskFromJournal(journal);
+      if (lastFinishedTaskEvent) {
+        lastFinishedTaskDetails = getTaskDetails(stateDir, logsDir, lastFinishedTaskEvent.id);
+      }
+    }
       
     res.render("live-activity", { 
       runningTask: taskDetails, 
       parentSequence: parentSequence,
+      lastFinishedTask: lastFinishedTaskDetails, // Pass the new variable
       page: 'live-activity'
     });
   });
