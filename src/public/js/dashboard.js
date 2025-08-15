@@ -5,6 +5,7 @@ class ClaudeDashboard {
         this.reconnectInterval = 5000;
         this.maxReconnectAttempts = 5;
         this.reconnectAttempts = 0;
+        this.globalOnMessage = this.handleRealtimeUpdate.bind(this);
     }
     
     // Initialize WebSocket connection (for future real-time updates)
@@ -28,7 +29,8 @@ class ClaudeDashboard {
             this.websocket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    this.handleRealtimeUpdate(data);
+                    // Call the globally accessible handler
+                    this.globalOnMessage(data);
                 } catch (e) {
                     console.error('Failed to parse WebSocket message:', e);
                 }

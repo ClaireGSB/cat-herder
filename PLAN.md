@@ -16,9 +16,8 @@ This plan will fix the two underlying bugs:
 ## Summary Checklist
 
 -   [x] **1. Backend: Implement Real-Time Log File Watching:** In `src/tools/web.ts`, upgrade the WebSocket server to create a dedicated file watcher for each client that requests a log stream.
--   [ ] **2. Frontend: Unify the WebSocket Message Handler:** In `src/public/js/live-activity.js`, refactor the code to use a single, comprehensive message handler that can process both log updates and task state changes.
+-   [x] **2. Frontend: Unify the WebSocket Message Handler:** In `src/public/js/live-activity.js`, refactor the code to use a single, comprehensive message handler that can process both log updates and task state changes.
 -   [ ] **3. Frontend: Implement DOM Updates for Step Changes:** Add the client-side JavaScript to update the UI (the sequence status and current step name) when a `task_update` message is received.
--   [ ] **4. Verification:** Confirm that logs now stream in real-time and the displayed step name changes automatically.
 
 ---
 
@@ -141,4 +140,84 @@ This plan will fix the two underlying bugs:
 
             // Now, add the logic specific to this page
             if (data.type === 'log_content') {
-                logContainer.textContent =
+                logContainer.textContent = data.content;
+                autoScrollToBottom();
+            } else if (data.type === 'log_update') {
+                logContainer.textContent += data.content;
+                autoScrollToBottom();
+            } else if (data.type === 'error') {
+                logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
+            } else if (data.type === 'journal_updated') {
+                if (document.querySelector('.empty-state')) {
+                    window.location.reload();
+                }
+            }
+        };
+
+        if (!runningTask) {
+            // No need for listenForNextTask anymore, the new handler covers it
+            return;
+        }
+        
+        // ... (rest of the function to request the initial log stream)
+        const currentStep = runningTask.currentStep;
+        const reasoningLog = runningTask.logs?.[currentStep]?.reasoning;
+        if (reasoningLog) {
+            // We just need to request the stream, the handler is already set up
+            const watchMessage = { type: 'watch_log', taskId: runningTask.taskId, logFile: reasoningLog };
+            // Small delay to ensure websocket is connected
+            setTimeout(() => {
+                 window.dashboard.websocket.send(JSON.stringify(watchMessage));
+                 logContainer.textContent = 'Connecting to log stream...\n';
+            }, 200);
+        } else {
+             logContainer.textContent = `Error: Could not find reasoning log for step: ${currentStep}`;
+        }
+    }
+
+    // REMOVE the old setupLogStream and listenForNextTask functions entirely.
+    ```
+
+### 3. Frontend: Implement DOM Updates for Step Changes
+
+*   **Objective:** To make the UI update when a `task_update` message arrives.
+*   **Task:** This logic belongs in the main dashboard handler. Open `src/public/js/dashboard.js` and add the specific DOM update logic for the live activity page inside the `task_update` handler.
+
+*   **Code Snippet (`src/public/js/dashboard.js`):**
+
+    ```javascript
+    // In the ClaudeDashboard class, inside the handleRealtimeUpdate method...
+    
+    handleRealtimeUpdate(data) {
+        // ...
+        if (data.type === 'task_update') {
+            // ... (existing logic for other pages)
+            
+            // --- ADD THIS NEW LOGIC ---
+            // If we are on the live activity page, update its elements
+            if (window.location.pathname.endsWith('/live')) {
+                const stepElement = document.querySelector('#running-step-name');
+                if (stepElement && data.data.currentStep) {
+                    stepElement.textContent = data.data.currentStep;
+                }
+                
+                // Also reload if the task we were watching has finished
+                const runningTask = window.liveActivityData?.runningTask;
+                if(runningTask && runningTask.taskId === data.data.taskId && data.data.phase !== 'running') {
+                    window.location.reload();
+                }
+            }
+        } 
+        // ...
+    }
+    ```    To make this work, we also need to add an ID to the element in the template.
+
+    **In `src/templates/web/live-activity.ejs`:**
+    ```html
+    <p class="card-text text-primary mb-0">
+        <strong>
+            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+            RUNNING STEP: <span id="running-step-name"><%= runningTask.currentStep %></span>
+        </strong>
+    </p>
+    ```
