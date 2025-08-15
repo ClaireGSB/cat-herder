@@ -4,7 +4,7 @@ import path from "node:path";
 import pc from "picocolors";
 import yaml from 'js-yaml';
 import { runStreaming, StreamResult, killActiveProcess } from "./proc.js";
-import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId, taskPathToTaskId } from "./status.js";
+import { updateStatus, readStatus, TaskStatus, readSequenceStatus, updateSequenceStatus, SequenceStatus, folderPathToSequenceId, taskPathToTaskId, logJournalEvent } from "./status.js";
 import { getConfig, getProjectRoot, ClaudeProjectConfig, PipelineStep } from "../config.js";
 import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
@@ -20,6 +20,8 @@ let shutdownState: {
   reasoningLogFile: string;
   sequenceStatusFile?: string;
   currentStepName: string;
+  taskId?: string;
+  sequenceId?: string;
 } | null = null;
 
 /**
@@ -32,7 +34,7 @@ async function handleGracefulShutdown() {
 
   console.log(pc.yellow("\n[Orchestrator] Gracefully shutting down. Updating state files..."));
 
-  const { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName } = shutdownState;
+  const { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName, taskId, sequenceId } = shutdownState;
   const interruptTime = new Date();
   const interruptISO = interruptTime.toISOString();
 
@@ -66,10 +68,23 @@ async function handleGracefulShutdown() {
     console.error(pc.red("[Orchestrator] Error writing to log files during shutdown:"), e);
   }
 
-  // 4. Kill the active claude process
+  // 4. Log journal events for interrupted tasks/sequences
+  try {
+    if (taskId) {
+      const parentId = sequenceId || undefined;
+      await logJournalEvent({ eventType: 'task_finished', id: taskId, parentId, status: 'interrupted' });
+    }
+    if (sequenceId) {
+      await logJournalEvent({ eventType: 'sequence_finished', id: sequenceId, status: 'interrupted' });
+    }
+  } catch (journalError: any) {
+    console.warn(pc.yellow(`[Orchestrator] Warning: Failed to log interruption events to journal: ${journalError.message}`));
+  }
+
+  // 5. Kill the active claude process
   killActiveProcess();
 
-  // 5. Exit
+  // 6. Exit
   process.exit(130); // Standard exit code for Ctrl+C
 }
 
@@ -265,7 +280,10 @@ async function executeStep(
     }
 
     // Set shutdown state before running the process
-    shutdownState = { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName: name };
+    // Extract taskId from statusFile name and sequenceId from sequenceStatusFile if available
+    const taskId = path.basename(statusFile, '.state.json');
+    const sequenceId = sequenceStatusFile ? path.basename(sequenceStatusFile, '.state.json') : undefined;
+    shutdownState = { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName: name, taskId, sequenceId };
 
     const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
 
@@ -542,10 +560,30 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
     s.taskPath = relativeTaskPath; // Ensure taskPath is always set
   });
 
-  // 5. Execute the pipeline using the new reusable function
-  await executePipelineForTask(taskPath, { pipelineOption });
+  // 5. Log task start event
+  try {
+    await logJournalEvent({ eventType: 'task_started', id: taskId });
+  } catch (error: any) {
+    console.warn(pc.yellow(`Warning: Failed to log task start event. Error: ${error.message}`));
+  }
 
-  // 6. Calculate final task statistics
+  // 6. Execute the pipeline using the new reusable function
+  let finalStatus: 'done' | 'failed' | 'interrupted' = 'done';
+  try {
+    await executePipelineForTask(taskPath, { pipelineOption });
+  } catch (error) {
+    finalStatus = isInterrupted ? 'interrupted' : 'failed';
+    throw error;
+  } finally {
+    // Log task finished event regardless of outcome
+    try {
+      await logJournalEvent({ eventType: 'task_finished', id: taskId, status: finalStatus });
+    } catch (error: any) {
+      console.warn(pc.yellow(`Warning: Failed to log task finish event. Error: ${error.message}`));
+    }
+  }
+
+  // 7. Calculate final task statistics
   console.log(pc.cyan("\n[Orchestrator] Calculating final task statistics..."));
   updateStatus(statusFile, s => {
     if (s.phase === 'done') {
@@ -692,86 +730,130 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
 
+  // Log sequence start event
+  try {
+    await logJournalEvent({ eventType: 'sequence_started', id: sequenceId });
+  } catch (error: any) {
+    console.warn(pc.yellow(`Warning: Failed to log sequence start event. Error: ${error.message}`));
+  }
+
   let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
   let pauseStartTime: number | null = null;
   let totalPauseTime = 0;
+  let sequenceFinalStatus: 'done' | 'failed' | 'interrupted' = 'done';
 
-  while (nextTaskPath) {
-    try {
-      console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
+  try {
+    while (nextTaskPath) {
+      const nextTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
+      try {
+        console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
 
-      updateSequenceStatus(statusFile, s => {
-        s.currentTaskPath = nextTaskPath;
-        s.phase = "running";
-      });
+        // Log task start event within sequence
+        try {
+          await logJournalEvent({ eventType: 'task_started', id: nextTaskId, parentId: sequenceId });
+        } catch (error: any) {
+          console.warn(pc.yellow(`Warning: Failed to log task start event. Error: ${error.message}`));
+        }
 
-      await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
+        updateSequenceStatus(statusFile, s => {
+          s.currentTaskPath = nextTaskPath;
+          s.phase = "running";
+        });
 
-      // Aggregate token usage from the completed task into sequence stats
-      const completedTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
-      const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
-      const completedTaskStatus = readStatus(completedTaskStatusFile);
+        await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
 
-      updateSequenceStatus(statusFile, s => {
-        s.completedTasks.push(nextTaskPath!);
-        s.currentTaskPath = null;
-        s.phase = "pending";
+        // Log task completion event within sequence
+        try {
+          await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: 'done' });
+        } catch (error: any) {
+          console.warn(pc.yellow(`Warning: Failed to log task finish event. Error: ${error.message}`));
+        }
 
-        // Aggregate token usage if available
-        if (completedTaskStatus.tokenUsage) {
-          if (!s.stats) {
-            s.stats = {
-              totalDuration: 0,
-              totalDurationExcludingPauses: 0,
-              totalPauseTime: 0,
-              totalTokenUsage: {}
-            };
-          }
-          if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
+        // Aggregate token usage from the completed task into sequence stats
+        const completedTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
+        const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
+        const completedTaskStatus = readStatus(completedTaskStatusFile);
 
-          for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
-            if (!s.stats.totalTokenUsage[model]) {
-              s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+        updateSequenceStatus(statusFile, s => {
+          s.completedTasks.push(nextTaskPath!);
+          s.currentTaskPath = null;
+          s.phase = "pending";
+
+          // Aggregate token usage if available
+          if (completedTaskStatus.tokenUsage) {
+            if (!s.stats) {
+              s.stats = {
+                totalDuration: 0,
+                totalDurationExcludingPauses: 0,
+                totalPauseTime: 0,
+                totalTokenUsage: {}
+              };
             }
-            s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
-            s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
-            s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
-            s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
+            if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
+
+            for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
+              if (!s.stats.totalTokenUsage[model]) {
+                s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+              }
+              s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
+              s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
+              s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
+              s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
+            }
           }
+        });
+
+        console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
+
+        nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
+
+      } catch (error: any) {
+        // Log task failure event within sequence
+        try {
+          const taskStatus = isInterrupted ? 'interrupted' : 'failed';
+          await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: taskStatus });
+        } catch (logError: any) {
+          console.warn(pc.yellow(`Warning: Failed to log task failure event. Error: ${logError.message}`));
+        }
+        
+        console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
+        updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
+        sequenceFinalStatus = isInterrupted ? 'interrupted' : 'failed';
+        throw error;
+      }
+    }
+
+    const finalStatus = readSequenceStatus(statusFile);
+    if (finalStatus.phase !== 'failed') {
+      console.log(pc.green("[Sequence] No more tasks found. All done!"));
+      updateSequenceStatus(statusFile, s => {
+        s.phase = "done";
+        const startTime = new Date(s.startTime).getTime();
+        const endTime = new Date().getTime();
+        const totalDuration = (endTime - startTime) / 1000;
+
+        // Ensure stats object exists and preserve existing token usage
+        if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+        const existingTokenUsage = s.stats.totalTokenUsage;
+        const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
+
+        s.stats = {
+          totalDuration,
+          totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
+          totalPauseTime: currentTotalPauseTime,
+          totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
         }
       });
-
-      console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
-
-      nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
-
-    } catch (error: any) {
-      console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
-      updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
-      throw error;
     }
-  }
-
-  const finalStatus = readSequenceStatus(statusFile);
-  if (finalStatus.phase !== 'failed') {
-    console.log(pc.green("[Sequence] No more tasks found. All done!"));
-    updateSequenceStatus(statusFile, s => {
-      s.phase = "done";
-      const startTime = new Date(s.startTime).getTime();
-      const endTime = new Date().getTime();
-      const totalDuration = (endTime - startTime) / 1000;
-
-      // Ensure stats object exists and preserve existing token usage
-      if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
-      const existingTokenUsage = s.stats.totalTokenUsage;
-      const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
-
-      s.stats = {
-        totalDuration,
-        totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
-        totalPauseTime: currentTotalPauseTime,
-        totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
-      }
-    });
+  } catch (error: any) {
+    sequenceFinalStatus = isInterrupted ? 'interrupted' : 'failed';
+    throw error;
+  } finally {
+    // Log sequence finished event regardless of outcome
+    try {
+      await logJournalEvent({ eventType: 'sequence_finished', id: sequenceId, status: sequenceFinalStatus });
+    } catch (error: any) {
+      console.warn(pc.yellow(`Warning: Failed to log sequence finish event. Error: ${error.message}`));
+    }
   }
 }
