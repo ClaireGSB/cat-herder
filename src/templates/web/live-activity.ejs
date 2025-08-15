@@ -1,58 +1,58 @@
 <%- include('partials/header', { title: 'Live Activity' }) %>
 
-<div id="live-header" class="mb-3">
-    <h1 class="h3">
-        <i class="bi bi-broadcast-pin text-danger me-2"></i>Live Activity
-    </h1>
-    
-    <!-- Sequence Context (when task is part of a sequence) -->
-    <div class="card border-primary mb-3" id="sequence-info-card" style="display: none;">
+<% if (runningTask) { %>
+    <!-- Context Header -->
+    <div class="card bg-light border-0 mb-3">
         <div class="card-body">
-            <h6 class="card-title mb-1 text-primary">
-                <i class="bi bi-collection me-2"></i>Part of Sequence: <span id="live-sequence-id"></span>
-            </h6>
-            <p class="card-text text-muted mb-0 small">
-                Sequence Status: <span class="badge bg-secondary" id="live-sequence-status"></span>
+            <% if (parentSequence) { %>
+                <h6 class="card-subtitle mb-2 text-muted">
+                    <i class="bi bi-collection me-1"></i>
+                    SEQUENCE: <%= parentSequence.sequenceId %> (<%= parentSequence.phase %>)
+                </h6>
+            <% } %>
+            <h5 class="card-title mb-1">
+                <i class="bi bi-gear-fill me-1"></i>
+                TASK: <%= runningTask.taskId %>
+            </h5>
+            <p class="card-text text-primary mb-0">
+                <strong>
+                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                    RUNNING STEP: <%= runningTask.currentStep %>
+                </strong>
             </p>
         </div>
     </div>
-    
-    <!-- Task Context -->
-    <div class="card bg-light border-0" id="task-info-card" style="display: none;">
-        <div class="card-body">
-            <h5 class="card-title mb-1" id="live-task-id"></h5>
-            <p class="card-text text-muted mb-0">
-                Current Step: <strong id="live-task-step"></strong>
+<% } else { %>
+    <!-- No Running Task View -->
+    <div class="empty-state">
+        <div class="text-center">
+            <i class="bi bi-moon-stars display-1 text-muted mb-3"></i>
+            <h3 class="text-muted mb-3">No Task is Currently Running</h3>
+            <p class="text-muted mb-4">
+                When a task starts, its live logs will appear here automatically.
             </p>
         </div>
     </div>
-    
-    <!-- Success Banners -->
-    <div class="alert alert-success d-flex align-items-center" id="sequence-finished-banner" style="display: none;">
-        <i class="bi bi-check-circle-fill me-2"></i>
-        <div class="flex-grow-1">
-            <strong>Sequence Complete!</strong> The entire sequence has finished successfully.
-        </div>
-        <a href="#" id="view-sequence-details-link" class="btn btn-outline-success btn-sm">
-            <i class="bi bi-eye me-1"></i>View Details
-        </a>
-    </div>
-    
-    <div class="alert alert-info d-flex align-items-center" id="task-finished-banner" style="display: none;">
-        <i class="bi bi-check-circle-fill me-2"></i>
-        <div class="flex-grow-1">
-            <strong>Task Complete!</strong> This task has finished.
-        </div>
-        <a href="#" id="view-task-details-link" class="btn btn-outline-info btn-sm">
-            <i class="bi bi-eye me-1"></i>View Details
-        </a>
-    </div>
-    
-    <p id="no-running-task" class="text-muted">No task is currently running. Start a task to see live logs.</p>
+<% } %>
+
+<!-- Log Viewer -->
+<div class="log-viewer">
+    <pre id="live-log-content" class="log-content"><% if (!runningTask) { %>Waiting for a task to start...<% } %></pre>
 </div>
 
-<div class="log-viewer" style="height: 60vh;">
-    <pre id="live-log-content" class="log-content"></pre>
-</div>
+<!-- Pass data to the client-side script -->
+<script>
+    // 1. Render the server-side data into a JavaScript string literal.
+    // The linter sees a valid string assignment, and the EJS tag is safely inside the quotes.
+    const runningTaskJSON = '<%- JSON.stringify(runningTask || null) %>';
+
+    // 2. Safely parse the JSON string into a JavaScript object.
+    const runningTaskObject = JSON.parse(runningTaskJSON);
+
+    // 3. Assign it to the global object. This is clean and error-free.
+    window.liveActivityData = {
+        runningTask: runningTaskObject
+    };
+</script>
 
 <%- include('partials/footer') %>
