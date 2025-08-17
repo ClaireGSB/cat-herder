@@ -60,19 +60,24 @@
 
 <!-- Pass data to the client-side script -->
 <script>
-    // 1. Render the server-side data into a JavaScript string literal.
-    // The linter sees a valid string assignment, and the EJS tag is safely inside the quotes.
+    // This script safely passes data from the EJS template to the client-side JavaScript.
+
+    // 1. Render all server-side data into JavaScript string literals.
+    // This prevents syntax errors even if the variables are null or undefined.
     const runningTaskJSON = '<%- JSON.stringify(runningTask || null) %>';
     const lastFinishedTaskJSON = '<%- JSON.stringify(lastFinishedTask || null) %>';
+    const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
 
-    // 2. Safely parse the JSON string into a JavaScript object.
+    // 2. Safely parse the JSON strings into JavaScript objects.
     const runningTaskObject = JSON.parse(runningTaskJSON);
     const lastFinishedTaskObject = JSON.parse(lastFinishedTaskJSON);
+    const parentSequenceObject = JSON.parse(parentSequenceJSON);
 
-    // 3. Assign it to the global object. This is clean and error-free.
+    // 3. Assign the parsed objects to a single global variable.
     window.liveActivityData = {
         runningTask: runningTaskObject,
-        lastFinishedTask: lastFinishedTaskObject
+        lastFinishedTask: lastFinishedTaskObject,
+        parentSequence: parentSequenceObject
     };
 </script>
 

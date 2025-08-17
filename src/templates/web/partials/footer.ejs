@@ -18,16 +18,9 @@
             <script src="/js/sequence-detail-page.js"></script>
         <% } else if (page === 'sequences-dashboard') { %>
             <script src="/js/sequences-dashboard-page.js"></script>
-        <% } else if (page === 'live-activity') { %>
-            <!-- Set up live activity data before loading page script -->
-            <script>
-                window.liveActivityData = {
-                    runningTask: <%- typeof runningTask !== 'undefined' && runningTask ? JSON.stringify(runningTask) : 'null' %>,
-                    parentSequence: <%- typeof parentSequence !== 'undefined' && parentSequence ? JSON.stringify(parentSequence) : 'null' %>
-                };
-            </script>
-            <script src="/js/live-activity-page.js"></script>
-        <% } %>
+            <% } else if (page === 'live-activity') { %>
+                <script src="/js/live-activity-page.js"></script>
+              <% } %>
     <% } %>
 </body>
 </html>
