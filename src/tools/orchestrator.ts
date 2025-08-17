@@ -10,6 +10,13 @@ import { runCheck, CheckConfig, CheckResult } from "./check-runner.js";
 import { contextProviders } from "./providers.js";
 import { validatePipeline } from "./validator.js";
 
+class InterruptedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InterruptedError";
+  }
+}
+
 // --- Graceful Shutdown Handling ---
 let isInterrupted = false;
 let shutdownInProgress = false;
@@ -28,6 +35,7 @@ let shutdownState: {
  * Handles the graceful shutdown process when a SIGINT is received.
  * It updates state files and logs to indicate an interruption.
  */
+// THIS FUNCTION IS NO LONGER USED, but we can keep it for logging if needed
 async function handleGracefulShutdown() {
   if (shutdownInProgress || !shutdownState) return;
   shutdownInProgress = true;
@@ -89,8 +97,13 @@ async function handleGracefulShutdown() {
 }
 
 process.on('SIGINT', () => {
+  if (isInterrupted) {
+    console.log(pc.red("\n[Orchestrator] Force-exiting on second interrupt."));
+    process.exit(1);
+  }
+  console.log(pc.yellow("\n[Orchestrator] Interruption signal received. Gracefully shutting down after this step..."));
   isInterrupted = true;
-  handleGracefulShutdown();
+  killActiveProcess(); // This will unblock the `await runStreaming` call
 });
 // --- End Graceful Shutdown Handling ---
 
@@ -283,28 +296,38 @@ async function executeStep(
     // Extract taskId from statusFile name and sequenceId from sequenceStatusFile if available
     const taskId = path.basename(statusFile, '.state.json');
     const sequenceId = sequenceStatusFile ? path.basename(sequenceStatusFile, '.state.json') : undefined;
-    shutdownState = { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName: name, taskId, sequenceId };
 
     const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
+    const partialTokenUsage = result.tokenUsage;
+    const modelName = result.modelUsed || model || 'default';
 
-    // Clear shutdown state after the process finishes
-    shutdownState = null;
-
-    if (isInterrupted) return; // Exit gracefully if interrupted
-
-    // Aggregate token usage data if available
-    if (result.tokenUsage) {
-      const modelName = model || 'default';
-      updateStatus(statusFile, s => {
+    // ALWAYS perform a state update after a run, even if it was interrupted.
+    updateStatus(statusFile, s => {
+      // 1. Aggregate any tokens that were used before the interruption.
+      if (partialTokenUsage) {
         if (!s.tokenUsage) s.tokenUsage = {};
         if (!s.tokenUsage[modelName]) {
           s.tokenUsage[modelName] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
         }
-        s.tokenUsage[modelName].inputTokens += result.tokenUsage!.input_tokens;
-        s.tokenUsage[modelName].outputTokens += result.tokenUsage!.output_tokens;
-        s.tokenUsage[modelName].cacheCreationInputTokens += result.tokenUsage!.cache_creation_input_tokens;
-        s.tokenUsage[modelName].cacheReadInputTokens += result.tokenUsage!.cache_read_input_tokens;
-      });
+        s.tokenUsage[modelName].inputTokens += partialTokenUsage.input_tokens;
+        s.tokenUsage[modelName].outputTokens += partialTokenUsage.output_tokens;
+        s.tokenUsage[modelName].cacheCreationInputTokens += partialTokenUsage.cache_creation_input_tokens;
+        s.tokenUsage[modelName].cacheReadInputTokens += partialTokenUsage.cache_read_input_tokens;
+      }
+
+      // 2. If interrupted, set the final state here.
+      if (isInterrupted) {
+        s.phase = "interrupted";
+        if (s.steps[name] === "running") {
+          s.steps[name] = "interrupted";
+        }
+      }
+    });
+
+
+    // 3. Now that the state is securely written, throw to stop the pipeline.
+    if (isInterrupted) {
+      throw new InterruptedError("Process was interrupted by the user.");
     }
 
     if (result.rateLimit) {
@@ -572,7 +595,13 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   try {
     await executePipelineForTask(taskPath, { pipelineOption });
   } catch (error) {
-    finalStatus = isInterrupted ? 'interrupted' : 'failed';
+    if (error instanceof InterruptedError) {
+      console.log(pc.green("\n[Orchestrator] Workflow safely interrupted and state saved."));
+      finalStatus = 'interrupted';
+      // Allow the finally block to run, then exit gracefully
+      return; 
+    }
+    finalStatus = 'failed';
     throw error;
   } finally {
     // Log task finished event regardless of outcome

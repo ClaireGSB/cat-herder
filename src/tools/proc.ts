@@ -24,6 +24,7 @@ export function killActiveProcess() {
 export interface StreamResult {
   code: number;
   output: string;
+  modelUsed?: string;
   tokenUsage?: StepTokenUsage;
   rateLimit?: {
     resetTimestamp: number;
@@ -110,6 +111,7 @@ export function runStreaming(
 
   let fullOutput = "";
   let buffer = ""; // Buffer for parsing JSON lines across chunks
+  let detectedModelName: string | undefined;
   let stepTokenUsage: StepTokenUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   let rateLimitInfo: StreamResult['rateLimit'] | undefined;
   let lastToolUsed: string | null = null;
@@ -168,6 +170,10 @@ export function runStreaming(
 
         try {
           const json = JSON.parse(line);
+
+          if (!detectedModelName && (json.model || json.message?.model)) {
+            detectedModelName = json.model || json.message.model;
+          }
           
           // Capture token usage data if present in the message
           if (json.message?.usage) {
@@ -317,7 +323,7 @@ export function runStreaming(
         rawJsonStream.end();
       }
       activeProcess = null;
-      resolve({ code: code ?? 1, output: fullOutput, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
+      resolve({ code: code ?? 1, output: fullOutput, modelUsed: detectedModelName, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
     });
   });
 }
