@@ -578,10 +578,16 @@ export async function startWebServer() {
             }
         });
     });
-    const stateWatcher = chokidar.watch(path.join(stateDir, '*.state.json'), {
+    const watchPattern = path.join(stateDir, '*.state.json').replace(/\\/g, '/');
+    
+    console.log(`[State Watcher] Initializing watcher on directory: ${stateDir}`);
+
+    const stateWatcher = chokidar.watch(stateDir, {
         persistent: true,
         awaitWriteFinish: { stabilityThreshold: 100, pollInterval: 50 },
-        ignoreInitial: true
+        ignoreInitial: true,
+        // Only watch files directly in this directory, not subdirectories.
+        depth: 0 
     });
     const handleStateChange = (filePath: string) => {
         if (!filePath.endsWith('.state.json')) return;
