@@ -312,16 +312,21 @@ export function runStreaming(
 
       const footer = `\n\n-------------------------------------------------\n`;
       const footer2 = `--- Process finished at: ${endTime.toISOString()} ---\n`;
+      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
+
       
       // Conditionally create the finish reason based on interruption status
       let finishReason: string;
       if (wasKilled || signal === 'SIGINT') {
         finishReason = `--- Reason: Interrupted by user, Exit Signal: ${signal || 'SIGINT'} ---\n`;
       } else {
-        finishReason = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
+        finishReason = `--- Reason: Process completed normally, Exit Code: ${code} ---\n`;
       }
 
-      const fullFooter = footer + footer2 + finishReason + tokenFooter;
+      const fullFooter = footer + footer2 + finishReason + footer3 + tokenFooter;
+
+      const streams: WriteStream[] = [logStream, reasoningStream];
+      if(rawJsonStream) streams.push(rawJsonStream);
 
       logStream.write(fullFooter);
       logStream.end();
