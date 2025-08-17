@@ -3,11 +3,18 @@
 <nav aria-label="breadcrumb" class="mb-4">
     <ol class="breadcrumb">
         <li class="breadcrumb-item">
-            <a href="/" class="text-decoration-none">
-                <i class="bi bi-house-fill"></i>
-                Dashboard
+            <a href="/history" class="text-decoration-none">
+                <i class="bi bi-clock-history"></i>
+                Run History
             </a>
         </li>
+        
+        <% if (task.parentSequenceId) { %>
+            <li class="breadcrumb-item">
+                <a href="/sequence/<%= task.parentSequenceId %>"><%= task.parentSequenceId %></a>
+            </li>
+        <% } %>
+
         <li class="breadcrumb-item active" aria-current="page">
             <%= task.taskId %>
         </li>
