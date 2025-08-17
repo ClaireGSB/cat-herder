@@ -71,6 +71,7 @@ class ClaudeDashboard {
     }
 
     updateTaskUI(task) {
+        // This part updates the history page badge in real-time
         const taskRow = document.querySelector(`[data-task-id="${task.taskId}"]`);
         if (taskRow) {
             this.updateStatusBadge(taskRow.querySelector('.task-status-badge'), task.phase);
@@ -78,30 +79,32 @@ class ClaudeDashboard {
 
         if (window.location.pathname.endsWith('/live')) {
             const runningTask = window.liveActivityData?.runningTask;
-            // If there's no running task defined on the page, or if the incoming update
-            // is for a DIFFERENT task (e.g., the one that just finished), ignore it.
-            // This prevents the race condition during task transitions.
-            if (!runningTask || runningTask.taskId !== task.taskId) {
-                return;
-            }
-            // Update the header text
-            const stepNameElement = document.querySelector('#running-step-name');
-            if (stepNameElement) {
-                stepNameElement.textContent = task.currentStep;
-            }
-
-            // --- NEW: Logic to switch the log file watch ---
-            const newStep = task.currentStep;
-            // Default to watching the 'reasoning' log as it's the most informative.
-            const newLogFile = task.logs?.[newStep]?.reasoning;
-
-            if (newLogFile && this.currentWatchedLogFile !== newLogFile) {
-                console.log(`Step changed. Switching log watch from ${this.currentWatchedLogFile} to ${newLogFile}`);
-                this.currentWatchedLogFile = newLogFile;
-                this.watchLogFile(task.taskId, newLogFile);
+            if (!runningTask) return;
+            
+            // --- NEW RELOAD LOGIC ---
+            // If the incoming update is for the currently running task,
+            // check if the step has changed. If so, reload the page
+            // to update the entire sidebar and status headers.
+            if (runningTask.taskId === task.taskId && runningTask.currentStep !== task.currentStep) {
+                console.log(`Step changed from '${runningTask.currentStep}' to '${task.currentStep}'. Reloading.`);
+                window.location.reload();
+                return; // Stop further processing
             }
             // --- END NEW LOGIC ---
 
+
+            // This part handles the log switching when a step changes,
+            // which will now run after a page reload.
+            const newStep = task.currentStep;
+            const newLogFile = task.logs?.[newStep]?.reasoning;
+
+            if (newLogFile && this.currentWatchedLogFile !== newLogFile) {
+                console.log(`Switching log watch to ${newLogFile}`);
+                this.currentWatchedLogFile = newLogFile;
+                this.watchLogFile(task.taskId, newLogFile);
+            }
+
+            // Existing logic to reload when the task is finished
             if (task.phase !== 'running') {
                 setTimeout(() => window.location.reload(), 1200);
             }

@@ -1,84 +1,124 @@
-<%- include('partials/header', { title: 'Live Activity' }) %>
+<%- include('partials/header', { title: 'Live Activity', page: 'live-activity' }) %>
 
-<% if (runningTask) { %>
-    <!-- Context Header -->
-    <div class="card bg-light border-0 mb-3">
-        <div class="card-body">
-            <% if (parentSequence) { %>
-                <h6 class="card-subtitle mb-2 text-muted">
-                    <i class="bi bi-collection me-1"></i>
-                    SEQUENCE: <%= parentSequence.sequenceId %> <span id="running-sequence-status">(<%= parentSequence.phase %>)</span>
-                </h6>
-            <% } %>
-            <h5 class="card-title mb-1">
-                <i class="bi bi-gear-fill me-1"></i>
-                TASK: <span id="running-task-id"><%= runningTask.taskId %></span>
-            </h5>
-            <p class="card-text text-primary mb-0">
-                <strong>
-                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-                    RUNNING STEP: <span id="running-step-name"><%= runningTask.currentStep %></span>
-                </strong>
-            </p>
-        </div>
-    </div>
-<% } else { %>
-    <!-- No Running Task View -->
-    <div class="empty-state">
-        <div class="text-center">
-            <i class="bi bi-moon-stars display-1 text-muted mb-3"></i>
-            <h3 class="text-muted mb-3">No Task is Currently Running</h3>
-            
-            <% if (lastFinishedTask) { %>
-                <p class="text-muted">The last task to run has completed.</p>
-                <div class="card d-inline-block p-3 bg-light" style="max-width: 600px; text-align: left;">
-                    <h6 class="mb-1">Last Activity:</h6>
-                    <p class="mb-1">
-                        <strong>Task ID:</strong> <%= lastFinishedTask.taskId %>
-                    </p>
-                    <p class="mb-2">
-                        <strong>Status:</strong> 
-                        <span class="badge status-<%= lastFinishedTask.phase %>"><%= lastFinishedTask.phase %></span>
-                    </p>
-                    <a href="/task/<%= lastFinishedTask.taskId %>" class="btn btn-sm btn-outline-secondary">
-                        View Details
-                    </a>
+<div class="row">
+    <!-- =============================================================== -->
+    <!-- === NEW: CONTEXT SIDEBAR (Stacks on mobile) === -->
+    <!-- =============================================================== -->
+    <div class="col-lg-4 order-lg-1">
+        <% 
+            const taskToShow = runningTask || lastFinishedTask;
+            const sequenceToShow = parentSequence;
+        %>
+
+        <% if (taskToShow) { %>
+            <!-- Sequence Context Panel -->
+            <% if (sequenceToShow) { %>
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="bi bi-collection me-2"></i>Sequence Tasks</h6>
+                    </div>
+                    <ul class="list-group list-group-flush">
+                        <% sequenceToShow.tasks.forEach(task => { %>
+                            <li class="list-group-item d-flex justify-content-between align-items-center <%= task.taskId === taskToShow.taskId ? 'active' : '' %>">
+                                <span><i class="bi bi-file-earmark-text me-2"></i><%= task.filename %></span>
+                                <span class="badge status-<%= task.status %>"><%= task.status %></span>
+                            </li>
+                        <% }); %>
+                    </ul>
                 </div>
-            <% } else { %>
-                <p class="text-muted mb-4">
-                    When a task starts, its live logs will appear here automatically.
-                </p>
             <% } %>
+
+            <!-- Current Task Steps Panel -->
+            <div class="card">
+                <div class="card-header">
+                     <h6 class="mb-0"><i class="bi bi-list-ol me-2"></i>Task Steps</h6>
+                </div>
+                <ul class="list-group list-group-flush">
+                     <% if (taskToShow.steps && Object.keys(taskToShow.steps).length > 0) { %>
+                        <% Object.entries(taskToShow.steps).forEach(([stepName, stepStatus]) => { %>
+                            <li class="list-group-item d-flex justify-content-between align-items-center <%= stepName === taskToShow.currentStep ? 'active' : '' %>">
+                                <span><%= stepName %></span>
+                                <span class="badge status-<%= stepStatus %>">
+                                     <% if (stepStatus === 'running') { %>
+                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                                     <% } %>
+                                    <%= stepStatus %>
+                                </span>
+                            </li>
+                        <% }); %>
+                    <% } else { %>
+                         <li class="list-group-item text-muted">Steps not yet started.</li>
+                    <% } %>
+                </ul>
+            </div>
+        <% } %>
+    </div>
+
+    <!-- =============================================================== -->
+    <!-- === MAIN CONTENT AREA === -->
+    <!-- =============================================================== -->
+    <div class="col-lg-8 order-lg-2">
+        <% if (runningTask) { %>
+            <!-- Context Header -->
+            <div class="card bg-light border-0 mb-3">
+                <div class="card-body">
+                    <% if (parentSequence) { %>
+                        <h6 class="card-subtitle mb-2 text-muted">
+                            <i class="bi bi-collection me-1"></i>
+                            SEQUENCE: <%= parentSequence.sequenceId %> <span id="running-sequence-status" class="badge status-<%= parentSequence.phase %>"><%= parentSequence.phase %></span>
+                        </h6>
+                    <% } %>
+                    <h5 class="card-title mb-1">
+                        <i class="bi bi-gear-fill me-1"></i>
+                        TASK: <span id="running-task-id"><%= runningTask.taskId %></span>
+                    </h5>
+                    <p class="card-text text-primary mb-0">
+                        <strong>
+                            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                            RUNNING STEP: <span id="running-step-name"><%= runningTask.currentStep %></span>
+                        </strong>
+                    </p>
+                </div>
+            </div>
+        <% } else { %>
+            <!-- No Running Task View -->
+            <div class="empty-state card">
+                 <div class="card-body">
+                    <div class="text-center">
+                        <i class="bi bi-moon-stars display-1 text-muted mb-3"></i>
+                        <h3 class="text-muted mb-3">No Task is Currently Running</h3>
+                        
+                        <% if (lastFinishedTask) { %>
+                            <p class="text-muted">View the final status of the last completed task.</p>
+                        <% } else { %>
+                            <p class="text-muted mb-4">
+                                When a task starts, its live logs and status will appear here.
+                            </p>
+                        <% } %>
+                    </div>
+                 </div>
+            </div>
+        <% } %>
+
+        <!-- Log Viewer -->
+        <div class="log-viewer mt-3">
+            <pre id="live-log-content" class="log-content"><% if (!runningTask && !lastFinishedTask) { %>Waiting for a task to start...<% } else { %>Live log will appear here when a task is running.<% } %></pre>
         </div>
     </div>
-<% } %>
-
-<!-- Log Viewer -->
-<div class="log-viewer">
-    <pre id="live-log-content" class="log-content"><% if (!runningTask) { %>Waiting for a task to start...<% } %></pre>
 </div>
+
 
 <!-- Pass data to the client-side script -->
 <script>
-    // This script safely passes data from the EJS template to the client-side JavaScript.
-
-    // 1. Render all server-side data into JavaScript string literals.
-    // This prevents syntax errors even if the variables are null or undefined.
+    // This script remains the same
     const runningTaskJSON = '<%- JSON.stringify(runningTask || null) %>';
     const lastFinishedTaskJSON = '<%- JSON.stringify(lastFinishedTask || null) %>';
     const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
-
-    // 2. Safely parse the JSON strings into JavaScript objects.
-    const runningTaskObject = JSON.parse(runningTaskJSON);
-    const lastFinishedTaskObject = JSON.parse(lastFinishedTaskJSON);
-    const parentSequenceObject = JSON.parse(parentSequenceJSON);
-
-    // 3. Assign the parsed objects to a single global variable.
     window.liveActivityData = {
-        runningTask: runningTaskObject,
-        lastFinishedTask: lastFinishedTaskObject,
-        parentSequence: parentSequenceObject
+        runningTask: JSON.parse(runningTaskJSON),
+        lastFinishedTask: JSON.parse(lastFinishedTaskJSON),
+        parentSequence: JSON.parse(parentSequenceJSON)
     };
 </script>
 
-<%- include('partials/footer') %>
+<%- include('partials/footer', { page: 'live-activity' }) %>
