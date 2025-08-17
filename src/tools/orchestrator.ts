@@ -31,70 +31,6 @@ let shutdownState: {
   sequenceId?: string;
 } | null = null;
 
-/**
- * Handles the graceful shutdown process when a SIGINT is received.
- * It updates state files and logs to indicate an interruption.
- */
-// THIS FUNCTION IS NO LONGER USED, but we can keep it for logging if needed
-async function handleGracefulShutdown() {
-  if (shutdownInProgress || !shutdownState) return;
-  shutdownInProgress = true;
-
-  console.log(pc.yellow("\n[Orchestrator] Gracefully shutting down. Updating state files..."));
-
-  const { statusFile, logFile, reasoningLogFile, sequenceStatusFile, currentStepName, taskId, sequenceId } = shutdownState;
-  const interruptTime = new Date();
-  const interruptISO = interruptTime.toISOString();
-
-  // 1. Update Task State
-  updateStatus(statusFile, s => {
-    s.phase = "interrupted";
-    if (s.steps[currentStepName] === "running") {
-      s.steps[currentStepName] = "interrupted";
-    }
-  });
-
-  // 2. Update Sequence State (if applicable)
-  if (sequenceStatusFile) {
-    updateSequenceStatus(sequenceStatusFile, s => {
-      s.phase = "interrupted";
-    });
-  }
-
-  // 3. Append to Log Files
-  const reasonLogMessage = `\n=================================================\n--- [SYSTEM] [INTERRUPT] User interrupted the process at: ${interruptISO} ---\n=================================================\n`;
-  const mainLogMessage = `\n-------------------------------------------------
---- [Orchestrator] User interrupted the process at: ${interruptISO} ---
--------------------------------------------------
-`;
-
-  try {
-    appendFileSync(reasoningLogFile, reasonLogMessage);
-    appendFileSync(logFile, mainLogMessage);
-    console.log(pc.green("[Orchestrator] State and logs updated."));
-  } catch (e) {
-    console.error(pc.red("[Orchestrator] Error writing to log files during shutdown:"), e);
-  }
-
-  // 4. Log journal events for interrupted tasks/sequences
-  try {
-    if (taskId) {
-      const parentId = sequenceId || undefined;
-      await logJournalEvent({ eventType: 'task_finished', id: taskId, parentId, status: 'interrupted' });
-    }
-    if (sequenceId) {
-      await logJournalEvent({ eventType: 'sequence_finished', id: sequenceId, status: 'interrupted' });
-    }
-  } catch (journalError: any) {
-    console.warn(pc.yellow(`[Orchestrator] Warning: Failed to log interruption events to journal: ${journalError.message}`));
-  }
-
-  // 5. Kill the active claude process
-  killActiveProcess();
-
-  // 6. Exit
-  process.exit(130); // Standard exit code for Ctrl+C
-}
 
 process.on('SIGINT', () => {
   if (isInterrupted) {
@@ -759,7 +695,6 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   console.log(pc.cyan(`[Sequence] Starting dynamic task sequence: ${sequenceId}`));
 
-  // Log sequence start event
   try {
     await logJournalEvent({ eventType: 'sequence_started', id: sequenceId });
   } catch (error: any) {
@@ -767,8 +702,6 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
   }
 
   let nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
-  let pauseStartTime: number | null = null;
-  let totalPauseTime = 0;
   let sequenceFinalStatus: 'done' | 'failed' | 'interrupted' = 'done';
 
   try {
@@ -777,7 +710,6 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
       try {
         console.log(pc.cyan(`[Sequence] Starting task: ${path.basename(nextTaskPath)}`));
 
-        // Log task start event within sequence
         try {
           await logJournalEvent({ eventType: 'task_started', id: nextTaskId, parentId: sequenceId });
         } catch (error: any) {
@@ -791,16 +723,14 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
         await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
 
-        // Log task completion event within sequence
+        // --- SUCCESS PATH ---
         try {
           await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: 'done' });
         } catch (error: any) {
           console.warn(pc.yellow(`Warning: Failed to log task finish event. Error: ${error.message}`));
         }
 
-        // Aggregate token usage from the completed task into sequence stats
-        const completedTaskId = taskPathToTaskId(nextTaskPath, projectRoot);
-        const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${completedTaskId}.state.json`);
+        const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${nextTaskId}.state.json`);
         const completedTaskStatus = readStatus(completedTaskStatusFile);
 
         updateSequenceStatus(statusFile, s => {
@@ -808,18 +738,9 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           s.currentTaskPath = null;
           s.phase = "pending";
 
-          // Aggregate token usage if available
           if (completedTaskStatus.tokenUsage) {
-            if (!s.stats) {
-              s.stats = {
-                totalDuration: 0,
-                totalDurationExcludingPauses: 0,
-                totalPauseTime: 0,
-                totalTokenUsage: {}
-              };
-            }
+            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
             if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
-
             for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
               if (!s.stats.totalTokenUsage[model]) {
                 s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
@@ -833,52 +754,79 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
         });
 
         console.log(pc.green(`[Sequence] Task completed: ${path.basename(nextTaskPath)}`));
-
         nextTaskPath = findNextAvailableTask(folderPathResolved, statusFile);
 
       } catch (error: any) {
-        // Log task failure event within sequence
-        try {
-          const taskStatus = isInterrupted ? 'interrupted' : 'failed';
-          await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: taskStatus });
-        } catch (logError: any) {
-          console.warn(pc.yellow(`Warning: Failed to log task failure event. Error: ${logError.message}`));
+        // --- ERROR / INTERRUPTION PATH ---
+        
+        // 1. Read the state of the task that was just interrupted/failed. It contains the partial token usage.
+        const taskStatusFile = path.resolve(projectRoot, config.statePath, `${nextTaskId}.state.json`);
+        const taskStatus = readStatus(taskStatusFile);
+        
+        // 2. ALWAYS aggregate its token usage into the sequence stats.
+        updateSequenceStatus(statusFile, s => {
+          if (taskStatus.tokenUsage) {
+            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+            if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
+            for (const [model, usage] of Object.entries(taskStatus.tokenUsage)) {
+              if (!s.stats.totalTokenUsage[model]) {
+                s.stats.totalTokenUsage[model] = { inputTokens: 0, outputTokens: 0, cacheCreationInputTokens: 0, cacheReadInputTokens: 0 };
+              }
+              s.stats.totalTokenUsage[model].inputTokens += usage.inputTokens;
+              s.stats.totalTokenUsage[model].outputTokens += usage.outputTokens;
+              s.stats.totalTokenUsage[model].cacheCreationInputTokens += usage.cacheCreationInputTokens;
+              s.stats.totalTokenUsage[model].cacheReadInputTokens += usage.cacheReadInputTokens;
+            }
+          }
+        });
+
+        // 3. Now, differentiate the reason for stopping.
+        if (error instanceof InterruptedError) {
+          sequenceFinalStatus = 'interrupted';
+          updateSequenceStatus(statusFile, s => { s.phase = "interrupted"; });
+          try {
+            await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: 'interrupted' });
+          } catch (logError: any) { /* silent */ }
+        } else {
+          console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
+          sequenceFinalStatus = 'failed';
+          updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
+          try {
+            await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: 'failed' });
+          } catch (logError: any) { /* silent */ }
         }
         
-        console.error(pc.red(`[Sequence] HALTING: Task failed with error: ${error.message}`));
-        updateSequenceStatus(statusFile, s => { s.phase = "failed"; });
-        sequenceFinalStatus = isInterrupted ? 'interrupted' : 'failed';
+        // 4. Stop the sequence by re-throwing.
         throw error;
       }
     }
 
     const finalStatus = readSequenceStatus(statusFile);
-    if (finalStatus.phase !== 'failed') {
+    if (finalStatus.phase !== 'failed' && finalStatus.phase !== 'interrupted') {
       console.log(pc.green("[Sequence] No more tasks found. All done!"));
       updateSequenceStatus(statusFile, s => {
         s.phase = "done";
         const startTime = new Date(s.startTime).getTime();
         const endTime = new Date().getTime();
         const totalDuration = (endTime - startTime) / 1000;
-
-        // Ensure stats object exists and preserve existing token usage
         if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
         const existingTokenUsage = s.stats.totalTokenUsage;
-        const currentTotalPauseTime = s.stats.totalPauseTime; // Get the tracked pause time
-
+        const currentTotalPauseTime = s.stats.totalPauseTime;
         s.stats = {
           totalDuration,
           totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
           totalPauseTime: currentTotalPauseTime,
-          totalTokenUsage: existingTokenUsage // Preserve accumulated token usage
+          totalTokenUsage: existingTokenUsage
         }
       });
     }
   } catch (error: any) {
-    sequenceFinalStatus = isInterrupted ? 'interrupted' : 'failed';
-    throw error;
+    if (error instanceof InterruptedError) {
+      return; // Exit gracefully, state is already saved.
+    }
+    sequenceFinalStatus = 'failed';
+    throw error; // Any other error is a real failure.
   } finally {
-    // Log sequence finished event regardless of outcome
     try {
       await logJournalEvent({ eventType: 'sequence_finished', id: sequenceId, status: sequenceFinalStatus });
     } catch (error: any) {
