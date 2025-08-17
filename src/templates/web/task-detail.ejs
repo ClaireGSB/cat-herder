@@ -71,24 +71,24 @@
                                 <div class="btn-group btn-group-sm ms-3" role="group">
                                     <% if (task.logs && task.logs[stepName]) { %>
                                         <% if (task.logs[stepName].log) { %>
-                                            <button type="button" class="btn btn-outline-primary" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].log %>')"
+                                            <button type="button" class="btn btn-outline-primary js-log-main" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].log %>', this)"
                                                     title="View Main Log">
                                                 <i class="bi bi-file-text"></i>
                                                 Main Log
                                             </button>
                                         <% } %>
                                         <% if (task.logs[stepName].reasoning) { %>
-                                            <button type="button" class="btn btn-outline-secondary" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].reasoning %>')"
+                                            <button type="button" class="btn btn-outline-secondary js-log-reasoning" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].reasoning %>', this)"
                                                     title="View Reasoning Log">
                                                 <i class="bi bi-lightbulb"></i>
                                                 Reasoning
                                             </button>
                                         <% } %>
                                         <% if (task.logs[stepName].raw) { %>
-                                            <button type="button" class="btn btn-outline-info" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].raw %>')"
+                                            <button type="button" class="btn btn-outline-info js-log-raw" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].raw %>', this)"
                                                     title="View Raw JSON Log">
                                                 <i class="bi bi-code-square"></i>
                                                 Raw
