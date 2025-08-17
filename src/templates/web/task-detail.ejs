@@ -39,119 +39,56 @@
                 </div>
             </div>
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Pipeline</h6>
-                        <span class="badge bg-secondary">
-                            <%= task.pipeline || 'default' %>
-                        </span>
-                    </div>
-                    <% if (task.branch) { %>
-                        <div class="col-md-3">
-                            <h6 class="text-muted mb-1">Git Branch</h6>
-                            <div>
-                                <i class="bi bi-git me-1"></i>
-                                <code><%= task.branch %></code>
-                            </div>
-                        </div>
-                    <% } %>
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Duration</h6>
-                        <span class="task-duration">
-                            <% if (task.stats?.totalDuration) { %>
-                                <%= task.stats.totalDuration.toFixed(2) %>s
-                            <% } else { %>
-                                N/A
-                            <% } %>
-                        </span>
-                        <% if (task.stats?.totalPauseTime && task.stats.totalPauseTime > 0) { %>
-                            <br>
-                            <small class="text-warning">
-                                <i class="bi bi-pause-fill"></i>
-                                <%= task.stats.totalPauseTime.toFixed(2) %>s paused
-                            </small>
-                        <% } %>
-                    </div>
-                    <div class="col-md-3">
-                        <h6 class="text-muted mb-1">Last Updated</h6>
-                        <% if (task.lastUpdate) { %>
-                            <%= new Date(task.lastUpdate).toLocaleString() %>
-                        <% } else { %>
-                            <span class="text-muted">Unknown</span>
-                        <% } %>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Pipeline Steps -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-transparent">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-list-ol me-2"></i>
-                    Pipeline Steps
-                </h5>
-            </div>
-            <div class="card-body">
-                <% if (task.steps && task.steps.length > 0) { %>
-                    <% task.steps.forEach((step, index) => { %>
-                        <div class="pipeline-step <%= step.status %> p-3" data-step="<%= step.name %>">
+                <% if (task.steps && Object.keys(task.steps).length > 0) { %>
+                    <% Object.entries(task.steps).forEach(([stepName, stepStatus], index) => { %>
+                        <div class="pipeline-step <%= stepStatus === 'done' ? 'completed' : stepStatus %> p-3" data-step="<%= stepName %>">
                             <div class="d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1">
                                     <h6 class="mb-1">
                                         <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-                                        <%= step.name %>
+                                        <%= stepName %>
                                         
-                                        <% if (step.status === 'completed') { %>
+                                        <% if (stepStatus === 'done') { %>
                                             <i class="bi bi-check-circle-fill text-success ms-2"></i>
-                                        <% } else if (step.status === 'running') { %>
+                                        <% } else if (stepStatus === 'running') { %>
                                             <i class="bi bi-arrow-repeat text-primary ms-2 spinner-border spinner-border-sm" role="status"></i>
-                                        <% } else if (step.status === 'failed') { %>
+                                        <% } else if (stepStatus === 'failed') { %>
                                             <i class="bi bi-x-circle-fill text-danger ms-2"></i>
                                         <% } else { %>
                                             <i class="bi bi-circle text-muted ms-2"></i>
                                         <% } %>
                                         
-                                        <% if (task.phase === 'running' && step.status === 'running') { %>
+                                        <% if (task.phase === 'running' && stepStatus === 'running') { %>
                                             <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">
                                                 <i class="bi bi-broadcast me-1"></i>View Live Activity
                                             </a>
                                         <% } %>
                                     </h6>
                                     
-                                    <% if (step.duration) { %>
-                                        <small class="text-muted">
-                                            <i class="bi bi-clock me-1"></i>
-                                            <%= step.duration.toFixed(2) %>s
-                                        </small>
-                                    <% } %>
+                                     <% /* We can add step duration here if available in the future */ %>
                                 </div>
                                 
                                 <div class="btn-group btn-group-sm ms-3" role="group">
-                                    <% if (task.logs && task.logs[step.name]) { %>
-                                        <% if (task.logs[step.name].log) { %>
+                                    <% if (task.logs && task.logs[stepName]) { %>
+                                        <% if (task.logs[stepName].log) { %>
                                             <button type="button" class="btn btn-outline-primary" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[step.name].log %>', 'log-content')"
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].log %>')"
                                                     title="View Main Log">
                                                 <i class="bi bi-file-text"></i>
                                                 Main Log
                                             </button>
                                         <% } %>
-                                        <% if (task.logs[step.name].reasoning) { %>
+                                        <% if (task.logs[stepName].reasoning) { %>
                                             <button type="button" class="btn btn-outline-secondary" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[step.name].reasoning %>', 'log-content')"
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].reasoning %>')"
                                                     title="View Reasoning Log">
                                                 <i class="bi bi-lightbulb"></i>
                                                 Reasoning
                                             </button>
                                         <% } %>
-                                        <% if (task.logs[step.name].raw) { %>
+                                        <% if (task.logs[stepName].raw) { %>
                                             <button type="button" class="btn btn-outline-info" 
-                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[step.name].raw %>', 'log-content')"
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].raw %>')"
                                                     title="View Raw JSON Log">
                                                 <i class="bi bi-code-square"></i>
                                                 Raw
@@ -172,6 +109,7 @@
         </div>
     </div>
 </div>
+
 
 <!-- Log Viewer -->
 <div class="row mb-4">
