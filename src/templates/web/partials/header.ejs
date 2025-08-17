@@ -12,6 +12,7 @@
         .status-done { background-color: #198754; }
         .status-failed { background-color: #dc3545; }
         .status-paused { background-color: #fd7e14; }
+        .status-interrupted { background-color: #fd7e14; }
         
         .pipeline-step {
             border: 1px solid #dee2e6;
@@ -89,6 +90,14 @@
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
+
+        .log-line .log-meta { color: #888; } /* Grey for timestamps */
+        .log-line .log-assistant { color: #60a5fa; font-weight: bold; } /* Blue for ASSISTANT */
+        .log-line .log-user { color: #4ade80; font-weight: bold; } /* Green for USER */
+        .log-line .log-system { color: #c084fc; font-weight: bold; } /* Purple for SYSTEM */
+        .log-line .log-info { color: #93c5fd; } /* Light blue for info like [TEXT] */
+        .log-line .log-tool { color: #facc15; } /* Yellow for tool use */
+        .log-line .log-quote { color: #f97316; } /* Orange for quotes */
     </style>
 </head>
 <body>

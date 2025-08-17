@@ -141,23 +141,54 @@ class ClaudeDashboard {
         }
     }
 
+    colorizeLogLine(line) {
+        // This regex captures all the patterns we want to style, in a single pass.
+        const tokenizer = /(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]|\`.*?\`|(?<!\w)'.*?'|".*?"|\[ASSISTANT\]|\[USER\]|\[SYSTEM\]|\[TEXT\]|\[INIT\]|\[TOOL_USE\]|\[TOOL_RESULT\])/g;
+      
+        const escapeHtml = (unsafe) => 
+            unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+      
+        // Split the string by our patterns. The captured delimiters are included in the array.
+        const parts = line.split(tokenizer);
+      
+        const htmlParts = parts.map(part => {
+            if (!part) return ''; // Ignore empty strings from the split.
+      
+            // Check if the part is one of our special tokens and apply the correct class.
+            if (part.match(/^\[\d{4}/)) return `<span class="log-meta">${escapeHtml(part)}</span>`;
+            if (part.startsWith('`') || part.startsWith('"') || part.startsWith("'")) return `<span class="log-quote">${escapeHtml(part)}</span>`;
+            if (part === '[ASSISTANT]') return `<span class="log-assistant">${escapeHtml(part)}</span>`;
+            if (part === '[USER]') return `<span class="log-user">${escapeHtml(part)}</span>`;
+            if (part === '[SYSTEM]') return `<span class="log-system">${escapeHtml(part)}</span>`;
+            if (part === '[TEXT]' || part === '[INIT]') return `<span class="log-info">${escapeHtml(part)}</span>`;
+            if (part === '[TOOL_USE]' || part === '[TOOL_RESULT]') return `<span class="log-tool">${escapeHtml(part)}</span>`;
+            
+            // If it's not a special token, it's plain text. Escape it.
+            return escapeHtml(part);
+        });
+      
+        return `<div class="log-line">${htmlParts.join('')}</div>`;
+      }
+
     handleLogUpdate(data) {
         if (!window.location.pathname.endsWith('/live')) return;
         const logContainer = document.getElementById('live-log-content');
         if (!logContainer) return;
-
-        if (data.type === 'log_content') {
-            logContainer.textContent = data.content;
-        } else if (data.type === 'log_update') {
-            // Clear the "Connecting..." message on first update
-            if (logContainer.textContent.startsWith('--- Switched to step')) {
-                logContainer.textContent = data.content;
+  
+        if (data.type === 'error') {
+            logContainer.innerHTML += this.colorizeLogLine(`[SYSTEM] [ERROR] ${data.message}`);
+        } else if (data.content) {
+            // Process each line individually
+            const lines = data.content.split('\n');
+            const newHtml = lines.map(line => this.colorizeLogLine(line)).join('');
+  
+            if (data.type === 'log_content' || logContainer.textContent.startsWith('--- Switched to step')) {
+                logContainer.innerHTML = newHtml; // Replace content
             } else {
-                logContainer.textContent += data.content;
+                logContainer.innerHTML += newHtml; // Append content
             }
-        } else if (data.type === 'error') {
-            logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
         }
+        
         if (logContainer.parentElement) {
             logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
         }
