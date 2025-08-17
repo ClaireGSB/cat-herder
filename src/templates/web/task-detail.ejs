@@ -1,0 +1,221 @@
+<%- include('partials/header', { title: task.taskId, page: 'task-detail' }) %>
+
+<nav aria-label="breadcrumb" class="mb-4">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="/history" class="text-decoration-none">
+                <i class="bi bi-clock-history"></i>
+                Run History
+            </a>
+        </li>
+        
+        <% if (task.parentSequenceId) { %>
+            <li class="breadcrumb-item">
+                <a href="/sequence/<%= task.parentSequenceId %>"><%= task.parentSequenceId %></a>
+            </li>
+        <% } %>
+
+        <li class="breadcrumb-item active" aria-current="page">
+            <%= task.taskId %>
+        </li>
+    </ol>
+</nav>
+
+<!-- Task Overview Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-transparent">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h1 class="h4 mb-0">
+                        <i class="bi bi-gear-fill me-2 text-primary"></i>
+                        <%= task.taskId %>
+                    </h1>
+                    <span class="badge status-<%= task.phase %> fs-6 task-status">
+                        <% if (task.phase === 'running') { %>
+                            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                        <% } else if (task.phase === 'done') { %>
+                            <i class="bi bi-check-circle-fill me-1"></i>
+                        <% } else if (task.phase === 'failed') { %>
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <% } else if (task.phase === 'paused') { %>
+                            <i class="bi bi-pause-circle-fill me-1"></i>
+                        <% } %>
+                        <%= task.phase %>
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <% if (task.steps && Object.keys(task.steps).length > 0) { %>
+                    <% Object.entries(task.steps).forEach(([stepName, stepStatus], index) => { %>
+                        <div class="pipeline-step <%= stepStatus === 'done' ? 'completed' : stepStatus %> p-3" data-step="<%= stepName %>">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
+                                        <%= stepName %>
+                                        
+                                        <% if (stepStatus === 'done') { %>
+                                            <i class="bi bi-check-circle-fill text-success ms-2"></i>
+                                        <% } else if (stepStatus === 'running') { %>
+                                            <i class="bi bi-arrow-repeat text-primary ms-2 spinner-border spinner-border-sm" role="status"></i>
+                                        <% } else if (stepStatus === 'failed') { %>
+                                            <i class="bi bi-x-circle-fill text-danger ms-2"></i>
+                                        <% } else { %>
+                                            <i class="bi bi-circle text-muted ms-2"></i>
+                                        <% } %>
+                                        
+                                        <% if (task.phase === 'running' && stepStatus === 'running') { %>
+                                            <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">
+                                                <i class="bi bi-broadcast me-1"></i>View Live Activity
+                                            </a>
+                                        <% } %>
+                                    </h6>
+                                    
+                                     <% /* We can add step duration here if available in the future */ %>
+                                </div>
+                                
+                                <div class="btn-group btn-group-sm ms-3" role="group">
+                                    <% if (task.logs && task.logs[stepName]) { %>
+                                        <% if (task.logs[stepName].log) { %>
+                                            <button type="button" class="btn btn-outline-primary js-log-main" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].log %>', this)"
+                                                    title="View Main Log">
+                                                <i class="bi bi-file-text"></i>
+                                                Main Log
+                                            </button>
+                                        <% } %>
+                                        <% if (task.logs[stepName].reasoning) { %>
+                                            <button type="button" class="btn btn-outline-secondary js-log-reasoning" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].reasoning %>', this)"
+                                                    title="View Reasoning Log">
+                                                <i class="bi bi-lightbulb"></i>
+                                                Reasoning
+                                            </button>
+                                        <% } %>
+                                        <% if (task.logs[stepName].raw) { %>
+                                            <button type="button" class="btn btn-outline-info js-log-raw" 
+                                                    onclick="loadLog('<%= task.taskId %>', '<%= task.logs[stepName].raw %>', this)"
+                                                    title="View Raw JSON Log">
+                                                <i class="bi bi-code-square"></i>
+                                                Raw
+                                            </button>
+                                        <% } %>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                <% } else { %>
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-list-ol display-4 mb-3"></i>
+                        <p>No pipeline steps information available.</p>
+                    </div>
+                <% } %>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Log Viewer -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-terminal me-2"></i>
+                    Log Viewer
+                </h5>
+                <div id="loading-spinner" class="loading-spinner">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="log-viewer" id="log-content">
+                    <div class="text-muted p-4 text-center">
+                        <i class="bi bi-file-text display-4 mb-3"></i>
+                        <p>Select a step log above to view its content here.</p>
+                        <small>Logs will be loaded asynchronously for better performance.</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Token Usage & Stats -->
+<% if (task.tokenUsage && Object.keys(task.tokenUsage).length > 0) { %>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-graph-up me-2"></i>
+                        Token Usage
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <% Object.entries(task.tokenUsage).forEach(([model, usage]) => { %>
+                            <div class="col-lg-6 mb-3">
+                                <div class="task-stats h-100">
+                                    <h6 class="mb-3">
+                                        <i class="bi bi-cpu me-1"></i>
+                                        <%= helpers.formatModelName(model) %>
+                                    </h6>
+                                    
+                                    <div class="row text-center">
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-primary mb-0"><%= usage.inputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Input</small>
+                                        </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-success mb-0"><%= usage.outputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Output</small>
+                                        </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-info mb-0"><%= usage.cacheCreationInputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Cache Write</small>
+                                        </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-warning mb-0"><%= usage.cacheReadInputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Cache Read</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<!-- Raw Task Data (Debug) -->
+<% if (process.env.NODE_ENV === 'development' || true) { %>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-code me-2"></i>
+                        Debug Information
+                        <small class="text-muted ms-2">(Raw Task State)</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <details>
+                        <summary class="btn btn-outline-secondary btn-sm">View Raw JSON Data</summary>
+                        <pre class="mt-3 bg-light p-3 border rounded"><code><%= JSON.stringify(task, null, 2) %></code></pre>
+                    </details>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<%- include('partials/footer', { page: 'task-detail' }) %>

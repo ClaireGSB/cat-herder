@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import pc from "picocolors";
+import { getConfig, getProjectRoot } from "../config.js";
 
 export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
 
@@ -13,12 +15,23 @@ export type TokenUsage = {
 export type ModelTokenUsage = {
   [modelName: string]: TokenUsage;
 };
+
+// Journal Event interface for run-journal.json
+export interface JournalEvent {
+  timestamp: string;
+  eventType: 'task_started' | 'task_finished' | 'sequence_started' | 'sequence_finished';
+  id: string; // taskId or sequenceId
+  parentId?: string; // The sequenceId if it's a task within a sequence
+  status?: 'done' | 'failed' | 'interrupted'; // Only for 'finished' events
+}
 export type TaskStatus = {
   version: number;
   taskId: string;
+  taskPath: string;
   startTime: string;
   branch: string;
   pipeline?: string;
+  parentSequenceId?: string;
   currentStep: string;
   phase: Phase;
   steps: Record<string, Phase>;
@@ -69,8 +82,9 @@ function writeJsonAtomic(file: string, data: unknown) {
 }
 
 const defaultStatus: TaskStatus = {
-    version: 1,
+    version: 2,
     taskId: "unknown",
+    taskPath: "unknown",
     startTime: new Date().toISOString(),
     branch: "",
     currentStep: "",
@@ -82,14 +96,20 @@ const defaultStatus: TaskStatus = {
 };
 
 export function readStatus(file: string): TaskStatus {
-    if (fs.existsSync(file)) {
-        try {
-            return JSON.parse(fs.readFileSync(file, "utf8"));
-        } catch {
-            return defaultStatus;
-        }
-    }
-    return defaultStatus;
+  if (fs.existsSync(file)) {
+      try {
+          const data = JSON.parse(fs.readFileSync(file, "utf8"));
+          // Simple migration for old status files
+          if (!data.taskPath) data.taskPath = "unknown";
+          if (!data.version || data.version < 2) data.version = 2;
+          return data;
+      } catch {
+          // Return a NEW copy if parsing fails
+          return { ...defaultStatus };
+      }
+  }
+  // Return a NEW copy if the file doesn't exist
+  return { ...defaultStatus };
 }
 
 
@@ -113,14 +133,14 @@ const defaultSequenceStatus: SequenceStatus = {
 };
 
 export function readSequenceStatus(file: string): SequenceStatus {
-    if (fs.existsSync(file)) {
-        try {
-            return JSON.parse(fs.readFileSync(file, "utf8"));
-        } catch {
-            return defaultSequenceStatus;
-        }
-    }
-    return defaultSequenceStatus;
+  if (fs.existsSync(file)) {
+      try {
+          return JSON.parse(fs.readFileSync(file, "utf8"));
+      } catch {
+          return { ...defaultSequenceStatus };
+      }
+  }
+  return { ...defaultSequenceStatus };
 }
 
 export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => void) {
@@ -130,8 +150,63 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
     writeJsonAtomic(file, s);
 }
 
+// New function to generate a unique task ID from its path
+export function taskPathToTaskId(taskPath: string, projectRoot: string): string {
+    const relativePath = path.isAbsolute(taskPath)
+        ? path.relative(projectRoot, taskPath)
+        : taskPath;
+
+    const taskId = relativePath
+        .replace(/\.md$/, '') // remove extension
+        .replace(/[\\/]/g, '-') // replace path separators
+        .replace(/[^a-z0-9-]/gi, '-'); // sanitize
+    return `task-${taskId}`;
+}
+
 export function folderPathToSequenceId(folderPath: string): string {
     // Convert path like "claude-Tasks/my-feature" to "sequence-my-feature"
     const folderName = path.basename(path.resolve(folderPath));
-    return `sequence-${folderName}`;
+    // Sanitize to make it a safe filename component
+    const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');
+    return `sequence-${sanitizedName}`;
+}
+
+// Journal utility functions for run-journal.json
+
+// Helper to get the journal file path
+async function getJournalPath(): Promise<string> {
+    const projectRoot = getProjectRoot();
+    const config = await getConfig();
+    return path.join(projectRoot, config.statePath, 'run-journal.json');
+}
+
+// New function to read the journal
+export async function readJournal(): Promise<JournalEvent[]> {
+    const journalPath = await getJournalPath();
+    if (!fs.existsSync(journalPath)) {
+        return [];
+    }
+    try {
+        const content = fs.readFileSync(journalPath, 'utf-8');
+        return JSON.parse(content) as JournalEvent[];
+    } catch (error: any) {
+        console.warn(pc.yellow(`Warning: Could not read or parse run-journal.json. Starting fresh. Error: ${error.message}`));
+        return [];
+    }
+}
+
+// New function to log an event
+export async function logJournalEvent(event: Omit<JournalEvent, 'timestamp'>): Promise<void> {
+    const journalPath = await getJournalPath();
+    const journal = await readJournal();
+    const newEvent: JournalEvent = {
+        timestamp: new Date().toISOString(),
+        ...event,
+    };
+    journal.push(newEvent);
+    try {
+        writeJsonAtomic(journalPath, journal);
+    } catch (error: any) {
+        console.error(pc.red(`Fatal: Could not write to run-journal.json. Error: ${error.message}`));
+    }
 }
