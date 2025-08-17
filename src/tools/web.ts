@@ -8,7 +8,6 @@ import { createServer } from 'node:http';
 import { getConfig, getProjectRoot } from "../config.js";
 import { readJournal, JournalEvent } from "./status.js";
 
-// Interfaces remain the same...
 interface TaskStatus {
   taskId: string;
   taskPath: string;
@@ -57,7 +56,72 @@ interface SequenceDetails extends SequenceStatus {
   tasks: SequenceTaskInfo[];
 }
 
-// Helper functions remain the same...
+// =================================================================
+// --- TEMPLATE HELPER FUNCTIONS ---
+// =================================================================
+
+/**
+ * Converts seconds into a human-readable format like "1m 23s" or "45.6s".
+ */
+const formatDuration = (seconds: number | undefined | null): string => {
+  if (seconds === null || typeof seconds === 'undefined' || seconds < 0) {
+      return 'N/A';
+  }
+
+  // Handle case for less than a second
+  if (seconds < 1) {
+      return `${seconds.toFixed(1)}s`;
+  }
+  
+  // Handle case for less than a minute
+  if (seconds < 60) {
+      return `${Math.floor(seconds)}s`;
+  }
+
+  // Handle case for less than an hour
+  if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+      return `${minutes}m ${remainingSeconds}s`;
+  }
+
+  // Handle cases for an hour or more
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = Math.floor(seconds % 60);
+  return `${hours}h ${minutes}m ${remainingSeconds}s`;
+};
+
+/**
+* Helper function to convert a string to Title Case.
+*/
+const toTitleCase = (str: string): string => {
+  return str.replace(
+      /\w\S*/g,
+      (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
+  );
+};
+
+/**
+* Dynamically formats a Claude model ID into a human-readable name.
+*/
+const formatModelName = (modelId: string): string => {
+  if (!modelId || typeof modelId !== 'string') {
+      return 'Unknown Model';
+  }
+  const coreName = modelId.replace(/^claude-/, '').replace(/-\d{8}$/, '');
+  const spacedName = coreName.replace(/-/g, ' ');
+  const titleCased = toTitleCase(spacedName);
+  return `Claude ${titleCased}`;
+};
+
+// Bundle helpers into an object to pass to templates
+const templateHelpers = {
+  formatDuration,
+  formatModelName
+};
+
+
 function getAllTaskStatuses(stateDir: string): TaskStatus[] {
   if (!fs.existsSync(stateDir)) return [];
   const files = fs.readdirSync(stateDir).filter(f => f.endsWith(".state.json") && !f.startsWith("sequence-"));
@@ -431,7 +495,7 @@ export async function startWebServer() {
     const allTasks = buildTaskHistoryFromJournal(journal, stateDir);
     const standaloneTasks = allTasks.filter(t => !t.parentSequenceId);
     const sequences = buildSequenceHistoryFromJournal(journal, stateDir);
-    res.render("history", { sequences, standaloneTasks, page: 'history' });
+    res.render("history", { sequences, standaloneTasks, page: 'history', helpers: templateHelpers });
   });
 
   // =================================================================
@@ -462,7 +526,8 @@ export async function startWebServer() {
       runningTask: taskDetails, 
       parentSequence: parentSequence,
       lastFinishedTask: lastFinishedTaskDetails, // Pass the new variable
-      page: 'live-activity'
+      page: 'live-activity',
+      helpers: templateHelpers
     });
   });
   // =================================================================
@@ -474,7 +539,7 @@ export async function startWebServer() {
     if (!taskId || typeof taskId !== "string") return res.status(400).send("Invalid task ID");
     const taskDetails = getTaskDetails(stateDir, logsDir, taskId);
     if (!taskDetails) return res.status(404).send(`Task with ID '${taskId}' could not be found.`);
-    res.render("task-detail", { task: taskDetails, page: 'task-detail' });
+    res.render("task-detail", { task: taskDetails, page: 'task-detail', helpers: templateHelpers });
   });
 
   app.get("/sequence/:sequenceId", (req: Request, res: Response) => {
@@ -482,7 +547,7 @@ export async function startWebServer() {
     if (!sequenceId || typeof sequenceId !== "string") return res.status(400).send("Invalid sequence ID");
     const sequenceDetails = getSequenceDetails(stateDir, config, sequenceId);
     if (!sequenceDetails) return res.status(404).send(`Sequence with ID '${sequenceId}' could not be found.`);
-    res.render("sequence-detail", { sequence: sequenceDetails, page: 'sequence-detail' });
+    res.render("sequence-detail", { sequence: sequenceDetails, page: 'sequence-detail', helpers: templateHelpers });
   });
 
   app.get("/log/:taskId/:logFile", (req: Request, res: Response) => {
@@ -635,7 +700,7 @@ export async function startWebServer() {
       attemptRead();
       // --- END NEW LOGIC ---
     };
-    
+
     stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
 
     // Journal file watcher for auto-refresh functionality

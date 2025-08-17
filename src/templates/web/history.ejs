@@ -45,7 +45,7 @@
                                 <td>
                                     <span class="badge bg-light text-dark"><%= sequence.folderPath %></span>
                                 </td>
-                                <td><%= sequence.stats?.totalDuration ? sequence.stats.totalDuration.toFixed(2) + 's' : 'N/A' %></td>
+                                <td><%= helpers.formatDuration(sequence.stats?.totalDuration) %></td>
                                 <td><%= new Date(sequence.lastUpdate).toLocaleString() %></td>
                                 <td>
                                     <a href="/sequence/<%= sequence.sequenceId %>" class="btn btn-sm btn-outline-primary">Details</a>
@@ -89,7 +89,7 @@
                                     <a href="/task/<%= task.taskId %>"><strong><%= task.taskId %></strong></a>
                                 </td>
                                 <td><span class="badge status-<%= task.phase %>"><%= task.phase %></span></td>
-                                <td><%= task.stats?.totalDuration ? task.stats.totalDuration.toFixed(2) + 's' : 'N/A' %></td>
+                                <td><%= helpers.formatDuration(task.stats?.totalDuration) %></td>
                                 <td><%= new Date(task.lastUpdate).toLocaleString() %></td>
                                 <td>
                                     <a href="/task/<%= task.taskId %>" class="btn btn-sm btn-outline-primary">Details</a>

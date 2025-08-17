@@ -1,4 +1,4 @@
-<%- include('partials/header', { title: sequence.sequenceId }) %>
+<%- include('partials/header', { title: sequence.sequenceId, page: 'sequence-detail' }) %>
 
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
@@ -8,9 +8,13 @@
         </h1>
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0">
-                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
-                <li class="breadcrumb-item"><a href="/sequences">Sequences</a></li>
-                <li class="breadcrumb-item active"><%= sequence.sequenceId %></li>
+                <li class="breadcrumb-item">
+                    <a href="/history" class="text-decoration-none">
+                        <i class="bi bi-clock-history"></i>
+                        Run History
+                    </a>
+                </li>
+                <li class="breadcrumb-item active" aria-current="page"><%= sequence.sequenceId %></li>
             </ol>
         </nav>
     </div>
@@ -63,15 +67,11 @@
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="task-stats">
+                        <div class="task-stats h-100">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted">Total Duration</span>
                                 <strong class="sequence-duration">
-                                    <% if (sequence.stats?.totalDuration) { %>
-                                        <%= sequence.stats.totalDuration.toFixed(2) %>s
-                                    <% } else { %>
-                                        N/A
-                                    <% } %>
+                                    <%= helpers.formatDuration(sequence.stats?.totalDuration) %>
                                 </strong>
                             </div>
                             <% if (sequence.stats?.totalPauseTime && sequence.stats.totalPauseTime > 0) { %>
@@ -79,7 +79,7 @@
                                     <span class="text-muted">Pause Time</span>
                                     <strong class="text-warning">
                                         <i class="bi bi-pause-fill me-1"></i>
-                                        <%= sequence.stats.totalPauseTime.toFixed(2) %>s
+                                        <%= helpers.formatDuration(sequence.stats.totalPauseTime) %>
                                     </strong>
                                 </div>
                             <% } %>
@@ -99,30 +99,26 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-3">
-                        <div class="task-stats">
+                    <div class="col-md-6">
+                        <div class="task-stats h-100">
+                            <h6 class="mb-3 text-muted">
+                                <i class="bi bi-graph-up me-1"></i>
+                                Total Token Usage
+                            </h6>
                             <% if (sequence.stats?.totalTokenUsage && Object.keys(sequence.stats.totalTokenUsage).length > 0) { %>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-muted">Token Usage</span>
-                                </div>
                                 <% Object.entries(sequence.stats.totalTokenUsage).forEach(([model, usage]) => { %>
-                                    <div class="mb-1">
-                                        <small class="text-muted d-block"><%= model.split('-').pop() %></small>
-                                        <div class="token-usage">
-                                            <% if (usage.inputTokens) { %>
-                                                <span class="badge bg-info">In: <%= usage.inputTokens.toLocaleString() %></span>
-                                            <% } %>
-                                            <% if (usage.outputTokens) { %>
-                                                <span class="badge bg-success">Out: <%= usage.outputTokens.toLocaleString() %></span>
-                                            <% } %>
+                                    <div class="mb-2 p-2 border rounded bg-light">
+                                        <small class="fw-bold d-block mb-1"><%= helpers.formatModelName(model) %></small>
+                                        <div class="token-usage small">
+                                            <span class="badge bg-primary">Input: <%= (usage.inputTokens || 0).toLocaleString() %></span>
+                                            <span class="badge bg-success">Output: <%= (usage.outputTokens || 0).toLocaleString() %></span>
+                                            <span class="badge bg-info">Cache Write: <%= (usage.cacheCreationInputTokens || 0).toLocaleString() %></span>
+                                            <span class="badge bg-warning text-dark">Cache Read: <%= (usage.cacheReadInputTokens || 0).toLocaleString() %></span>
                                         </div>
                                     </div>
                                 <% }); %>
                             <% } else { %>
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <span class="text-muted">Token Usage</span>
-                                    <span class="text-muted">N/A</span>
-                                </div>
+                                <div class="text-muted">N/A</div>
                             <% } %>
                         </div>
                     </div>
@@ -217,4 +213,4 @@
     </div>
 </div>
 
-<%- include('partials/footer') %>
+<%- include('partials/footer', { page: 'sequence-detail' }) %>

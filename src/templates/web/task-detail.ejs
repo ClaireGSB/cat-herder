@@ -1,4 +1,4 @@
-<%- include('partials/header', { title: task.taskId }) %>
+<%- include('partials/header', { title: task.taskId, page: 'task-detail' }) %>
 
 <nav aria-label="breadcrumb" class="mb-4">
     <ol class="breadcrumb">
@@ -154,61 +154,37 @@
                 <div class="card-header bg-transparent">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-graph-up me-2"></i>
-                        Token Usage & Cost Analysis
+                        Token Usage
                     </h5>
                 </div>
                 <div class="card-body">
                     <div class="row">
                         <% Object.entries(task.tokenUsage).forEach(([model, usage]) => { %>
                             <div class="col-lg-6 mb-3">
-                                <div class="task-stats">
+                                <div class="task-stats h-100">
                                     <h6 class="mb-3">
                                         <i class="bi bi-cpu me-1"></i>
-                                        <%= model %>
+                                        <%= helpers.formatModelName(model) %>
                                     </h6>
                                     
                                     <div class="row text-center">
-                                        <div class="col-6">
-                                            <div class="border-end pe-3">
-                                                <h4 class="text-primary mb-1">
-                                                    <%= usage.inputTokens?.toLocaleString() || '0' %>
-                                                </h4>
-                                                <small class="text-muted">Input Tokens</small>
-                                            </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-primary mb-0"><%= usage.inputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Input</small>
                                         </div>
-                                        <div class="col-6">
-                                            <div class="ps-3">
-                                                <h4 class="text-success mb-1">
-                                                    <%= usage.outputTokens?.toLocaleString() || '0' %>
-                                                </h4>
-                                                <small class="text-muted">Output Tokens</small>
-                                            </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-success mb-0"><%= usage.outputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Output</small>
+                                        </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-info mb-0"><%= usage.cacheCreationInputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Cache Write</small>
+                                        </div>
+                                        <div class="col-md-3 col-6 mb-2">
+                                            <h5 class="text-warning mb-0"><%= usage.cacheReadInputTokens?.toLocaleString() || '0' %></h5>
+                                            <small class="text-muted">Cache Read</small>
                                         </div>
                                     </div>
-                                    
-                                    <% if (usage.cacheCreationInputTokens || usage.cacheReadInputTokens) { %>
-                                        <hr class="my-3">
-                                        <div class="row text-center small">
-                                            <div class="col-6">
-                                                <div class="border-end pe-3">
-                                                    <strong class="text-info">
-                                                        <%= usage.cacheCreationInputTokens?.toLocaleString() || '0' %>
-                                                    </strong>
-                                                    <br>
-                                                    <small class="text-muted">Cache Created</small>
-                                                </div>
-                                            </div>
-                                            <div class="col-6">
-                                                <div class="ps-3">
-                                                    <strong class="text-warning">
-                                                        <%= usage.cacheReadInputTokens?.toLocaleString() || '0' %>
-                                                    </strong>
-                                                    <br>
-                                                    <small class="text-muted">Cache Read</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <% } %>
                                 </div>
                             </div>
                         <% }); %>
@@ -242,4 +218,4 @@
     </div>
 <% } %>
 
-<%- include('partials/footer') %>
+<%- include('partials/footer', { page: 'task-detail' }) %>
