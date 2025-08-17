@@ -2,9 +2,12 @@ class ClaudeDashboard {
     constructor() {
         this.websocket = null;
         this.reconnectInterval = 5000;
+        // --- NEW: Keep track of the log file we are currently watching ---
+        this.currentWatchedLogFile = null;
     }
 
     initWebSocket() {
+        // ... (The initWebSocket function remains exactly the same)
         if (typeof WebSocket === 'undefined') {
             console.error("WebSockets are not supported in this browser.");
             return;
@@ -34,7 +37,8 @@ class ClaudeDashboard {
     }
 
     handleRealtimeUpdate(data) {
-        switch (data.type) {
+        // ... (The handleRealtimeUpdate switch statement remains the same)
+         switch (data.type) {
             case 'task_update':
                 this.updateTaskUI(data.data);
                 break;
@@ -56,6 +60,16 @@ class ClaudeDashboard {
         }
     }
 
+    // --- NEW: A dedicated function to start the live view ---
+    initializeLiveView(runningTask) {
+        if (!runningTask) {
+            console.log("Live view initialized, no task is currently running.");
+            return;
+        }
+        // Trigger the first UI update and log watch.
+        this.updateTaskUI(runningTask);
+    }
+
     updateTaskUI(task) {
         const taskRow = document.querySelector(`[data-task-id="${task.taskId}"]`);
         if (taskRow) {
@@ -63,23 +77,50 @@ class ClaudeDashboard {
         }
 
         if (window.location.pathname.endsWith('/live')) {
-            const runningTask = window.liveActivityData?.runningTask;
-            if (runningTask && runningTask.taskId === task.taskId) {
-                
-                // --- THIS IS THE CORRECTED CODE ---
-                const stepNameElement = document.querySelector('#running-step-name');
-                if (stepNameElement) {
-                    stepNameElement.textContent = task.currentStep;
-                }
-                // --- END CORRECTION ---
-                
-                if (task.phase !== 'running') {
-                    setTimeout(() => window.location.reload(), 1200);
-                }
+            // Update the header text
+            const stepNameElement = document.querySelector('#running-step-name');
+            if (stepNameElement) {
+                stepNameElement.textContent = task.currentStep;
+            }
+
+            // --- NEW: Logic to switch the log file watch ---
+            const newStep = task.currentStep;
+            // Default to watching the 'reasoning' log as it's the most informative.
+            const newLogFile = task.logs?.[newStep]?.reasoning;
+
+            if (newLogFile && this.currentWatchedLogFile !== newLogFile) {
+                console.log(`Step changed. Switching log watch from ${this.currentWatchedLogFile} to ${newLogFile}`);
+                this.currentWatchedLogFile = newLogFile;
+                this.watchLogFile(task.taskId, newLogFile);
+            }
+            // --- END NEW LOGIC ---
+
+            if (task.phase !== 'running') {
+                setTimeout(() => window.location.reload(), 1200);
             }
         }
     }
+    
+    // --- NEW: A reusable function to send the watch_log message ---
+    watchLogFile(taskId, logFile) {
+        const sendRequest = () => {
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                const watchMessage = { type: 'watch_log', taskId: taskId, logFile: logFile };
+                this.websocket.send(JSON.stringify(watchMessage));
+                
+                const logContainer = document.getElementById('live-log-content');
+                if (logContainer) {
+                    logContainer.textContent = `--- Switched to step: ${taskId} ---\nConnecting to log stream for ${logFile}...\n`;
+                }
+            } else {
+                // If the socket isn't open yet, wait and try again.
+                setTimeout(sendRequest, 200);
+            }
+        };
+        sendRequest();
+    }
 
+    // ... (updateSequenceUI, handleLogUpdate, and updateStatusBadge remain the same)
     updateSequenceUI(sequence) {
         const sequenceStatusElement = document.querySelector(`[data-sequence-id="${sequence.sequenceId}"] .status-badge, #running-sequence-status`);
         if (sequenceStatusElement) {
@@ -101,7 +142,12 @@ class ClaudeDashboard {
         if (data.type === 'log_content') {
             logContainer.textContent = data.content;
         } else if (data.type === 'log_update') {
-            logContainer.textContent += data.content;
+            // Clear the "Connecting..." message on first update
+            if (logContainer.textContent.startsWith('--- Switched to step')) {
+                logContainer.textContent = data.content;
+            } else {
+                logContainer.textContent += data.content;
+            }
         } else if (data.type === 'error') {
             logContainer.textContent += `\n\n[WebSocket Error] ${data.message}`;
         }

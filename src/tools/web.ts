@@ -590,22 +590,52 @@ export async function startWebServer() {
         depth: 0 
     });
     const handleStateChange = (filePath: string) => {
-        if (!filePath.endsWith('.state.json')) return;
-        try {
-            const content = fs.readFileSync(filePath, 'utf-8');
-            const stateData = JSON.parse(content);
-            const messageType = path.basename(filePath).startsWith('sequence-') ? 'sequence_update' : 'task_update';
-            const message = JSON.stringify({ type: messageType, data: stateData });
-            for (const ws of wss.clients) {
-                if (ws.readyState === WebSocket.OPEN) {
-                    ws.send(message);
-                }
-            }
-            console.log(`[State Watcher] Broadcasted ${messageType} for ${path.basename(filePath)}`);
-        } catch (e) {
-            console.error(`[State Watcher] Failed to process state change for ${filePath}`, e);
-        }
+      if (!filePath.endsWith('.state.json')) return;
+    
+      // --- NEW: Resilient file reading to prevent race conditions ---
+      let attempts = 0;
+      const maxAttempts = 3;
+      const attemptRead = () => {
+          attempts++;
+          try {
+              const content = fs.readFileSync(filePath, 'utf-8');
+              const stateData = JSON.parse(content); // This is where the error happened
+              
+              // If parsing succeeds, broadcast the message
+              const messageType = path.basename(filePath).startsWith('sequence-') ? 'sequence_update' : 'task_update';
+              
+              // Enrich task data with log file paths before sending
+              const dataToSend = (messageType === 'task_update') 
+                  ? getTaskDetails(stateDir, logsDir, stateData.taskId) 
+                  : stateData;
+    
+              if (!dataToSend) {
+                  console.error(`[State Watcher] Could not get details for task ID ${stateData.taskId}. Aborting broadcast.`);
+                  return;
+              }
+    
+              const message = JSON.stringify({ type: messageType, data: dataToSend });
+              for (const ws of wss.clients) {
+                  if (ws.readyState === WebSocket.OPEN) {
+                      ws.send(message);
+                  }
+              }
+              console.log(`[State Watcher] Broadcasted ${messageType} for ${path.basename(filePath)}`);
+    
+          } catch (e: any) {
+              // If parsing fails, and we have attempts left, wait and retry.
+              if (e instanceof SyntaxError && attempts < maxAttempts) {
+                  console.warn(`[State Watcher] Failed to parse ${path.basename(filePath)} (Attempt ${attempts}/${maxAttempts}), retrying shortly...`);
+                  setTimeout(attemptRead, 75); // Wait 75ms before retrying
+              } else {
+                  console.error(`[State Watcher] Failed to process state change for ${filePath}`, e);
+              }
+          }
+      };
+      attemptRead();
+      // --- END NEW LOGIC ---
     };
+    
     stateWatcher.on('add', handleStateChange).on('change', handleStateChange);
 
     // Journal file watcher for auto-refresh functionality
