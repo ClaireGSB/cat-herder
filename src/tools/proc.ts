@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import pc from "picocolors";
 
 let activeProcess: ChildProcess | null = null;
+let wasKilled = false;
 
 // Interface for token usage data from Claude CLI stream
 interface StepTokenUsage {
@@ -16,6 +17,7 @@ interface StepTokenUsage {
 export function killActiveProcess() {
   if (activeProcess) {
     console.log(pc.yellow("[Proc] Interruption signal received. Terminating active Claude process..."));
+    wasKilled = true; 
     activeProcess.kill('SIGINT');
     activeProcess = null;
   }
@@ -24,6 +26,7 @@ export function killActiveProcess() {
 export interface StreamResult {
   code: number;
   output: string;
+  modelUsed?: string;
   tokenUsage?: StepTokenUsage;
   rateLimit?: {
     resetTimestamp: number;
@@ -46,8 +49,10 @@ export function runStreaming(
   model?: string,
   options?: RunStreamingOptions
 ): Promise<StreamResult> {
+  wasKilled = false;
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
+  
 
   // Conditionally add the model flag
   if (model) {
@@ -110,6 +115,7 @@ export function runStreaming(
 
   let fullOutput = "";
   let buffer = ""; // Buffer for parsing JSON lines across chunks
+  let detectedModelName: string | undefined;
   let stepTokenUsage: StepTokenUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
   let rateLimitInfo: StreamResult['rateLimit'] | undefined;
   let lastToolUsed: string | null = null;
@@ -168,6 +174,10 @@ export function runStreaming(
 
         try {
           const json = JSON.parse(line);
+
+          if (!detectedModelName && (json.model || json.message?.model)) {
+            detectedModelName = json.model || json.message.model;
+          }
           
           // Capture token usage data if present in the message
           if (json.message?.usage) {
@@ -290,7 +300,7 @@ export function runStreaming(
       fullOutput += chunk.toString();
     });
 
-    p.on("close", (code) => {
+    p.on("close", (code, signal) => {
       const endTime = new Date();
       const duration = (endTime.getTime() - startTime.getTime()) / 1000;
 
@@ -302,22 +312,35 @@ export function runStreaming(
 
       const footer = `\n\n-------------------------------------------------\n`;
       const footer2 = `--- Process finished at: ${endTime.toISOString()} ---\n`;
-      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n` + tokenFooter;
+      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
 
-      logStream.write(footer + footer2 + footer3);
+      
+      // Conditionally create the finish reason based on interruption status
+      let finishReason: string;
+      if (wasKilled || signal === 'SIGINT') {
+        finishReason = `--- Reason: Interrupted by user, Exit Signal: ${signal || 'SIGINT'} ---\n`;
+      } else {
+        finishReason = `--- Reason: Process completed normally, Exit Code: ${code} ---\n`;
+      }
+
+      const fullFooter = footer + footer2 + finishReason + footer3 + tokenFooter;
+
+      const streams: WriteStream[] = [logStream, reasoningStream];
+      if(rawJsonStream) streams.push(rawJsonStream);
+
+      logStream.write(fullFooter);
       logStream.end();
-
-      // Close reasoning stream
-      reasoningStream.write(footer + footer2 + footer3);
+      
+      reasoningStream.write(fullFooter);
       reasoningStream.end();
-
-      // Close raw JSON stream if it exists
+      
       if (rawJsonStream) {
-        rawJsonStream.write(footer + footer2 + footer3);
+        rawJsonStream.write(fullFooter);
         rawJsonStream.end();
       }
+
       activeProcess = null;
-      resolve({ code: code ?? 1, output: fullOutput, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
+      resolve({ code: code ?? 1, output: fullOutput, modelUsed: detectedModelName, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
     });
   });
 }
