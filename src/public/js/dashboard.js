@@ -17,7 +17,7 @@ class ClaudeDashboard {
         this.websocket = new WebSocket(wsUrl);
 
         this.websocket.onopen = () => console.log('WebSocket connected. Listening for updates...');
-        
+
         this.websocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -27,18 +27,18 @@ class ClaudeDashboard {
                 console.error('Failed to parse WebSocket message:', e, 'Raw data:', event.data);
             }
         };
-        
+
         this.websocket.onclose = () => {
             console.log('WebSocket disconnected. Attempting to reconnect in 5 seconds...');
             setTimeout(() => this.initWebSocket(), this.reconnectInterval);
         };
-        
+
         this.websocket.onerror = (error) => console.error('WebSocket error:', error);
     }
 
     handleRealtimeUpdate(data) {
         // ... (The handleRealtimeUpdate switch statement remains the same)
-         switch (data.type) {
+        switch (data.type) {
             case 'task_update':
                 this.updateTaskUI(data.data);
                 break;
@@ -48,8 +48,8 @@ class ClaudeDashboard {
             case 'journal_updated':
                 console.log('\'journal_updated\' event handled. Current path:', window.location.pathname);
                 if (window.location.pathname.endsWith('/live') || window.location.pathname === '/') {
-                     console.log('Path is /live or /, attempting page reload...');
-                     window.location.reload();
+                    console.log('Path is /live or /, attempting page reload...');
+                    window.location.reload();
                 }
                 break;
             case 'log_content':
@@ -77,6 +77,13 @@ class ClaudeDashboard {
         }
 
         if (window.location.pathname.endsWith('/live')) {
+            const runningTask = window.liveActivityData?.runningTask;
+            // If there's no running task defined on the page, or if the incoming update
+            // is for a DIFFERENT task (e.g., the one that just finished), ignore it.
+            // This prevents the race condition during task transitions.
+            if (!runningTask || runningTask.taskId !== task.taskId) {
+                return;
+            }
             // Update the header text
             const stepNameElement = document.querySelector('#running-step-name');
             if (stepNameElement) {
@@ -100,14 +107,14 @@ class ClaudeDashboard {
             }
         }
     }
-    
+
     // --- NEW: A reusable function to send the watch_log message ---
     watchLogFile(taskId, logFile) {
         const sendRequest = () => {
             if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
                 const watchMessage = { type: 'watch_log', taskId: taskId, logFile: logFile };
                 this.websocket.send(JSON.stringify(watchMessage));
-                
+
                 const logContainer = document.getElementById('live-log-content');
                 if (logContainer) {
                     logContainer.textContent = `--- Switched to step: ${taskId} ---\nConnecting to log stream for ${logFile}...\n`;
@@ -133,7 +140,7 @@ class ClaudeDashboard {
             }
         }
     }
-    
+
     handleLogUpdate(data) {
         if (!window.location.pathname.endsWith('/live')) return;
         const logContainer = document.getElementById('live-log-content');
@@ -158,14 +165,14 @@ class ClaudeDashboard {
 
     updateStatusBadge(element, phase) {
         if (!element) return;
-        
+
         element.className = element.className.replace(/\bstatus-\S+/g, '');
         element.classList.add(`status-${phase}`);
 
         const temp = document.createElement('span');
         temp.innerHTML = element.innerHTML;
         const icon = temp.querySelector('i');
-        
+
         element.innerHTML = `${icon ? icon.outerHTML : ''} ${phase}`;
     }
 }
