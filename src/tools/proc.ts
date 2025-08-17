@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import pc from "picocolors";
 
 let activeProcess: ChildProcess | null = null;
+let wasKilled = false;
 
 // Interface for token usage data from Claude CLI stream
 interface StepTokenUsage {
@@ -16,6 +17,7 @@ interface StepTokenUsage {
 export function killActiveProcess() {
   if (activeProcess) {
     console.log(pc.yellow("[Proc] Interruption signal received. Terminating active Claude process..."));
+    wasKilled = true; 
     activeProcess.kill('SIGINT');
     activeProcess = null;
   }
@@ -47,8 +49,10 @@ export function runStreaming(
   model?: string,
   options?: RunStreamingOptions
 ): Promise<StreamResult> {
+  wasKilled = false;
   // Build final args with JSON streaming flags and enhanced debugging
   const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
+  
 
   // Conditionally add the model flag
   if (model) {
@@ -296,7 +300,7 @@ export function runStreaming(
       fullOutput += chunk.toString();
     });
 
-    p.on("close", (code) => {
+    p.on("close", (code, signal) => {
       const endTime = new Date();
       const duration = (endTime.getTime() - startTime.getTime()) / 1000;
 
@@ -308,20 +312,28 @@ export function runStreaming(
 
       const footer = `\n\n-------------------------------------------------\n`;
       const footer2 = `--- Process finished at: ${endTime.toISOString()} ---\n`;
-      const footer3 = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n` + tokenFooter;
+      
+      // Conditionally create the finish reason based on interruption status
+      let finishReason: string;
+      if (wasKilled || signal === 'SIGINT') {
+        finishReason = `--- Reason: Interrupted by user, Exit Signal: ${signal || 'SIGINT'} ---\n`;
+      } else {
+        finishReason = `--- Duration: ${duration.toFixed(2)}s, Exit Code: ${code} ---\n`;
+      }
 
-      logStream.write(footer + footer2 + footer3);
+      const fullFooter = footer + footer2 + finishReason + tokenFooter;
+
+      logStream.write(fullFooter);
       logStream.end();
-
-      // Close reasoning stream
-      reasoningStream.write(footer + footer2 + footer3);
+      
+      reasoningStream.write(fullFooter);
       reasoningStream.end();
-
-      // Close raw JSON stream if it exists
+      
       if (rawJsonStream) {
-        rawJsonStream.write(footer + footer2 + footer3);
+        rawJsonStream.write(fullFooter);
         rawJsonStream.end();
       }
+
       activeProcess = null;
       resolve({ code: code ?? 1, output: fullOutput, modelUsed: detectedModelName, tokenUsage: stepTokenUsage, rateLimit: rateLimitInfo });
     });
