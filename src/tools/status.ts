@@ -34,12 +34,14 @@ export type TaskStatus = {
   parentSequenceId?: string;
   currentStep: string;
   phase: Phase;
+  interruptionTimestamp: string | null; 
   steps: Record<string, Phase>;
   tokenUsage: ModelTokenUsage;
   stats: {
     totalDuration: number;
-    totalDurationExcludingPauses: number;
+    totalRunTime: number; // RENAMED: from totalDurationExcludingPauses
     totalPauseTime: number;
+    totalInterruptionTime: number; // ADDED: To accumulate interruption downtime
   } | null;
   lastUpdate: string;
   prUrl?: string;
@@ -53,13 +55,15 @@ export interface SequenceStatus {
   startTime: string;
   branch: string;
   phase: SequencePhase;
+  interruptionTimestamp: string | null; 
   currentTaskPath: string | null;
   completedTasks: string[];
   lastUpdate: string;
   stats: {
     totalDuration: number;
-    totalDurationExcludingPauses: number;
+    totalRunTime: number; // RENAMED: from totalDurationExcludingPauses
     totalPauseTime: number;
+    totalInterruptionTime: number; // ADDED: To accumulate interruption downtime
     totalTokenUsage: ModelTokenUsage;
   } | null;
 }
@@ -89,9 +93,15 @@ const defaultStatus: TaskStatus = {
     branch: "",
     currentStep: "",
     phase: "pending",
+    interruptionTimestamp: null,
     steps: {},
     tokenUsage: {},
-    stats: null,
+    stats: { 
+      totalDuration: 0,
+      totalRunTime: 0,
+      totalPauseTime: 0,
+      totalInterruptionTime: 0,
+    },
     lastUpdate: new Date().toISOString()
 };
 
@@ -99,9 +109,18 @@ export function readStatus(file: string): TaskStatus {
   if (fs.existsSync(file)) {
       try {
           const data = JSON.parse(fs.readFileSync(file, "utf8"));
-          // Simple migration for old status files
+          // --- Start Migration Logic ---
           if (!data.taskPath) data.taskPath = "unknown";
           if (!data.version || data.version < 2) data.version = 2;
+          if (data.interruptionTimestamp === undefined) data.interruptionTimestamp = null;
+          if (data.stats) {
+            if (data.stats.totalDurationExcludingPauses !== undefined) {
+              data.stats.totalRunTime = data.stats.totalDurationExcludingPauses;
+              delete data.stats.totalDurationExcludingPauses;
+            }
+            if (data.stats.totalInterruptionTime === undefined) data.stats.totalInterruptionTime = 0;
+          }
+          // --- End Migration Logic ---
           return data;
       } catch {
           // Return a NEW copy if parsing fails
@@ -126,16 +145,30 @@ const defaultSequenceStatus: SequenceStatus = {
     startTime: new Date().toISOString(),
     branch: "",
     phase: "pending",
+    interruptionTimestamp: null,
     currentTaskPath: null,
     completedTasks: [],
     lastUpdate: new Date().toISOString(),
-    stats: null
-};
+    stats: { 
+      totalDuration: 0,
+      totalRunTime: 0,
+      totalPauseTime: 0,
+      totalInterruptionTime: 0,
+      totalTokenUsage: {},
+    }};
 
 export function readSequenceStatus(file: string): SequenceStatus {
   if (fs.existsSync(file)) {
       try {
-          return JSON.parse(fs.readFileSync(file, "utf8"));
+        const data = JSON.parse(fs.readFileSync(file, "utf8"));
+        if (data.interruptionTimestamp === undefined) data.interruptionTimestamp = null;
+        if (data.stats) {
+          if (data.stats.totalDurationExcludingPauses !== undefined) {
+            data.stats.totalRunTime = data.stats.totalDurationExcludingPauses;
+            delete data.stats.totalDurationExcludingPauses;
+          }
+          if (data.stats.totalInterruptionTime === undefined) data.stats.totalInterruptionTime = 0;
+        }
       } catch {
           return { ...defaultSequenceStatus };
       }

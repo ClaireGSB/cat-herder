@@ -254,6 +254,7 @@ async function executeStep(
       // 2. If interrupted, set the final state here.
       if (isInterrupted) {
         s.phase = "interrupted";
+        s.interruptionTimestamp = new Date().toISOString(); // MODIFIED: Record interruption time
         if (s.steps[name] === "running") {
           s.steps[name] = "interrupted";
         }
@@ -286,14 +287,14 @@ async function executeStep(
           const pauseInSeconds = waitMs / 1000;
           updateStatus(statusFile, s => {
             s.phase = "waiting_for_reset";
-            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+            if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0 };
             s.stats.totalPauseTime += pauseInSeconds;
           });
 
           if (sequenceStatusFile) {
             updateSequenceStatus(sequenceStatusFile, s => {
               (s.phase as any) = "waiting_for_reset";
-              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+              if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0, totalTokenUsage: {} };
               s.stats.totalPauseTime += pauseInSeconds;
             });
           }
@@ -488,7 +489,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   const taskId = taskPathToTaskId(taskPath, projectRoot);
   const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
-  const status: TaskStatus = readStatus(statusFile);
+  let status: TaskStatus = readStatus(statusFile); // MODIFIED: Make status mutable
 
   if (status.phase === 'done') {
     console.log(pc.green(`✔ Task "${taskId}" is already complete.`));
@@ -498,6 +499,21 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
 
   if (status.phase === 'interrupted') {
     console.log(pc.yellow(`[Orchestrator] Resuming interrupted task: "${taskId}"`));
+    // --- MODIFIED: Calculate and store interruption time ---
+    if (status.interruptionTimestamp) {
+        const interruptionEndTime = new Date().getTime();
+        const interruptionStartTime = new Date(status.interruptionTimestamp).getTime();
+        const interruptionDuration = (interruptionEndTime - interruptionStartTime) / 1000;
+        
+        updateStatus(statusFile, s => {
+            if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0 };
+            s.stats.totalInterruptionTime = (s.stats.totalInterruptionTime || 0) + interruptionDuration;
+            s.interruptionTimestamp = null;
+            s.phase = 'pending'; 
+        });
+        status = readStatus(statusFile); // Re-read status after update
+    }
+    // --- END MODIFICATION ---
   }
 
   // 2. Validate the pipeline configuration.
@@ -556,11 +572,14 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
       const endTime = new Date().getTime();
       const totalDuration = (endTime - startTime) / 1000;
 
-      if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
-      const totalPauseTime = s.stats.totalPauseTime;
+      if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0 };
+      const totalPauseTime = s.stats.totalPauseTime || 0;
+      const totalInterruptionTime = s.stats.totalInterruptionTime || 0;
 
       s.stats.totalDuration = totalDuration;
-      s.stats.totalDurationExcludingPauses = totalDuration - totalPauseTime;
+      s.stats.totalPauseTime = totalPauseTime;
+      s.stats.totalInterruptionTime = totalInterruptionTime;
+      s.stats.totalRunTime = totalDuration - totalPauseTime - totalInterruptionTime;
     }
   });
   console.log(pc.green("[Orchestrator] Task statistics saved."));
@@ -677,6 +696,21 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   if (sequenceStatus.phase === 'interrupted') {
     console.log(pc.yellow(`[Sequence] Resuming interrupted sequence: "${sequenceId}"`));
+     // --- MODIFIED: Calculate and store interruption time ---
+    if (sequenceStatus.interruptionTimestamp) {
+        const interruptionEndTime = new Date().getTime();
+        const interruptionStartTime = new Date(sequenceStatus.interruptionTimestamp).getTime();
+        const interruptionDuration = (interruptionEndTime - interruptionStartTime) / 1000;
+        
+        updateSequenceStatus(statusFile, s => {
+            if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0, totalTokenUsage: {} };
+            s.stats.totalInterruptionTime = (s.stats.totalInterruptionTime || 0) + interruptionDuration;
+            s.interruptionTimestamp = null;
+            s.phase = 'pending'; 
+        });
+        sequenceStatus = readSequenceStatus(statusFile); // Re-read status after update
+    }
+    // --- END MODIFICATION ---
   }
 
   if (config.manageGitBranch !== false) {
@@ -739,7 +773,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           s.phase = "pending";
 
           if (completedTaskStatus.tokenUsage) {
-            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+            if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0, totalTokenUsage: {} };
             if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
             for (const [model, usage] of Object.entries(completedTaskStatus.tokenUsage)) {
               if (!s.stats.totalTokenUsage[model]) {
@@ -766,7 +800,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
         // 2. ALWAYS aggregate its token usage into the sequence stats.
         updateSequenceStatus(statusFile, s => {
           if (taskStatus.tokenUsage) {
-            if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+            if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0, totalTokenUsage: {} };
             if (!s.stats.totalTokenUsage) s.stats.totalTokenUsage = {};
             for (const [model, usage] of Object.entries(taskStatus.tokenUsage)) {
               if (!s.stats.totalTokenUsage[model]) {
@@ -783,7 +817,10 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
         // 3. Now, differentiate the reason for stopping.
         if (error instanceof InterruptedError) {
           sequenceFinalStatus = 'interrupted';
-          updateSequenceStatus(statusFile, s => { s.phase = "interrupted"; });
+          updateSequenceStatus(statusFile, s => { 
+              s.phase = "interrupted";
+              s.interruptionTimestamp = new Date().toISOString(); // MODIFIED: Record interruption time
+          });
           try {
             await logJournalEvent({ eventType: 'task_finished', id: nextTaskId, parentId: sequenceId, status: 'interrupted' });
           } catch (logError: any) { /* silent */ }
@@ -809,13 +846,17 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
         const startTime = new Date(s.startTime).getTime();
         const endTime = new Date().getTime();
         const totalDuration = (endTime - startTime) / 1000;
-        if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+        if (!s.stats) s.stats = { totalDuration: 0, totalRunTime: 0, totalPauseTime: 0, totalInterruptionTime: 0, totalTokenUsage: {} };
+        
+        const totalPauseTime = s.stats.totalPauseTime || 0;
+        const totalInterruptionTime = s.stats.totalInterruptionTime || 0;
         const existingTokenUsage = s.stats.totalTokenUsage;
-        const currentTotalPauseTime = s.stats.totalPauseTime;
+
         s.stats = {
           totalDuration,
-          totalDurationExcludingPauses: totalDuration - currentTotalPauseTime,
-          totalPauseTime: currentTotalPauseTime,
+          totalPauseTime,
+          totalInterruptionTime,
+          totalRunTime: totalDuration - totalPauseTime - totalInterruptionTime,
           totalTokenUsage: existingTokenUsage
         }
       });
