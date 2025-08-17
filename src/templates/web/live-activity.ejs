@@ -2,23 +2,18 @@
 
 <div class="row">
     <!-- =============================================================== -->
-    <!-- === NEW: CONTEXT SIDEBAR (Stacks on mobile) === -->
+    <!-- === CONTEXT SIDEBAR (Stacks on mobile) === -->
     <!-- =============================================================== -->
     <div class="col-lg-4 order-lg-1">
-        <% 
-            const taskToShow = runningTask || lastFinishedTask;
-            const sequenceToShow = parentSequence;
-        %>
-
         <% if (taskToShow) { %>
             <!-- Sequence Context Panel -->
-            <% if (sequenceToShow) { %>
+            <% if (parentSequence) { %>
                 <div class="card mb-3">
                     <div class="card-header">
                         <h6 class="mb-0"><i class="bi bi-collection me-2"></i>Sequence Tasks</h6>
                     </div>
                     <ul class="list-group list-group-flush">
-                        <% sequenceToShow.tasks.forEach(task => { %>
+                        <% parentSequence.tasks.forEach(task => { %>
                             <li class="list-group-item d-flex justify-content-between align-items-center <%= task.taskId === taskToShow.taskId ? 'active' : '' %>">
                                 <span><i class="bi bi-file-earmark-text me-2"></i><%= task.filename %></span>
                                 <span class="badge status-<%= task.status %>"><%= task.status %></span>
@@ -58,43 +53,46 @@
     <!-- === MAIN CONTENT AREA === -->
     <!-- =============================================================== -->
     <div class="col-lg-8 order-lg-2">
-        <% if (runningTask) { %>
+        <% if (taskToShow) { %>
             <!-- Context Header -->
             <div class="card bg-light border-0 mb-3">
                 <div class="card-body">
-                    <% if (parentSequence) { %>
+                    <% if (isLive) { %>
+                        <p class="card-text text-primary mb-0">
+                            <strong>
+                                <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                                RUNNING STEP: <span id="running-step-name"><%= taskToShow.currentStep %></span>
+                            </strong>
+                        </p>
+                    <% } else { %>
+                         <p class="card-text text-muted mb-0">
+                            <strong>
+                                No task running. Showing last activity.
+                            </strong>
+                        </p>
+                    <% } %>
+                    <h5 class="card-title mt-2 mb-1">
+                        <i class="bi bi-gear-fill me-1"></i>
+                        TASK: <span id="running-task-id"><%= taskToShow.taskId %></span>
+                    </h5>
+                     <% if (parentSequence) { %>
                         <h6 class="card-subtitle mb-2 text-muted">
                             <i class="bi bi-collection me-1"></i>
-                            SEQUENCE: <%= parentSequence.sequenceId %> <span id="running-sequence-status" class="badge status-<%= parentSequence.phase %>"><%= parentSequence.phase %></span>
+                            SEQUENCE: <%= parentSequence.sequenceId %> <span class="badge status-<%= parentSequence.phase %>"><%= parentSequence.phase %></span>
                         </h6>
                     <% } %>
-                    <h5 class="card-title mb-1">
-                        <i class="bi bi-gear-fill me-1"></i>
-                        TASK: <span id="running-task-id"><%= runningTask.taskId %></span>
-                    </h5>
-                    <p class="card-text text-primary mb-0">
-                        <strong>
-                            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-                            RUNNING STEP: <span id="running-step-name"><%= runningTask.currentStep %></span>
-                        </strong>
-                    </p>
                 </div>
             </div>
         <% } else { %>
-            <!-- No Running Task View -->
+            <!-- No Task Ever Run View -->
             <div class="empty-state card">
                  <div class="card-body">
                     <div class="text-center">
                         <i class="bi bi-moon-stars display-1 text-muted mb-3"></i>
                         <h3 class="text-muted mb-3">No Task is Currently Running</h3>
-                        
-                        <% if (lastFinishedTask) { %>
-                            <p class="text-muted">View the final status of the last completed task.</p>
-                        <% } else { %>
-                            <p class="text-muted mb-4">
-                                When a task starts, its live logs and status will appear here.
-                            </p>
-                        <% } %>
+                        <p class="text-muted mb-4">
+                            When a task starts, its live logs and status will appear here.
+                        </p>
                     </div>
                  </div>
             </div>
@@ -102,7 +100,18 @@
 
         <!-- Log Viewer -->
         <div class="log-viewer mt-3">
-            <pre id="live-log-content" class="log-content"><% if (!runningTask && !lastFinishedTask) { %>Waiting for a task to start...<% } else { %>Live log will appear here when a task is running.<% } %></pre>
+            <pre id="live-log-content" class="log-content"><% 
+                if (initialLogContent) {
+                    // We just print the raw text content here. The script below will colorize it.
+                    %><%- initialLogContent %><%
+                } else if (isLive) {
+                    %>Connecting to live log stream...<%
+                } else if (taskToShow) {
+                    %>Log for last step not available.<%
+                } else {
+                    %>Waiting for a task to start...<%
+                }
+            %></pre>
         </div>
     </div>
 </div>
@@ -110,15 +119,30 @@
 
 <!-- Pass data to the client-side script -->
 <script>
-    // This script remains the same
-    const runningTaskJSON = '<%- JSON.stringify(runningTask || null) %>';
-    const lastFinishedTaskJSON = '<%- JSON.stringify(lastFinishedTask || null) %>';
+    const taskToShowJSON = '<%- JSON.stringify(taskToShow || null) %>';
     const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
+    
+    // Unify the data for dashboard.js
     window.liveActivityData = {
-        runningTask: JSON.parse(runningTaskJSON),
-        lastFinishedTask: JSON.parse(lastFinishedTaskJSON),
-        parentSequence: JSON.parse(parentSequenceJSON)
+        runningTask: JSON.parse(taskToShowJSON), // dashboard.js expects 'runningTask'
+        lastFinishedTask: null, // No longer needed
+        parentSequence: JSON.parse(parentSequenceJSON),
+        isLive: <%- isLive %>
     };
+
+    // Client-side script to colorize the pre-loaded log
+    document.addEventListener('DOMContentLoaded', () => {
+        const logContainer = document.getElementById('live-log-content');
+        const initialContent = `<%- JSON.stringify(initialLogContent || null) %>`;
+
+        if (logContainer && initialContent && initialContent !== 'null') {
+            const parsedContent = JSON.parse(initialContent);
+            if (window.dashboard && typeof window.dashboard.colorizeLogLine === 'function') {
+                const lines = parsedContent.split('\\n'); // Note the escaped newline
+                logContainer.innerHTML = lines.map(line => window.dashboard.colorizeLogLine(line)).join('');
+            }
+        }
+    });
 </script>
 
 <%- include('partials/footer', { page: 'live-activity' }) %>

@@ -311,6 +311,28 @@ function getSequenceDetails(stateDir: string, config: any, sequenceId: string): 
     }
 }
 
+function findLastStepName(taskDetails: TaskDetails): string | null {
+  if (!taskDetails.steps) return null;
+  
+  let lastStep: { name: string; status: string } | null = null;
+  let lastDoneStep: { name: string; status: string } | null = null;
+  
+  // The order of steps in the state file isn't guaranteed, so we can't just take the last one.
+  // We must find the one with the most important status.
+  for (const [name, status] of Object.entries(taskDetails.steps)) {
+      if (status.status === 'running' || status.status === 'interrupted' || status.status === 'failed') {
+          // These are terminal or active states, this is definitely the one we want.
+          return name;
+      }
+      if (status.status === 'done') {
+          lastDoneStep = { name, status: status.status };
+      }
+  }
+  
+  // If we finished the loop without finding a more important status, return the last 'done' step.
+  return lastDoneStep?.name || null;
+}
+
 // Helper function to find the currently active task from journal events
 function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
   // Use a Map to track tasks that have started but not yet finished.
@@ -503,29 +525,46 @@ export async function startWebServer() {
   // =================================================================
   app.get("/live", async (req: Request, res: Response) => {
     const journal = await readJournal();
+    
+    let taskToShow: TaskDetails | null = null;
+    let parentSequence = null;
+    let isLive = false;
+    let initialLogContent: string | null = null;
+  
     const activeTaskEvent = findActiveTaskFromJournal(journal);
     
-    let taskDetails = null;
-    let parentSequence = null;
-    let lastFinishedTaskDetails = null; // New variable
-
     if (activeTaskEvent) {
-      taskDetails = getTaskDetails(stateDir, logsDir, activeTaskEvent.id);
-      parentSequence = activeTaskEvent.parentId 
-        ? getSequenceDetails(stateDir, config, activeTaskEvent.parentId)
-        : null;
+        // STATE A: A task is actively running
+        isLive = true;
+        taskToShow = getTaskDetails(stateDir, logsDir, activeTaskEvent.id);
     } else {
-      // If no task is running, find the last one that finished.
-      const lastFinishedTaskEvent = findLastFinishedTaskFromJournal(journal);
-      if (lastFinishedTaskEvent) {
-        lastFinishedTaskDetails = getTaskDetails(stateDir, logsDir, lastFinishedTaskEvent.id);
-      }
+        // STATE B: No task is running, find the last one that was touched
+        isLive = false;
+        const lastFinishedEvent = findLastFinishedTaskFromJournal(journal);
+        if (lastFinishedEvent) {
+            taskToShow = getTaskDetails(stateDir, logsDir, lastFinishedEvent.id);
+  
+            // Pre-load the logs for the static view
+            if (taskToShow) {
+                const lastStepName = findLastStepName(taskToShow);
+                if (lastStepName && taskToShow.logs?.[lastStepName]?.reasoning) {
+                    const logFile = taskToShow.logs[lastStepName].reasoning as string;
+                    initialLogContent = readLogFile(logsDir, taskToShow.taskId, logFile);
+                }
+            }
+        }
     }
       
+    // In either state, if we have a task, try to find its parent sequence
+    if (taskToShow && taskToShow.parentSequenceId) {
+        parentSequence = getSequenceDetails(stateDir, config, taskToShow.parentSequenceId);
+    }
+  
     res.render("live-activity", { 
-      runningTask: taskDetails, 
-      parentSequence: parentSequence,
-      lastFinishedTask: lastFinishedTaskDetails, // Pass the new variable
+      taskToShow,
+      parentSequence,
+      isLive,
+      initialLogContent, // Pass the pre-loaded log content
       page: 'live-activity',
       helpers: templateHelpers
     });

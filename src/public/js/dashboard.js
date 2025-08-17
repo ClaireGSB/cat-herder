@@ -105,7 +105,8 @@ class ClaudeDashboard {
             }
 
             // Existing logic to reload when the task is finished
-            if (task.phase !== 'running') {
+            if (window.liveActivityData.isLive && task.phase !== 'running') {
+                console.log(`Task phase changed from 'running' to '${task.phase}'. Reloading to show final state.`);
                 setTimeout(() => window.location.reload(), 1200);
             }
         }
