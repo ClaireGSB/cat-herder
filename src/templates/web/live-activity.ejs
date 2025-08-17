@@ -121,13 +121,14 @@
 <script>
     const taskToShowJSON = '<%- JSON.stringify(taskToShow || null) %>';
     const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
+    const isLiveJSON = '<%- JSON.stringify(isLive) %>';
     
     // Unify the data for dashboard.js
     window.liveActivityData = {
         runningTask: JSON.parse(taskToShowJSON), // dashboard.js expects 'runningTask'
         lastFinishedTask: null, // No longer needed
         parentSequence: JSON.parse(parentSequenceJSON),
-        isLive: <%- isLive %>
+        isLive: JSON.parse(isLiveJSON)
     };
 
     // Client-side script to colorize the pre-loaded log
