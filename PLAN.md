@@ -26,7 +26,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
 
 -   [x] **1. Set Up New Frontend Development Environment:** Initialize a Vite + Vue 3 project within the repository and install all necessary dependencies (Vue, Vuetify, Pinia).
 -   [x] **2. Isolate the Backend Source Code:** Create a `src/backend` directory and move all existing Node.js CLI source code into it to create a clean separation from the frontend.
--   [ ] **3. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
+-   [x] **3. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
 -   [ ] **4. Implement State Management with Pinia:** Create a central Pinia store to manage all application state, including tasks, sequences, and live activity data.
 -   [ ] **5. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
 -   [ ] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
