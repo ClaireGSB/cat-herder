@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 You've made a very sharp observation, and your critique is spot on.
 
 Let's break down how the implementation of the plan went.
@@ -46,22 +47,49 @@ This plan will address these issues by:
 2.  Re-implementing the Live Activity page with a proper sidebar/main content layout.
 3.  Styling the log viewer to look and feel like a proper terminal.
 4.  Applying global density settings and custom CSS to reduce wasted space and improve the overall visual hierarchy.
+=======
+
+
+# FINAL PLAN.MD: Replicating the High-Density UI
+
+## The Golden Rule: The Screenshots are the Law
+
+The single, non-negotiable goal is to make the Vue application a pixel-perfect recreation of the provided screenshots. Your primary task is to use Vuetify and custom CSS to match this design precisely. the screenshots provided are in the /examples directory.
+
+**For every implementation step, you must:**
+
+1.  **Implement the changes with a focus on visual replication.**
+2.  Run the verification script to launch the dashboard with mock data.
+3.  Use Playwright MCP to take a screenshot of the page being worked on.
+4.  **Visually compare its screenshot to the corresponding golden image.**
+5.  **Use its judgment to identify and fix *any* visual discrepancies**, including spacing, font sizes, component choices, borders, and colors, until its output is a faithful reproduction of the target design.
+6.  **Pay attention to details** Make sure that the page is responsive, that text doesn't get truncated in weird ways, that the color contrasts are OK (no white text on light backgrounds), etc.
+>>>>>>> Stashed changes
 
 ---
 
 ## Summary Checklist
 
+<<<<<<< Updated upstream
 -   [x] **1. Refactor History View for Density:** Replace the vertical list of `<TaskCard>` and `<SequenceCard>` components with information-dense Vuetify data tables.
 -   [x] **2. Re-architect the Live Activity View Layout:** Change the single-column layout to a two-column layout with a fixed sidebar for context and a primary, large area for the live log viewer.
 -   [x] **3. Enhance the Log Viewer Component:** Style the log viewer to resemble a terminal and add real-time auto-scrolling functionality.
 -   [x] **4. Apply Global Compact Styling:** Use Vuetify's `density` prop and targeted CSS to make all components (cards, lists, chips) smaller and more compact.
 
 **Status: ✅ COMPLETED** - All UI/UX refinement tasks have been successfully implemented.
+=======
+-   [ ] **1. Implement the History View:** Replicate the clean, table-based layout for listing runs.
+-   [ ] **2. Implement the Sequence Detail View:** Build the multi-section layout with detailed information cards and a list of tasks.
+-   [ ] **3. Implement the Task Detail View:** Build the view for a single task, showing its pipeline steps and the main log viewer.
+-   [ ] **4. Implement the Live Activity View:** Create the two-column layout with a compact sidebar and a dominant, full-height log viewer.
+-   [ ] **5. Final Polish and Consistency Review:** Ensure all pages share a consistent, polished, and professional aesthetic.
+>>>>>>> Stashed changes
 
 ---
 
 ## Detailed Implementation Steps
 
+<<<<<<< Updated upstream
 ### 1. Refactor History View for Density
 
 *   **Objective:** To display more tasks and sequences on a single screen without scrolling, mimicking the efficiency of the old table-based layout.
@@ -139,3 +167,87 @@ This plan will address these issues by:
     *   The cards on the detail pages are visibly smaller and have less internal padding.
     *   Buttons and chips throughout the application are smaller.
     *   Overall, the UI feels tighter and more professional, allowing more information to be displayed on the screen at once.
+=======
+### 1. Implement the History View (`/history`)
+
+*   **Objective:** To replace the clunky card list with the clean, information-dense tables shown in the screenshot.
+*   **Example Screenshot:** `examples/history.png`
+*   **File to Modify:** `src/frontend/src/views/HistoryView.vue`
+*   **Implementation:**
+    1.  **Main Layout:** The entire page content should be within a `<v-container>`.
+    2.  **Header:** Use a `<div>` with `d-flex` to position the "Run History" title on the left and the "Status updates" text on the right.
+    3.  **Section Containers:** Each section ("Recent Sequences" and "Recent Standalone Tasks") should be a single `<v-card variant="flat" border>`. This creates the clean, bordered look without heavy shadows.
+    4.  **Data Tables:** Inside each card, use a `<v-data-table>`.
+        *   It **must** have the `density="compact"` prop.
+        *   The headers should be simple text as shown.
+        *   **Status Column:** This column must render the `<StatusBadge>` component.
+        *   **Sequence/Task ID Column:** This must be a link (`<a>` tag or router-link) to the detail page.
+        *   **Actions Column:** This contains a single `<v-btn variant="outlined" size="small">Details</v-btn>`.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The page looks exactly like the "Run History" screenshot.
+    *   The layout is a clean, two-table design.
+    *   The tables are compact and easy to read.
+
+### 2. Implement the Sequence Detail View (`/sequence/:id`)
+
+*   **Example Screenshot:** `examples/sequence-details.png`
+*   **Objective:** Recreate the beautifully organized, multi-section layout for displaying sequence information.
+*   **File to Modify:** `src/frontend/src/views/SequenceDetailView.vue`
+*   **Implementation:**
+    1.  **Header:** Contains the `<BreadcrumbNav>`, Sequence ID title, and a `<StatusBadge>`.
+    2.  **"Sequence Information" Card:**
+        *   Use a single `<v-card variant="flat" border>`.
+        *   Inside, use a `<v-row>` and `<v-col>` to create the three-column layout for "Folder Path", "Total Duration", and "Total Tasks".
+        *   Use `v-list-item` or simple `div`s with icons to display each piece of data, **not** nested cards.
+        *   The "Total Token Usage" section is a styled `div` inside this card, with `<v-chip>` elements for each token type as shown.
+    3.  **"Tasks in Sequence" Section:**
+        *   This is a `<v-card variant="flat" border>`.
+        *   **CRITICAL:** Do NOT use `<TaskCard>`. Use a `<v-list lines="two">`.
+        *   Each task is a `<v-list-item>` with a custom layout using `d-flex` to position the task number, title, status, and "Details" button horizontally. This is key to the compact design.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The page is a pixel-perfect match of the "sequence-test" screenshot.
+    *   Information is grouped logically in bordered sections.
+    *   The list of tasks is a compact vertical list, not a grid of large cards.
+
+### 3. Implement the Task Detail View (`/task/:id`)
+
+*   **Example Screenshot:** `examples/task-details.png`
+*   **Objective:** To build a clean, two-part view for task details, separating the pipeline steps from the logs.
+*   **File to Modify:** `src/frontend/src/views/TaskDetailView.vue`
+*   **Implementation:**
+    1.  **Header:** Breadcrumbs and Task ID title with `<StatusBadge>`.
+    2.  **"Pipeline Progress" Section:**
+        *   Use a `<v-card variant="flat" border>`.
+        *   Inside, use a `<v-list>`. Each pipeline step is a `<v-list-item>`.
+        *   Each list item contains a `d-flex` layout to arrange the step number, step name, status icon (`v-icon mdi-check`), and a `<v-btn-group density="compact">` for the log buttons ("Main Log", "Reasoning", "Raw").
+    3.  **"Log Viewer" Section:**
+        *   This is a separate `<v-card variant="flat" border>`.
+        *   It contains the `<LogViewer>` component.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The page exactly matches the "task-claude-Tasks-test-01-test" screenshot.
+    *   The pipeline steps are a clean, bordered list.
+    *   The log buttons are a small, compact group on the right of each step.
+
+### 4. Implement the Live Activity View (`/live`)
+
+*   **Objective:** To fix the layout and functionality to match the original, highly effective design.
+*   **Example Screenshot:** `examples/live-activity.png`
+*   **File to Modify:** `src/frontend/src/views/LiveActivityView.vue`
+*   **Implementation:**
+    1.  **Layout:** Use a `<v-row>` to create the main structure.
+    2.  **Sidebar (`<v-col md="4">`):**
+        *   This column contains two sections: "Sequence Tasks" and "Task Steps".
+        *   Each section should be a `<v-list>` with a `<v-list-subheader>`.
+        *   Each item is a `<v-list-item density="compact">`.
+        *   The currently active item (e.g., "02-test.md" and "review") must have a blue background, as shown. This is done by binding the `:active` prop and using CSS to style it.
+    3.  **Main Content (`<v-col md="8">`):**
+        *   This column contains **only one element**: the `<LogViewer>`.
+        *   The `<LogViewer>` must be styled with `height: 100%` and a dark, terminal-like theme (`theme="dark"` on the card, custom CSS for the `<pre>` tag).
+    4. **IMPORTANT:**
+        *   when no task is running, the layout should be exactly the same. It should show the last task and sequence that was running, with their logs. Just the status should be updated to reflect current status.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The page is a pixel-perfect match of the first screenshot provided.
+    *   The sidebar is narrow and uses compact lists.
+    *   The active item in each list is highlighted with a solid blue background.
+    *   The log viewer dominates the screen space and has a dark theme.
+>>>>>>> Stashed changes
