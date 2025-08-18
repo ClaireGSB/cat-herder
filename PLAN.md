@@ -11,8 +11,8 @@ This refactoring initiative will restructure the code by breaking down large fil
 ## Summary Checklist
 
 -   [x] **Refactor Orchestrator Logic**: Decompose the main `orchestrator.ts` file into modules for Git operations, prompt building, and pipeline/step/sequence execution.
--   [ ] **Refactor Web Server Logic**: Split the `web.ts` file into modules for server setup, route handling, data access, and WebSocket management.
--   [ ] **Refactor CLI Command Handling**: Separate the `commander` setup in `index.ts` from the action implementations.
+-   [x] **Refactor Web Server Logic**: Split the `web.ts` file into modules for server setup, route handling, data access, and WebSocket management.
+-   [x] **Refactor CLI Command Handling**: Separate the `commander` setup in `index.ts` from the action implementations.
 -   [ ] **Refactor Project Initialization**: Break down `init.ts` into modules for scaffolding files and handling settings hooks.
 -   [ ] **Refactor Configuration Validator**: Decompose the `validator.ts` into smaller, focused validation functions.
 -   [ ] **Refactor Utility Functions**: Centralize common utilities like ID generation into a dedicated `utils` directory.
