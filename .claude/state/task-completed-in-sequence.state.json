@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "taskId": "task-completed-in-sequence",
+  "taskPath": "claude-Tasks/feature-A/01-plan.md",
+  "phase": "done",
+  "currentStep": "review",
+  "parentSequenceId": "sequence-running-sample",
+  "steps": { "plan": "done", "implement": "done", "review": "done" },
+  "tokenUsage": {
+    "claude-3-5-sonnet-20241022": {
+      "inputTokens": 12000, 
+      "outputTokens": 3200,
+      "cacheCreationInputTokens": 15000, 
+      "cacheReadInputTokens": 1800
+    }
+  },
+  "stats": { "totalDuration": 89.15 },
+  "lastUpdate": "2025-08-15T10:45:00Z"
+}

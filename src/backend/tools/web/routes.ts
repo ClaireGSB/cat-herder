@@ -111,7 +111,7 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
     res.json({ sequence: sequenceDetails });
   });
 
-  router.get("/log/:taskId/:logFile", (req: Request, res: Response) => {
+  router.get("/api/log/:taskId/:logFile", (req: Request, res: Response) => {
     const { taskId, logFile } = req.params;
     if (!taskId || !logFile || typeof taskId !== "string" || typeof logFile !== "string") {
       return res.status(400).json({ error: "Invalid parameters" });

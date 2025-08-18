@@ -232,7 +232,8 @@ const loadTaskDetails = async () => {
       throw new Error(`Failed to fetch task details: ${response.status} ${response.statusText}`);
     }
     
-    task.value = await response.json();
+    const data = await response.json();
+    task.value = data.task;
   } catch (err) {
     console.error('Error loading task details:', err);
     error.value = err instanceof Error ? err.message : 'Failed to load task details';

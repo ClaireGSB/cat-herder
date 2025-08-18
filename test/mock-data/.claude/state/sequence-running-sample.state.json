@@ -6,5 +6,19 @@
   "completedTasks": [
     "claude-Tasks/feature-A/01-plan.md"
   ],
+  "stats": {
+    "totalDuration": 134.45,
+    "totalDurationExcludingPauses": 128.20,
+    "totalPauseTime": 6.25,
+    "totalTokenUsage": {
+      "claude-3-5-sonnet-20241022": {
+        "inputTokens": 20000,
+        "outputTokens": 5700,
+        "cacheCreationInputTokens": 27000,
+        "cacheReadInputTokens": 3300
+      }
+    }
+  },
+  "branch": "claude/feature-A",
   "lastUpdate": "2025-08-15T11:00:00Z"
 }

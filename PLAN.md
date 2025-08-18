@@ -25,8 +25,8 @@ Important: make sure to user the Playwright MCP to verify each step as you compl
 -   [x] **0. Create  Test Data for Verification:** Create a set of test data in the backend to simulate sequences and tasks for verification.
 -   [x] **1. Implement the History View:** Populate the main dashboard page with lists of recent sequences and standalone tasks by integrating existing components.
 -   [x] **2. Implement the Live Activity View:** Re-create the real-time monitoring page, including the live log viewer, by integrating and enhancing existing components.
--   [ ] **3. Implement the Task Detail View:** Build the page that displays all information for a single task, wiring up the interaction between the steps list and the log viewer.
--   [ ] **4. Implement the Sequence Detail View:** Build the page that displays all information for a sequence, including its list of associated tasks.
+-   [x] **3. Implement the Task Detail View:** Build the page that displays all information for a single task, wiring up the interaction between the steps list and the log viewer.
+-   [x] **4. Implement the Sequence Detail View:** Build the page that displays all information for a sequence, including its list of associated tasks.
 -   [ ] **5. Implement Global UI Components:** Add shared components like breadcrumb navigation and global error/loading states to unify the user experience.
 -   [ ] **6. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the completed and fully functional SPA.
 

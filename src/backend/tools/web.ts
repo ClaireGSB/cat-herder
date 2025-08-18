@@ -1,5 +1,6 @@
 import express from "express";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import pc from "picocolors";
 import { createServer } from 'node:http';
 import { getConfig, getProjectRoot } from "../config.js";
@@ -16,8 +17,13 @@ export async function startWebServer() {
   const app = express();
   const server = createServer(app);
   
-  // Serve Vue SPA static files from the installed package directory
-  const frontendDistPath = path.resolve(new URL('../frontend', import.meta.url).pathname);
+  // Serve Vue SPA static files - use local dist in development, package in production
+  const localFrontendDistPath = path.resolve(projectRoot, 'src/frontend/dist');
+  const packageFrontendDistPath = path.resolve(new URL('../frontend', import.meta.url).pathname);
+  
+  // Check if local dist exists (development mode)
+  const frontendDistPath = existsSync(localFrontendDistPath) ? localFrontendDistPath : packageFrontendDistPath;
+  console.log(`Serving frontend from: ${frontendDistPath}`);
   app.use(express.static(frontendDistPath));
 
   // Use the router from routes.ts
