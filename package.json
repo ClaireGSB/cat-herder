@@ -33,10 +33,13 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/dot-claude dist/ && cp -r src/tasks dist/ && cp -r src/templates dist/ && cp -r src/public dist/ && chmod +x dist/index.js",
+    "build": "rm -rf dist && npm run build:frontend && tsc -p tsconfig.json && cp -r src/dot-claude dist/ && cp -r src/tasks dist/ && cp -r src/templates dist/ && cp -r src/public dist/ && cp -r src/frontend/dist dist/frontend && chmod +x dist/index.js",
+    "build:frontend": "cd src/frontend && npm run build",
     "dev": "tsx src/index.ts",
+    "dev:frontend": "cd src/frontend && npm run dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:frontend": "cd src/frontend && vue-tsc -b --noEmit"
   }
 }
