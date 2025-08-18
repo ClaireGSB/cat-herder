@@ -31,7 +31,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
 -   [x] **5. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
 -   [x] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
 -   [x] **7. Replace EJS Views with a Vue SPA:** Configure the Express server to serve the compiled Vue application and remove all EJS templates and old client-side JavaScript files.
--   [ ] **8. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new monorepo structure, SPA architecture, and data flow.
+-   [x] **8. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new monorepo structure, SPA architecture, and data flow.
 
 ---
 

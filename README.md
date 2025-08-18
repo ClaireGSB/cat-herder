@@ -170,10 +170,15 @@ Your test environment is now ready.
 
 This is the loop you will follow every time you make changes to `claude-project` and want to test them.
 
-1.  **Rebuild Your Tool:** After saving changes in your `claude-project` source code, you must rebuild it.
+1.  **Rebuild Your Tool:** After saving changes in your `claude-project` source code, you must rebuild both the backend and frontend.
 ```bash
 # In your claude-project repository root
 npm run build
+
+# If you made frontend changes, also build the Vue app
+cd src/frontend
+npm run build
+cd ../..
 ```
 
 2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
@@ -181,7 +186,6 @@ npm run build
 # In your my-test-app directory
 rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
 ```
-
 
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
@@ -806,6 +810,45 @@ npm run claude:web
 ```
 
 The dashboard will be available at `http://localhost:5177` in your browser.
+
+### Frontend Development
+
+The web dashboard is built as a Vue 3 Single Page Application (SPA) located in `src/frontend/`. For development work on the web interface:
+
+#### Development Server
+To run the frontend with hot-reload during development:
+
+```bash
+# In the src/frontend directory
+cd src/frontend
+npm install  # First time only
+npm run dev  # Starts dev server on http://localhost:5173
+```
+
+The development server provides:
+- Hot module replacement for instant updates
+- Better error messages and debugging
+- Faster rebuilds during development
+
+#### Production Build
+Before testing the complete `claude-project web` experience or deploying changes:
+
+```bash
+# Build the frontend for production
+cd src/frontend
+npm run build
+
+# The compiled files will be in src/frontend/dist/
+# The main web server will serve these files
+```
+
+#### Architecture
+The frontend uses:
+- **Vue 3** with Composition API for reactive components
+- **Vuetify** for consistent UI components and Material Design
+- **Pinia** for centralized state management
+- **Vite** for fast builds and development server
+- **WebSockets** for real-time updates from the backend
 
 ## Commands Reference
 
