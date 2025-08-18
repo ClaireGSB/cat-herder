@@ -2,8 +2,15 @@ import { useTaskStore } from '@/stores/taskStore';
 import type { TaskDetails, SequenceDetails, LiveActivity } from '@/stores/types';
 
 interface WebSocketMessage {
-  type: 'task_update' | 'sequence_update' | 'live_activity';
-  data: TaskDetails | SequenceDetails | LiveActivity;
+  type: 'task_update' | 'sequence_update' | 'live_activity' | 'live_log';
+  data: TaskDetails | SequenceDetails | LiveActivity | LiveLogData;
+}
+
+interface LiveLogData {
+  content: string;
+  step?: string;
+  taskId?: string;
+  sequenceId?: string;
 }
 
 export const ConnectionState = {
@@ -111,6 +118,11 @@ class WebSocketService {
         
       case 'live_activity':
         this.taskStore.handleLiveActivity(message.data as LiveActivity);
+        break;
+        
+      case 'live_log':
+        const logData = message.data as LiveLogData;
+        this.taskStore.updateLiveLogContent(logData.content, logData.step);
         break;
         
       default:

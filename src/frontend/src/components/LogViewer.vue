@@ -4,6 +4,15 @@
       <div class="d-flex align-center">
         <v-icon icon="mdi-console" class="me-2" />
         Log Viewer
+        <v-chip 
+          v-if="props.isLiveMode"
+          color="primary" 
+          variant="flat" 
+          size="small" 
+          class="ml-2 live-pulse"
+        >
+          LIVE
+        </v-chip>
       </div>
       
       <v-progress-circular 
@@ -17,7 +26,7 @@
     
     <v-card-text class="pa-0">
       <v-tabs
-        v-if="availableLogs.length > 0"
+        v-if="!props.isLiveMode && availableLogs.length > 0"
         v-model="selectedLogType"
         bg-color="transparent"
         density="compact"
@@ -33,32 +42,44 @@
       </v-tabs>
       
       <div class="log-content">
-        <div v-if="!selectedLogPath" class="empty-state">
-          <v-icon icon="mdi-file-document-outline" size="64" class="mb-4 text-disabled" />
-          <p class="text-medium-emphasis">Select a log type above to view its content</p>
+        <!-- Live Mode Display -->
+        <div v-if="props.isLiveMode" class="log-text-container" ref="logContainer">
+          <div v-if="!effectiveLogContent" class="empty-state">
+            <v-icon icon="mdi-broadcast" size="48" class="mb-2 text-disabled" />
+            <p class="text-medium-emphasis">Waiting for live log content...</p>
+          </div>
+          <pre v-else class="log-text">{{ effectiveLogContent }}</pre>
         </div>
         
-        <div v-else-if="loading" class="loading-state">
-          <v-progress-circular indeterminate size="32" class="mb-4" />
-          <p class="text-medium-emphasis">Loading log content...</p>
-        </div>
-        
-        <div v-else-if="error" class="error-state">
-          <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
-          <p class="text-error mb-2">{{ error }}</p>
-          <v-btn @click="loadLog" variant="outlined" size="small">
-            <v-icon icon="mdi-refresh" class="me-1" />
-            Retry
-          </v-btn>
-        </div>
-        
-        <div v-else-if="logContent" class="log-text-container">
-          <pre class="log-text">{{ logContent }}</pre>
-        </div>
-        
-        <div v-else class="empty-state">
-          <v-icon icon="mdi-file-outline" size="48" class="mb-2 text-disabled" />
-          <p class="text-medium-emphasis">No log content available</p>
+        <!-- Static Mode Display -->
+        <div v-else>
+          <div v-if="!selectedLogPath" class="empty-state">
+            <v-icon icon="mdi-file-document-outline" size="64" class="mb-4 text-disabled" />
+            <p class="text-medium-emphasis">Select a log type above to view its content</p>
+          </div>
+          
+          <div v-else-if="loading" class="loading-state">
+            <v-progress-circular indeterminate size="32" class="mb-4" />
+            <p class="text-medium-emphasis">Loading log content...</p>
+          </div>
+          
+          <div v-else-if="error" class="error-state">
+            <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
+            <p class="text-error mb-2">{{ error }}</p>
+            <v-btn @click="loadLog" variant="outlined" size="small">
+              <v-icon icon="mdi-refresh" class="me-1" />
+              Retry
+            </v-btn>
+          </div>
+          
+          <div v-else-if="effectiveLogContent" class="log-text-container">
+            <pre class="log-text">{{ effectiveLogContent }}</pre>
+          </div>
+          
+          <div v-else class="empty-state">
+            <v-icon icon="mdi-file-outline" size="48" class="mb-2 text-disabled" />
+            <p class="text-medium-emphasis">No log content available</p>
+          </div>
         </div>
       </div>
     </v-card-text>
@@ -66,7 +87,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
+import { useTaskStore } from '@/stores/taskStore';
 
 export interface LogFiles {
   log?: string;
@@ -78,14 +100,17 @@ export interface LogViewerProps {
   taskId: string;
   logs?: Record<string, LogFiles> | null;
   stepName?: string;
+  isLiveMode?: boolean;
 }
 
 const props = defineProps<LogViewerProps>();
+const taskStore = useTaskStore();
 
 const selectedLogType = ref<string>('');
 const logContent = ref<string>('');
 const loading = ref(false);
 const error = ref<string | null>(null);
+const logContainer = ref<HTMLElement | null>(null);
 
 // Define log types with metadata
 const logTypes = [
@@ -131,6 +156,22 @@ const selectedLogPath = computed(() => {
   return stepLogs[selectedLogType.value as keyof LogFiles] || null;
 });
 
+// Get the effective log content (live or static)
+const effectiveLogContent = computed(() => {
+  if (props.isLiveMode && taskStore.liveLogContent) {
+    return taskStore.liveLogContent;
+  }
+  return logContent.value;
+});
+
+// Auto-scroll function for live content
+const scrollToBottom = async () => {
+  if (logContainer.value) {
+    await nextTick();
+    logContainer.value.scrollTop = logContainer.value.scrollHeight;
+  }
+};
+
 // Load log content from API
 const loadLog = async () => {
   if (!selectedLogPath.value) {
@@ -166,11 +207,18 @@ watch(availableLogs, (newLogs) => {
 
 // Load log content when selection changes
 watch(selectedLogType, () => {
-  if (selectedLogType.value) {
+  if (selectedLogType.value && !props.isLiveMode) {
     loadLog();
   } else {
     logContent.value = '';
     error.value = null;
+  }
+});
+
+// Watch live log content for auto-scroll
+watch(() => taskStore.liveLogContent, () => {
+  if (props.isLiveMode) {
+    scrollToBottom();
   }
 });
 
@@ -245,5 +293,19 @@ defineExpose({
 
 .log-text-container::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--v-theme-on-surface-variant));
+}
+
+/* Live mode animation */
+.live-pulse {
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(var(--v-theme-primary), 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(var(--v-theme-primary), 0.1);
+  }
 }
 </style>

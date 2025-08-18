@@ -171,6 +171,20 @@
           </div>
         </v-card-text>
       </v-card>
+      
+      <!-- Live Log Viewer for Active Task -->
+      <v-card v-if="taskStore.liveTask.currentStep" class="mt-4">
+        <v-card-title>
+          <v-icon icon="mdi-broadcast" class="me-2" />
+          Live Logs - {{ taskStore.liveTask.currentStep }}
+        </v-card-title>
+        <v-card-text class="pa-0">
+          <LogViewer
+            :task-id="taskStore.liveTask.taskId"
+            :is-live-mode="true"
+          />
+        </v-card-text>
+      </v-card>
     </div>
     
     <!-- Live Sequence Activity -->
@@ -317,6 +331,7 @@ import { initializeWebSocket } from '@/services/websocket';
 import StatusBadge from '@/components/StatusBadge.vue';
 import DurationDisplay from '@/components/DurationDisplay.vue';
 import PipelineSteps from '@/components/PipelineSteps.vue';
+import LogViewer from '@/components/LogViewer.vue';
 
 const taskStore = useTaskStore();
 

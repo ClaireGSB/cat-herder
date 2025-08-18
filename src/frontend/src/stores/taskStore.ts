@@ -18,6 +18,10 @@ interface TaskStoreState {
   liveSequence: SequenceDetails | null;
   isLive: boolean;
   
+  // Live log streaming state
+  liveLogContent: string;
+  liveLogStep: string | null;
+  
   // Loading and error states
   isLoading: boolean;
   error: string | null;
@@ -33,6 +37,8 @@ export const useTaskStore = defineStore('tasks', {
     liveTask: null,
     liveSequence: null,
     isLive: false,
+    liveLogContent: '',
+    liveLogStep: null,
     isLoading: false,
     error: null,
     isConnected: false,
@@ -131,6 +137,7 @@ export const useTaskStore = defineStore('tasks', {
       if (this.liveTask && this.liveTask.taskId === taskData.taskId && taskData.phase !== 'running') {
         this.liveTask = null;
         this.isLive = false;
+        this.clearLiveLogContent();
       }
     },
 
@@ -159,6 +166,7 @@ export const useTaskStore = defineStore('tasks', {
       if (this.liveSequence && this.liveSequence.sequenceId === sequenceData.sequenceId && sequenceData.phase !== 'running') {
         this.liveSequence = null;
         this.isLive = false;
+        this.clearLiveLogContent();
       }
     },
 
@@ -176,6 +184,24 @@ export const useTaskStore = defineStore('tasks', {
           this.liveSequence.phase = activityData.phase;
         }
       }
+    },
+
+    // Handle live log updates from WebSocket
+    updateLiveLogContent(content: string, step?: string) {
+      if (step && step !== this.liveLogStep) {
+        // New step, reset log content
+        this.liveLogContent = content;
+        this.liveLogStep = step;
+      } else {
+        // Append to existing content
+        this.liveLogContent += content;
+      }
+    },
+
+    // Clear live log content
+    clearLiveLogContent() {
+      this.liveLogContent = '';
+      this.liveLogStep = null;
     },
 
     // Set WebSocket connection state
@@ -200,6 +226,7 @@ export const useTaskStore = defineStore('tasks', {
       this.liveTask = null;
       this.liveSequence = null;
       this.isLive = false;
+      this.clearLiveLogContent();
       this.error = null;
     },
 
