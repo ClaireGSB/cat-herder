@@ -289,12 +289,17 @@ const isLiveSequence = (sequenceId: string) => {
 };
 
 // Row click handlers for tables
-const onTaskRowClick = (event: any, { item }: { item: any }) => {
+const onTaskRowClick = (_event: any, { item }: { item: any }) => {
   router.push(`/task/${item.taskId}`);
 };
 
-const onSequenceRowClick = (event: any, { item }: { item: any }) => {
+const onSequenceRowClick = (_event: any, { item }: { item: any }) => {
   router.push(`/sequence/${item.sequenceId}`);
+};
+
+// Format date helper
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleString();
 };
 
 // Refresh data from API

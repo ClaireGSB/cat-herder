@@ -385,9 +385,6 @@ const reconnectWebSocket = () => {
   initializeWebSocket();
 };
 
-const formatDate = (dateString: string): string => {
-  return new Date(dateString).toLocaleString();
-};
 
 // Initialize WebSocket and load initial data
 onMounted(() => {
