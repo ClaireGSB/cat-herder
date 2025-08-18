@@ -17,22 +17,22 @@ The system is designed around a few key concepts to ensure it is resilient, cust
 The architecture is split into distinct layers, each with a clear responsibility.
 
 1.  **Interface Layer (CLI & Web):** The user's entry point. This layer is responsible for parsing user input and presenting status information.
-    *   **CLI (`src/index.ts`, `src/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
-    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
+    *   **CLI (`src/backend/index.ts`, `src/backend/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
+    *   **Web Dashboard (`src/frontend/` & `src/backend/tools/web/`):** A modern Vue 3 Single Page Application (SPA) that provides real-time monitoring. The frontend is built with Vite, Vue 3, Vuetify for UI components, and Pinia for state management. The backend serves the compiled SPA and provides a JSON API for data communication.
 
-2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
+2.  **Orchestration Layer (`src/backend/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
     *   It reads the user's pipeline configuration (`claude.config.js`).
     *   It manages the overall flow of a task or sequence.
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
 
-3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
+3.  **AI Interaction Layer (`src/backend/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
     *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results.
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
 
-4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
+4.  **State Layer (`src/backend/tools/status.ts`):** The system's source of truth and memory.
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `.claude/state` directory.
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
@@ -45,28 +45,51 @@ The following diagram illustrates the interaction between the core components wh
 graph TD
     subgraph User Interface
         CLI[CLI: claude-project run]
-        Web[Web Dashboard]
+        VueApp[Vue 3 SPA]
+        Browser[User's Browser]
     end
 
-    subgraph Orchestration Layer
-        Orchestrator[Orchestrator]
-        Validator[Pipeline Validator]
-        CheckRunner[Check Runner]
+    subgraph Frontend["Frontend (src/frontend/)"]
+        VueApp
+        Pinia[Pinia Store]
+        Vuetify[Vuetify Components]
     end
 
-    subgraph State & Config
-        State[State Files (.json)]
-        Config[claude.config.js]
-        Prompts[Command Prompts (.md)]
-    end
+    subgraph Backend["Backend (src/backend/)"]
+        WebAPI[Express API (/api/*)]
+        WebSockets[WebSocket Server]
+        
+        subgraph Orchestration Layer
+            Orchestrator[Orchestrator]
+            Validator[Pipeline Validator]
+            CheckRunner[Check Runner]
+        end
 
-    subgraph AI Interaction
-        Proc[Process Runner (proc.ts)]
-        ClaudeCLI[Claude CLI (child process)]
+        subgraph State & Config
+            State[State Files (.json)]
+            Config[claude.config.js]
+            Prompts[Command Prompts (.md)]
+        end
+
+        subgraph AI Interaction
+            Proc[Process Runner (proc.ts)]
+            ClaudeCLI[Claude CLI (child process)]
+        end
     end
 
     User[User] --> CLI
+    User --> Browser
+    Browser --> VueApp
     CLI --> Orchestrator
+    
+    VueApp -- HTTP/JSON --> WebAPI
+    VueApp -- Real-time --> WebSockets
+    VueApp -- State --> Pinia
+    VueApp -- UI --> Vuetify
+    
+    WebAPI -- Reads --> State
+    WebSockets -- Reads --> State
+    
     Orchestrator -- Reads --> Config
     Orchestrator -- Uses --> Validator
     Orchestrator -- Reads/Writes --> State
@@ -76,17 +99,19 @@ graph TD
     ClaudeCLI -- Modifies --> UserFiles[User's Source Code]
     Orchestrator -- Uses --> CheckRunner
     CheckRunner -- Executes --> Shell[Shell Commands (npm test)]
-
-    Web -- Reads --> State
-    User -- Views --> Web
 ```
 
 ### C. Key Directories
 
-*   **`src/`**: The main application source code.
-    *   **`src/tools/`**: Contains the core logic for orchestration, web UI, validation, and status management. This is the engine of the application.
-    *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`claude.config.js`).
-    *   **`src/init/`**: Logic related to the `claude-project init` command.
+*   **`src/`**: The main application source code, organized as a monorepo with separate frontend and backend.
+    *   **`src/backend/`**: All Node.js CLI source code and backend services.
+        *   **`src/backend/tools/`**: Contains the core logic for orchestration, web API, validation, and status management. This is the engine of the application.
+        *   **`src/backend/templates/`**: Default configuration files (`claude.config.js`).
+        *   **`src/backend/init/`**: Logic related to the `claude-project init` command.
+    *   **`src/frontend/`**: Vue 3 Single Page Application for the web dashboard.
+        *   Built with Vite, Vue 3, Vuetify, and Pinia
+        *   Communicates with backend via JSON API and WebSockets
+        *   Compiled to `src/frontend/dist/` for production
 *   **`.claude/` (in user's project)**: The user-facing configuration directory.
     *   **`commands/`**: User-customizable markdown prompts for each pipeline step.
     *   **`settings.json`**: Permissions and hooks for the `claude` CLI tool.

@@ -5,8 +5,7 @@ import type {
   SequenceStatus,
   SequenceDetails,
   LiveActivity,
-  HistoryResponse,
-  LiveResponse
+  HistoryResponse
 } from './types';
 
 interface TaskStoreState {
@@ -100,10 +99,10 @@ export const useTaskStore = defineStore('tasks', {
     },
 
     // Update from live data (HTTP API call)
-    updateFromLive(liveData: LiveResponse) {
+    updateFromLive(liveData: any) {
       this.isLive = liveData.isLive;
-      this.liveTask = liveData.liveTask || null;
-      this.liveSequence = liveData.liveSequence || null;
+      this.liveTask = liveData.task || liveData.liveTask || null;
+      this.liveSequence = liveData.parentSequence || liveData.liveSequence || null;
       this.error = null;
     },
 

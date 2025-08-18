@@ -1,0 +1,24 @@
+[
+  {
+    "timestamp": "2025-08-15T09:00:00Z",
+    "eventType": "task_started",
+    "id": "task-completed-sample"
+  },
+  {
+    "timestamp": "2025-08-15T10:00:00Z",
+    "eventType": "task_finished",
+    "id": "task-completed-sample",
+    "status": "done"
+  },
+  {
+    "timestamp": "2025-08-15T10:30:00Z",
+    "eventType": "sequence_started",
+    "id": "sequence-running-sample"
+  },
+  {
+    "timestamp": "2025-08-15T11:00:00Z",
+    "eventType": "task_started",
+    "id": "task-running-in-sequence",
+    "parentId": "sequence-running-sample"
+  }
+]

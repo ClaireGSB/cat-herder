@@ -18,12 +18,52 @@ However, the UI is currently a shell. It is missing critical features and the ex
 
 Important: make sure to user the Playwright MCP to verify each step as you complete it. This will ensure that the implementation meets the requirements and is functional.
 
+## HOW TO TEST PROGRESS FOR THIS PLAN
+
+To implement the plan, Claude should follow this repeatable script. This ensures a consistent environment for every Playwright check.
+
+1.  **Claude Action:** Make code changes to files in `src/frontend/`.
+2.  **Run Verification Script:** Execute the following commands from the project root:
+
+```bash
+#!/bin/bash
+
+# --- PREPARE THE ENVIRONMENT ---
+echo "Step 1: Setting up mock data..."
+./tools/setup-mocks.sh
+if [ $? -ne 0 ]; then echo "Mock setup failed!"; exit 1; fi
+
+# --- BUILD THE FRONTEND ---
+echo "Step 2: Building the Vue application..."
+npm run build --prefix src/frontend
+if [ $? -ne 0 ]; then echo "Frontend build failed!"; exit 1; fi
+echo "Build successful."
+
+# --- RUN THE SERVER ---
+echo "Step 3: Starting the web server in the background..."
+claude-project web &
+SERVER_PID=$!
+echo "Server started with PID: $SERVER_PID. Waiting for it to initialize..."
+sleep 3
+
+# --- VERIFY THE UI ---
+echo "Step 4: Running Playwright MCP to verify UI..."
+# (Agent invokes Playwright MCP here, e.g., to view http://localhost:5177/task/task-completed-sample)
+
+# --- CLEAN UP ---
+echo "Step 5: Shutting down the web server..."
+kill $SERVER_PID
+wait $SERVER_PID 2>/dev/null
+echo "Server stopped. Loop complete."
+```
+
+
 ---
 
 ## Summary Checklist
 
 -   [x] **0. Create  Test Data for Verification:** Create a set of test data in the backend to simulate sequences and tasks for verification.
--   [ ] **1. Implement the History View:** Populate the main dashboard page with lists of recent sequences and standalone tasks by integrating existing components.
+-   [x] **1. Implement the History View:** Populate the main dashboard page with lists of recent sequences and standalone tasks by integrating existing components.
 -   [ ] **2. Implement the Live Activity View:** Re-create the real-time monitoring page, including the live log viewer, by integrating and enhancing existing components.
 -   [ ] **3. Implement the Task Detail View:** Build the page that displays all information for a single task, wiring up the interaction between the steps list and the log viewer.
 -   [ ] **4. Implement the Sequence Detail View:** Build the page that displays all information for a sequence, including its list of associated tasks.

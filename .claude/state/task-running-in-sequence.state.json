@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "taskId": "task-running-in-sequence",
+  "taskPath": "claude-Tasks/feature-A/02-implement.md",
+  "phase": "running",
+  "currentStep": "implement",
+  "parentSequenceId": "sequence-running-sample",
+  "steps": { "plan": "done", "implement": "running", "review": "pending" },
+  "tokenUsage": {
+    "claude-3-5-sonnet-20241022": {
+      "inputTokens": 8000, 
+      "outputTokens": 2500,
+      "cacheCreationInputTokens": 12000, 
+      "cacheReadInputTokens": 1500
+    }
+  },
+  "stats": { "totalDuration": 45.30 },
+  "lastUpdate": "2025-08-15T11:30:00Z"
+}
