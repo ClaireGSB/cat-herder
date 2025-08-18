@@ -68,7 +68,7 @@ const loadInitialData = async () => {
     <!-- App Bar -->
     <v-app-bar 
       color="primary" 
-      prominent
+      density="compact"
       :elevation="2"
     >
       <template v-slot:prepend>
@@ -82,7 +82,7 @@ const loadInitialData = async () => {
         <v-icon icon="mdi-robot" size="large" class="me-2" />
         <span class="font-weight-bold">Claude Project</span>
         <v-chip 
-          size="small" 
+          size="x-small" 
           variant="outlined" 
           color="white"
           class="ml-2 hidden-sm-and-down"
@@ -101,6 +101,7 @@ const loadInitialData = async () => {
           :to="item.to"
           :variant="isActiveRoute(item.to) ? 'flat' : 'text'"
           :color="isActiveRoute(item.to) ? 'white' : 'default'"
+          size="small"
           class="mx-1"
         >
           <v-icon :icon="item.icon" size="small" class="me-2" />
@@ -119,7 +120,7 @@ const loadInitialData = async () => {
       <v-chip
         :color="taskStore.isConnected ? 'success' : 'error'"
         variant="outlined"
-        size="small"
+        size="x-small"
         class="ml-2 hidden-xs"
       >
         <v-icon 
@@ -137,7 +138,7 @@ const loadInitialData = async () => {
       v-model="drawer"
       temporary
     >
-      <v-list>
+      <v-list density="compact">
         <v-list-item
           v-for="item in navigationItems"
           :key="item.to"
@@ -197,6 +198,7 @@ const loadInitialData = async () => {
         v-if="taskStore.error"
         type="error"
         variant="tonal"
+        density="compact"
         closable
         class="ma-4"
         @click:close="taskStore.setError(null)"

@@ -94,7 +94,7 @@
     <div class="mb-8">
       <div class="d-flex align-center mb-4">
         <v-icon icon="mdi-folder-multiple" class="me-2" />
-        <h2 class="text-h5">Recent Sequences</h2>
+        <h2 class="text-h6">Recent Sequences</h2>
         <v-chip 
           v-if="taskStore.sequences.length > 0" 
           size="small" 
@@ -105,14 +105,52 @@
         </v-chip>
       </div>
       
-      <div v-if="taskStore.sequences.length > 0" class="sequences-grid">
-        <SequenceCard
-          v-for="sequence in taskStore.sequences"
-          :key="sequence.sequenceId"
-          :sequence="sequence"
-          :is-live="isLiveSequence(sequence.sequenceId)"
-        />
-      </div>
+      <v-data-table
+        v-if="taskStore.sequences.length > 0"
+        :headers="sequenceHeaders"
+        :items="taskStore.sequences"
+        density="compact"
+        class="sequences-table"
+        @click:row="onSequenceRowClick"
+        hover
+        :loading="taskStore.isLoading"
+        item-value="sequenceId"
+      >
+        <template v-slot:item.phase="{ item }">
+          <StatusBadge :phase="item.phase" />
+        </template>
+        
+        <template v-slot:item.sequenceId="{ item }">
+          <div class="d-flex align-center">
+            <v-icon 
+              :icon="isLiveSequence(item.sequenceId) ? 'mdi-broadcast' : 'mdi-folder-multiple'"
+              :color="isLiveSequence(item.sequenceId) ? 'primary' : 'default'"
+              size="small"
+              class="me-2"
+            />
+            <div>
+              <div class="font-weight-medium">{{ item.sequenceId }}</div>
+              <div v-if="item.currentTaskPath" class="text-caption text-medium-emphasis">
+                Current: {{ item.currentTaskPath }}
+              </div>
+            </div>
+          </div>
+        </template>
+        
+        <template v-slot:item.folderPath="{ item }">
+          <div class="text-truncate" style="max-width: 200px;" :title="item.folderPath">
+            {{ item.folderPath }}
+          </div>
+        </template>
+        
+        <template v-slot:item.duration="{ item }">
+          <DurationDisplay :duration="item.stats?.totalDuration" />
+        </template>
+        
+        <template v-slot:item.lastUpdate="{ item }">
+          <span class="text-caption">{{ formatDate(item.lastUpdate) }}</span>
+        </template>
+      </v-data-table>
       
       <v-card v-else variant="outlined" class="empty-state">
         <v-card-text class="text-center py-8">
@@ -129,7 +167,7 @@
     <div>
       <div class="d-flex align-center mb-4">
         <v-icon icon="mdi-cog-outline" class="me-2" />
-        <h2 class="text-h5">Recent Standalone Tasks</h2>
+        <h2 class="text-h6">Recent Standalone Tasks</h2>
         <v-chip 
           v-if="taskStore.standaloneTasks.length > 0" 
           size="small" 
@@ -140,14 +178,60 @@
         </v-chip>
       </div>
       
-      <div v-if="taskStore.standaloneTasks.length > 0" class="tasks-grid">
-        <TaskCard
-          v-for="task in taskStore.standaloneTasks"
-          :key="task.taskId"
-          :task="task"
-          :is-live="isLiveTask(task.taskId)"
-        />
-      </div>
+      <v-data-table
+        v-if="taskStore.standaloneTasks.length > 0"
+        :headers="taskHeaders"
+        :items="taskStore.standaloneTasks"
+        density="compact"
+        class="tasks-table"
+        @click:row="onTaskRowClick"
+        hover
+        :loading="taskStore.isLoading"
+        item-value="taskId"
+      >
+        <template v-slot:item.phase="{ item }">
+          <StatusBadge :phase="item.phase" />
+        </template>
+        
+        <template v-slot:item.taskId="{ item }">
+          <div class="d-flex align-center">
+            <v-icon 
+              :icon="isLiveTask(item.taskId) ? 'mdi-broadcast' : 'mdi-cog'"
+              :color="isLiveTask(item.taskId) ? 'primary' : 'default'"
+              size="small"
+              class="me-2"
+            />
+            <div>
+              <div class="font-weight-medium">{{ item.taskId }}</div>
+              <div v-if="item.taskPath" class="text-caption text-medium-emphasis">
+                {{ item.taskPath }}
+              </div>
+            </div>
+          </div>
+        </template>
+        
+        <template v-slot:item.pipeline="{ item }">
+          <v-chip v-if="item.pipeline" size="small" variant="outlined">
+            {{ item.pipeline }}
+          </v-chip>
+          <span v-else class="text-disabled">—</span>
+        </template>
+        
+        <template v-slot:item.currentStep="{ item }">
+          <v-chip v-if="item.currentStep" size="small" variant="tonal" color="primary">
+            {{ item.currentStep }}
+          </v-chip>
+          <span v-else class="text-disabled">—</span>
+        </template>
+        
+        <template v-slot:item.duration="{ item }">
+          <DurationDisplay :duration="item.stats?.totalDuration" />
+        </template>
+        
+        <template v-slot:item.lastUpdate="{ item }">
+          <span class="text-caption">{{ formatDate(item.lastUpdate) }}</span>
+        </template>
+      </v-data-table>
       
       <v-card v-else variant="outlined" class="empty-state">
         <v-card-text class="text-center py-8">
@@ -165,12 +249,32 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useTaskStore } from '@/stores/taskStore';
-import TaskCard from '@/components/TaskCard.vue';
-import SequenceCard from '@/components/SequenceCard.vue';
+import StatusBadge from '@/components/StatusBadge.vue';
+import DurationDisplay from '@/components/DurationDisplay.vue';
 
 const taskStore = useTaskStore();
+const router = useRouter();
 const initialLoading = ref(true);
+
+// Table headers
+const sequenceHeaders = [
+  { title: 'Status', value: 'phase', width: '100px' },
+  { title: 'Sequence ID', value: 'sequenceId', width: '250px' },
+  { title: 'Folder Path', value: 'folderPath', width: '200px' },
+  { title: 'Duration', value: 'duration', width: '120px' },
+  { title: 'Last Update', value: 'lastUpdate', width: '150px' }
+];
+
+const taskHeaders = [
+  { title: 'Status', value: 'phase', width: '100px' },
+  { title: 'Task ID', value: 'taskId', width: '250px' },
+  { title: 'Pipeline', value: 'pipeline', width: '120px' },
+  { title: 'Current Step', value: 'currentStep', width: '150px' },
+  { title: 'Duration', value: 'duration', width: '120px' },
+  { title: 'Last Update', value: 'lastUpdate', width: '150px' }
+];
 
 // Get live activity info
 const liveActivity = computed(() => taskStore.currentLiveActivity);
@@ -182,6 +286,15 @@ const isLiveTask = (taskId: string) => {
 
 const isLiveSequence = (sequenceId: string) => {
   return taskStore.liveSequence?.sequenceId === sequenceId;
+};
+
+// Row click handlers for tables
+const onTaskRowClick = (event: any, { item }: { item: any }) => {
+  router.push(`/task/${item.taskId}`);
+};
+
+const onSequenceRowClick = (event: any, { item }: { item: any }) => {
+  router.push(`/sequence/${item.sequenceId}`);
 };
 
 // Refresh data from API
@@ -243,18 +356,16 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.sequences-grid,
-.tasks-grid {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+.sequences-table,
+.tasks-table {
+  background: rgb(var(--v-theme-surface));
+  border-radius: 8px;
 }
 
-@media (max-width: 768px) {
-  .sequences-grid,
-  .tasks-grid {
-    grid-template-columns: 1fr;
-  }
+.sequences-table :deep(.v-data-table__tr--clickable:hover),
+.tasks-table :deep(.v-data-table__tr--clickable:hover) {
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  cursor: pointer;
 }
 
 .empty-state {

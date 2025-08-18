@@ -48,7 +48,7 @@
             <v-icon icon="mdi-broadcast" size="48" class="mb-2 text-disabled" />
             <p class="text-medium-emphasis">Waiting for live log content...</p>
           </div>
-          <pre v-else class="log-text">{{ effectiveLogContent }}</pre>
+          <pre v-else class="log-text" v-html="colorizeLogContent(effectiveLogContent)"></pre>
         </div>
         
         <!-- Static Mode Display -->
@@ -73,7 +73,7 @@
           </div>
           
           <div v-else-if="effectiveLogContent" class="log-text-container">
-            <pre class="log-text">{{ effectiveLogContent }}</pre>
+            <pre class="log-text" v-html="colorizeLogContent(effectiveLogContent)"></pre>
           </div>
           
           <div v-else class="empty-state">
@@ -198,6 +198,38 @@ const loadLog = async () => {
   }
 };
 
+// Colorize log content function
+const colorizeLogContent = (content: string): string => {
+  if (!content) return '';
+  
+  // Escape HTML to prevent XSS attacks
+  const escaped = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+  
+  // Apply colorization
+  return escaped
+    // [ASSISTANT] - Blue
+    .replace(/(\[ASSISTANT\])/g, '<span class="log-assistant">$1</span>')
+    // [TOOL_USE] - Yellow
+    .replace(/(\[TOOL_USE\])/g, '<span class="log-tool">$1</span>')
+    // [ERROR] - Red
+    .replace(/(\[ERROR\])/g, '<span class="log-error">$1</span>')
+    // [WARNING] - Orange
+    .replace(/(\[WARNING\])/g, '<span class="log-warning">$1</span>')
+    // [INFO] - Green
+    .replace(/(\[INFO\])/g, '<span class="log-info">$1</span>')
+    // [DEBUG] - Gray
+    .replace(/(\[DEBUG\])/g, '<span class="log-debug">$1</span>')
+    // [SUCCESS] - Green bright
+    .replace(/(\[SUCCESS\])/g, '<span class="log-success">$1</span>')
+    // Generic [WORD] patterns - Cyan
+    .replace(/(\[[A-Z_]+\])/g, '<span class="log-generic">$1</span>');
+};
+
 // Auto-select first available log when logs change
 watch(availableLogs, (newLogs) => {
   if (newLogs.length > 0 && !selectedLogType.value) {
@@ -259,8 +291,9 @@ defineExpose({
 .log-text-container {
   height: 100%;
   overflow: auto;
-  background: rgb(var(--v-theme-surface-variant));
+  background: #1e1e1e;
   border-radius: 0 0 4px 4px;
+  border: 1px solid #333;
 }
 
 .log-text {
@@ -268,31 +301,72 @@ defineExpose({
   padding: 16px;
   font-family: 'Roboto Mono', 'Courier New', monospace;
   font-size: 0.875rem;
-  line-height: 1.4;
-  color: rgb(var(--v-theme-on-surface));
+  line-height: 1.5;
+  color: #e0e0e0;
   background: transparent;
   white-space: pre-wrap;
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
 
-/* Custom scrollbar for webkit browsers */
+/* Log colorization classes */
+.log-text :deep(.log-assistant) {
+  color: #66b3ff;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-tool) {
+  color: #ffcc66;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-error) {
+  color: #ff6666;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-warning) {
+  color: #ff9966;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-info) {
+  color: #66ff99;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-debug) {
+  color: #999999;
+  font-weight: 500;
+}
+
+.log-text :deep(.log-success) {
+  color: #66ff66;
+  font-weight: 600;
+}
+
+.log-text :deep(.log-generic) {
+  color: #66ffff;
+  font-weight: 500;
+}
+
+/* Custom scrollbar for webkit browsers - Terminal theme */
 .log-text-container::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 .log-text-container::-webkit-scrollbar-track {
-  background: rgb(var(--v-theme-surface));
+  background: #2a2a2a;
 }
 
 .log-text-container::-webkit-scrollbar-thumb {
-  background: rgb(var(--v-theme-outline));
+  background: #555;
   border-radius: 4px;
 }
 
 .log-text-container::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--v-theme-on-surface-variant));
+  background: #777;
 }
 
 /* Live mode animation */

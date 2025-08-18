@@ -1,5 +1,5 @@
 <template>
-  <v-breadcrumbs class="breadcrumb-nav pa-0" :items="breadcrumbItems">
+  <v-breadcrumbs class="breadcrumb-nav pa-0" :items="breadcrumbItems" density="compact">
     <template v-slot:prepend>
       <v-icon icon="mdi-home" size="small" />
     </template>

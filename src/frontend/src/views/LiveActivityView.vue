@@ -82,161 +82,82 @@
       </div>
     </v-alert>
     
-    <!-- Live Task Activity -->
-    <div v-if="taskStore.liveTask">
-      <div class="d-flex align-center mb-4">
-        <v-icon icon="mdi-cog" class="me-2" />
-        <h2 class="text-h5">Live Task</h2>
-        <v-chip 
-          color="primary" 
-          variant="flat" 
-          size="small" 
-          class="ml-2 live-pulse"
-        >
-          LIVE
-        </v-chip>
-      </div>
-      
-      <v-card class="live-task-card mb-6">
-        <v-card-title class="d-flex justify-space-between align-center">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-broadcast" color="primary" class="me-3" />
-            <div>
-              <div class="text-h6">{{ taskStore.liveTask.taskId }}</div>
-              <div v-if="taskStore.liveTask.taskPath" class="text-caption text-medium-emphasis">
-                {{ taskStore.liveTask.taskPath }}
-              </div>
-            </div>
-          </div>
+    <!-- Live Activity Content - Two Column Layout -->
+    <v-container v-if="taskStore.hasLiveActivity" fluid class="pa-0">
+      <v-row>
+        <!-- Sidebar Column -->
+        <v-col cols="12" md="4" class="sidebar-column">
           
-          <div class="d-flex align-center gap-2">
-            <StatusBadge :phase="taskStore.liveTask.phase" />
-            <v-btn
-              :to="`/task/${taskStore.liveTask.taskId}`"
-              variant="outlined"
-              size="small"
-            >
-              <v-icon icon="mdi-open-in-new" size="small" class="me-1" />
-              Details
-            </v-btn>
-          </div>
-        </v-card-title>
-        
-        <v-card-text>
-          <v-row>
-            <v-col v-if="taskStore.liveTask.pipeline" cols="12" sm="6" md="3">
-              <div class="detail-item">
+          <!-- Live Task Info -->
+          <v-card v-if="taskStore.liveTask" class="live-task-card mb-4" density="compact">
+            <v-card-title class="d-flex justify-space-between align-center pa-3">
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-broadcast" color="primary" class="me-2" size="small" />
+                <div>
+                  <div class="text-h6">{{ taskStore.liveTask.taskId }}</div>
+                  <div v-if="taskStore.liveTask.taskPath" class="text-caption text-medium-emphasis">
+                    {{ taskStore.liveTask.taskPath }}
+                  </div>
+                </div>
+              </div>
+              <StatusBadge :phase="taskStore.liveTask.phase" />
+            </v-card-title>
+            
+            <v-card-text class="pa-3">
+              <div v-if="taskStore.liveTask.pipeline" class="detail-item mb-2">
                 <v-icon icon="mdi-pipe" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Pipeline</div>
                   <v-chip size="small" variant="outlined">{{ taskStore.liveTask.pipeline }}</v-chip>
                 </div>
               </div>
-            </v-col>
-            
-            <v-col v-if="taskStore.liveTask.currentStep" cols="12" sm="6" md="3">
-              <div class="detail-item">
+              
+              <div v-if="taskStore.liveTask.currentStep" class="detail-item mb-2">
                 <v-icon icon="mdi-step-forward" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Current Step</div>
                   <v-chip size="small" variant="tonal" color="primary">{{ taskStore.liveTask.currentStep }}</v-chip>
                 </div>
               </div>
-            </v-col>
-            
-            <v-col cols="12" sm="6" md="3">
-              <div class="detail-item">
+              
+              <div class="detail-item mb-2">
                 <v-icon icon="mdi-clock-outline" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Duration</div>
                   <DurationDisplay :duration="taskStore.liveTask.stats?.totalDuration" />
                 </div>
               </div>
-            </v-col>
-            
-            <v-col cols="12" sm="6" md="3">
-              <div class="detail-item">
-                <v-icon icon="mdi-update" size="small" class="me-2" />
+              
+              <v-btn
+                :to="`/task/${taskStore.liveTask.taskId}`"
+                variant="outlined"
+                size="small"
+                block
+                class="mt-2"
+              >
+                <v-icon icon="mdi-open-in-new" size="small" class="me-1" />
+                View Details
+              </v-btn>
+            </v-card-text>
+          </v-card>
+          
+          <!-- Live Sequence Info -->
+          <v-card v-if="taskStore.liveSequence" class="live-sequence-card mb-4" density="compact">
+            <v-card-title class="d-flex justify-space-between align-center pa-3">
+              <div class="d-flex align-center">
+                <v-icon icon="mdi-broadcast" color="primary" class="me-2" size="small" />
                 <div>
-                  <div class="detail-label">Last Updated</div>
-                  <span class="text-caption">{{ formatDate(taskStore.liveTask.lastUpdate) }}</span>
+                  <div class="text-h6">{{ taskStore.liveSequence.sequenceId }}</div>
+                  <div v-if="taskStore.liveSequence.folderPath" class="text-caption text-medium-emphasis">
+                    {{ taskStore.liveSequence.folderPath }}
+                  </div>
                 </div>
               </div>
-            </v-col>
-          </v-row>
-          
-          <!-- Pipeline Steps for Live Task -->
-          <div v-if="taskStore.liveTask.steps && Object.keys(taskStore.liveTask.steps).length > 0" class="mt-4">
-            <h6 class="mb-3">Pipeline Progress</h6>
-            <PipelineSteps
-              :steps="taskStore.liveTask.steps"
-              :logs="taskStore.liveTask.logs"
-              :show-log-buttons="false"
-              :show-live-button="false"
-            />
-          </div>
-        </v-card-text>
-      </v-card>
-      
-      <!-- Live Log Viewer for Active Task -->
-      <v-card v-if="taskStore.liveTask.currentStep" class="mt-4">
-        <v-card-title>
-          <v-icon icon="mdi-broadcast" class="me-2" />
-          Live Logs - {{ taskStore.liveTask.currentStep }}
-        </v-card-title>
-        <v-card-text class="pa-0">
-          <LogViewer
-            :task-id="taskStore.liveTask.taskId"
-            :is-live-mode="true"
-          />
-        </v-card-text>
-      </v-card>
-    </div>
-    
-    <!-- Live Sequence Activity -->
-    <div v-if="taskStore.liveSequence">
-      <div class="d-flex align-center mb-4">
-        <v-icon icon="mdi-folder-multiple" class="me-2" />
-        <h2 class="text-h5">Live Sequence</h2>
-        <v-chip 
-          color="primary" 
-          variant="flat" 
-          size="small" 
-          class="ml-2 live-pulse"
-        >
-          LIVE
-        </v-chip>
-      </div>
-      
-      <v-card class="live-sequence-card mb-6">
-        <v-card-title class="d-flex justify-space-between align-center">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-broadcast" color="primary" class="me-3" />
-            <div>
-              <div class="text-h6">{{ taskStore.liveSequence.sequenceId }}</div>
-              <div v-if="taskStore.liveSequence.folderPath" class="text-caption text-medium-emphasis">
-                {{ taskStore.liveSequence.folderPath }}
-              </div>
-            </div>
-          </div>
-          
-          <div class="d-flex align-center gap-2">
-            <StatusBadge :phase="taskStore.liveSequence.phase" />
-            <v-btn
-              :to="`/sequence/${taskStore.liveSequence.sequenceId}`"
-              variant="outlined"
-              size="small"
-            >
-              <v-icon icon="mdi-open-in-new" size="small" class="me-1" />
-              Details
-            </v-btn>
-          </div>
-        </v-card-title>
-        
-        <v-card-text>
-          <v-row>
-            <v-col cols="12" sm="6" md="3">
-              <div class="detail-item">
+              <StatusBadge :phase="taskStore.liveSequence.phase" />
+            </v-card-title>
+            
+            <v-card-text class="pa-3">
+              <div class="detail-item mb-2">
                 <v-icon icon="mdi-format-list-numbered" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Total Tasks</div>
@@ -245,10 +166,8 @@
                   </v-chip>
                 </div>
               </div>
-            </v-col>
-            
-            <v-col v-if="taskStore.liveSequence.currentTaskPath" cols="12" sm="6" md="6">
-              <div class="detail-item">
+              
+              <div v-if="taskStore.liveSequence.currentTaskPath" class="detail-item mb-2">
                 <v-icon icon="mdi-play-circle" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Current Task</div>
@@ -257,68 +176,104 @@
                   </v-chip>
                 </div>
               </div>
-            </v-col>
-            
-            <v-col cols="12" sm="6" md="3">
-              <div class="detail-item">
+              
+              <div class="detail-item mb-2">
                 <v-icon icon="mdi-clock-outline" size="small" class="me-2" />
                 <div>
                   <div class="detail-label">Duration</div>
                   <DurationDisplay :duration="taskStore.liveSequence.stats?.totalDuration" />
                 </div>
               </div>
-            </v-col>
-          </v-row>
+              
+              <!-- Sequence Progress -->
+              <div v-if="sequenceTaskStats.total > 0" class="mt-3">
+                <div class="d-flex justify-space-between align-center mb-2">
+                  <span class="text-caption font-weight-medium">Progress</span>
+                  <span class="text-caption">
+                    {{ sequenceTaskStats.completed }}/{{ sequenceTaskStats.total }}
+                  </span>
+                </div>
+                
+                <v-progress-linear
+                  :model-value="sequenceProgressPercentage"
+                  height="8"
+                  rounded
+                  :color="getSequenceProgressColor()"
+                  class="mb-2"
+                />
+                
+                <div class="d-flex flex-wrap gap-1">
+                  <v-chip
+                    v-if="sequenceTaskStats.running > 0"
+                    size="x-small"
+                    variant="flat"
+                    color="primary"
+                  >
+                    {{ sequenceTaskStats.running }} running
+                  </v-chip>
+                  
+                  <v-chip
+                    v-if="sequenceTaskStats.completed > 0"
+                    size="x-small"
+                    variant="flat"
+                    color="success"
+                  >
+                    {{ sequenceTaskStats.completed }} done
+                  </v-chip>
+                  
+                  <v-chip
+                    v-if="sequenceTaskStats.failed > 0"
+                    size="x-small"
+                    variant="flat"
+                    color="error"
+                  >
+                    {{ sequenceTaskStats.failed }} failed
+                  </v-chip>
+                </div>
+              </div>
+              
+              <v-btn
+                :to="`/sequence/${taskStore.liveSequence.sequenceId}`"
+                variant="outlined"
+                size="small"
+                block
+                class="mt-3"
+              >
+                <v-icon icon="mdi-open-in-new" size="small" class="me-1" />
+                View Details
+              </v-btn>
+            </v-card-text>
+          </v-card>
           
-          <!-- Sequence Progress -->
-          <div v-if="sequenceTaskStats.total > 0" class="mt-4">
-            <div class="d-flex justify-space-between align-center mb-2">
-              <span class="text-subtitle-2">Sequence Progress</span>
-              <span class="text-caption">
-                {{ sequenceTaskStats.completed }}/{{ sequenceTaskStats.total }} completed
-              </span>
-            </div>
-            
-            <v-progress-linear
-              :model-value="sequenceProgressPercentage"
-              height="12"
-              rounded
-              :color="getSequenceProgressColor()"
-              class="mb-3"
-            />
-            
-            <div class="d-flex flex-wrap gap-2">
-              <v-chip
-                v-if="sequenceTaskStats.running > 0"
-                size="small"
-                variant="flat"
-                color="primary"
-              >
-                {{ sequenceTaskStats.running }} running
-              </v-chip>
-              
-              <v-chip
-                v-if="sequenceTaskStats.completed > 0"
-                size="small"
-                variant="flat"
-                color="success"
-              >
-                {{ sequenceTaskStats.completed }} completed
-              </v-chip>
-              
-              <v-chip
-                v-if="sequenceTaskStats.failed > 0"
-                size="small"
-                variant="flat"
-                color="error"
-              >
-                {{ sequenceTaskStats.failed }} failed
-              </v-chip>
-            </div>
-          </div>
-        </v-card-text>
-      </v-card>
-    </div>
+          <!-- Pipeline Steps -->
+          <v-card v-if="shouldShowPipelineSteps" density="compact">
+            <v-card-title class="pa-3">
+              <v-icon icon="mdi-format-list-checks" class="me-2" size="small" />
+              Pipeline Progress
+            </v-card-title>
+            <v-card-text class="pa-3">
+              <PipelineSteps
+                :steps="liveSteps"
+                :logs="liveLogs"
+                :show-log-buttons="false"
+                :show-live-button="false"
+              />
+            </v-card-text>
+          </v-card>
+          
+        </v-col>
+        
+        <!-- Main Log Viewer Column -->
+        <v-col cols="12" md="8" class="main-column">
+          <LogViewer
+            :task-id="liveTaskId"
+            :is-live-mode="true"
+            class="full-height-log"
+          />
+        </v-col>
+        
+      </v-row>
+    </v-container>
     
     <!-- Auto-refresh indicator -->
     <div class="text-center mt-8">
@@ -386,6 +341,23 @@ const getSequenceProgressColor = () => {
   if (sequenceTaskStats.value.completed === sequenceTaskStats.value.total) return 'success';
   return 'primary';
 };
+
+// Computed properties for two-column layout
+const shouldShowPipelineSteps = computed(() => {
+  return (taskStore.liveTask?.steps && Object.keys(taskStore.liveTask.steps).length > 0);
+});
+
+const liveSteps = computed(() => {
+  return taskStore.liveTask?.steps || {};
+});
+
+const liveLogs = computed(() => {
+  return taskStore.liveTask?.logs || {};
+});
+
+const liveTaskId = computed(() => {
+  return taskStore.liveTask?.taskId || '';
+});
 
 // Refresh live data from API
 const refreshData = async () => {
@@ -480,6 +452,34 @@ onUnmounted(() => {
   font-weight: 500;
   color: rgb(var(--v-theme-on-surface-variant));
   margin-bottom: 4px;
+}
+
+/* Two-column layout styles */
+.sidebar-column {
+  padding-right: 8px;
+}
+
+.main-column {
+  padding-left: 8px;
+}
+
+.full-height-log {
+  height: calc(100vh - 200px);
+  min-height: 500px;
+}
+
+/* Responsive adjustments for sidebar */
+@media (max-width: 960px) {
+  .sidebar-column,
+  .main-column {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  
+  .full-height-log {
+    height: auto;
+    min-height: 400px;
+  }
 }
 
 /* Responsive adjustments */
