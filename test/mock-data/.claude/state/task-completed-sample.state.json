@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "taskId": "task-completed-sample",
+  "taskPath": "claude-Tasks/completed-sample.md",
+  "phase": "done",
+  "currentStep": "review",
+  "steps": {
+    "plan": "done",
+    "implement": "done", 
+    "review": "done"
+  },
+  "tokenUsage": {
+    "claude-3-5-sonnet-20241022": {
+      "inputTokens": 15000,
+      "outputTokens": 4500,
+      "cacheCreationInputTokens": 18000,
+      "cacheReadInputTokens": 2000
+    }
+  },
+  "stats": {
+    "totalDuration": 123.45
+  },
+  "lastUpdate": "2025-08-15T10:00:00Z"
+}

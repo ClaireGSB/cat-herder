@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "sequenceId": "sequence-running-sample",
+  "phase": "running",
+  "currentTaskPath": "claude-Tasks/feature-A/02-implement.md",
+  "completedTasks": [
+    "claude-Tasks/feature-A/01-plan.md"
+  ],
+  "lastUpdate": "2025-08-15T11:00:00Z"
+}

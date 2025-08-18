@@ -1,246 +1,270 @@
-Of course. Tackling this in one go is a great approach, as it avoids throwaway work and gets you to the desired modern architecture faster. Migrating directly to Vue/Vuetify is the most efficient path.
 
-Here is the revised `PLAN.md` tailored for a direct migration.
 
-***
-
-# PLAN.md
+# PLAN.MD: Complete the Vue 3 Frontend Implementation (with Component Inventory)
 
 ## Title & Goal
 
-**Title:** Migrate Web Dashboard to a Modern Vue 3 & Vuetify Stack
+**Title:** Implement All UI Features for the Vue 3 Dashboard
 
-**Goal:** To replace the existing EJS server-rendered web dashboard with a high-performance, maintainable Single Page Application (SPA) using Vue 3, Vuetify for the UI, and Pinia for state management.
+**Goal:** To fully implement all the user-facing features from the original EJS dashboard into the new Vue 3 SPA, ensuring a feature-complete, real-time, and visually polished user experience.
 
 ---
 
 ## Description
 
-The current web dashboard, built with EJS and multiple vanilla JavaScript files, suffers from a poor user experience due to full-page reloads on data updates. Its scattered client-side logic makes it difficult to maintain and extend. This refactoring will address these issues by replacing the entire frontend with a modern SPA.
+The project has been successfully refactored to a monorepo structure with a new Vue 3 frontend application in `src/frontend`. The backend now serves a JSON API, and the frontend has a basic structure with views, routing, and a Pinia store.
 
-The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive component-based structure, **Pinia** for centralized state management, and **Vuetify** for a rich, pre-built component library. The Node.js/Express backend's role will shift from rendering HTML to serving a static `index.html` and providing a pure JSON API for the Vue application. This will completely eliminate page reloads, solve the status-syncing problem, and create a fast, modern, and highly maintainable frontend codebase.
+However, the UI is currently a shell. It is missing critical features and the existing components are not yet wired together. This plan outlines the remaining implementation steps to build out the UI, wire the components to the Pinia store, and re-enable all real-time features, including live log streaming. The final result will be a fast, modern, and fully functional dashboard that surpasses the old version in both performance and usability.
+
+Important: make sure to user the Playwright MCP to verify each step as you complete it. This will ensure that the implementation meets the requirements and is functional.
 
 ---
 
 ## Summary Checklist
 
--   [x] **1. Set Up New Frontend Development Environment:** Initialize a Vite + Vue 3 project within the repository and install all necessary dependencies (Vue, Vuetify, Pinia).
--   [x] **2. Isolate the Backend Source Code:** Create a `src/backend` directory and move all existing Node.js CLI source code into it to create a clean separation from the frontend.
--   [x] **3. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
--   [x] **4. Implement State Management with Pinia:** Create a central Pinia store to manage all application state, including tasks, sequences, and live activity data.
--   [x] **5. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
--   [x] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
--   [x] **7. Replace EJS Views with a Vue SPA:** Configure the Express server to serve the compiled Vue application and remove all EJS templates and old client-side JavaScript files.
--   [x] **8. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new monorepo structure, SPA architecture, and data flow.
+-   [x] **0. Create  Test Data for Verification:** Create a set of test data in the backend to simulate sequences and tasks for verification.
+-   [ ] **1. Implement the History View:** Populate the main dashboard page with lists of recent sequences and standalone tasks by integrating existing components.
+-   [ ] **2. Implement the Live Activity View:** Re-create the real-time monitoring page, including the live log viewer, by integrating and enhancing existing components.
+-   [ ] **3. Implement the Task Detail View:** Build the page that displays all information for a single task, wiring up the interaction between the steps list and the log viewer.
+-   [ ] **4. Implement the Sequence Detail View:** Build the page that displays all information for a sequence, including its list of associated tasks.
+-   [ ] **5. Implement Global UI Components:** Add shared components like breadcrumb navigation and global error/loading states to unify the user experience.
+-   [ ] **6. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the completed and fully functional SPA.
 
 ---
 
 ## Detailed Implementation Steps
 
-### 1. Set Up New Frontend Development Environment
+### 0. Create Test Data for Verification
 
-*   **Objective:** To create a dedicated, modern build environment for the new Vue application.
-*   **Task:**
-    1.  Create a new directory: `src/frontend`.
-    2.  Inside `src/frontend`, scaffold a new project using Vite: `npm create vite@latest . -- --template vue-ts`.
-    3.  Install necessary dependencies: `npm install vue-router pinia vuetify`.
-    4.  Follow the Vuetify installation guide to integrate it with Vite.
+Before starting the implementation, we must create a set of mock data. This is essential for the AI agent to visually verify its work using Playwright MCP. This data will simulate the state and log files that are normally generated when a user runs the tool.
 
-### 2. Isolate the Backend Source Code
-
-*   **Objective:** To create a logical and scalable file structure that explicitly separates the backend and frontend applications, improving clarity and maintainability.
-*   **Task:**
-    1.  **Create Directory:** In the `src/` folder, create a new directory named `backend`.
-    2.  **Move Directories:** Move the following directories from `src/` into the new `src/backend/` directory:
-        *   `tools/`
-        *   `init/`
-        *   `utils/`
-        *   `dot-claude/`
-        *   `public/`
-        *   `tasks/`
-        *   `templates/`
-    3.  **Move Files:** Move the following files from `src/` into `src/backend/`:
-        *   `cli-actions.ts`
-        *   `config.ts`
-        *   `index.ts`
-        *   `init.ts`
-    4.  **Update TypeScript Config:** In the **root** `tsconfig.json`, update the paths to point to the new backend source directory.
-        *   **Before:** `"rootDir": "./src"`, `"include": ["src/**/*"]`
-        *   **After:** `"rootDir": "./src/backend"`, `"include": ["src/backend/**/*"]`
-    5.  **Check Build Scripts:** In the **root** `package.json`, check if any scripts in the `"scripts"` section reference paths like `src/index.ts`. Update them to point to `src/backend/index.ts` if needed.
-    6.  **Verify Imports:** After moving the files, some relative import paths inside the backend code might be broken. Run `npm run build` from the root directory. The TypeScript compiler (`tsc`) will tell you exactly which files have incorrect import paths so you can fix them.
-    7.  **Test:** Once it builds successfully, run a simple command like `claude-project validate` from your terminal to ensure the CLI is still functioning correctly.
-
-### 3. Convert Backend Routes to a Data API
-
-*   **Objective:** To decouple the backend from the frontend by making it serve pure data.
-*   **Task:** Modify the routes in `src/tools/web/routes.ts`. Instead of calling `res.render()`, they should now call `res.json()`.
-
-*   **Code Snippet (`src/tools/web/routes.ts` - before/after):**
-    ```typescript
-    // BEFORE
-    router.get("/history", async (_req: Request, res: Response) => {
-      // ... logic to get tasks and sequences
-      res.render("history", { sequences, standaloneTasks, helpers });
-    });
-
-    // AFTER
-    router.get("/api/history", async (_req: Request, res: Response) => {
-      const journal = await readJournal();
-      const tasks = buildTaskHistoryFromJournal(journal, stateDir);
-      const sequences = buildSequenceHistoryFromJournal(journal, stateDir);
-      res.json({ tasks, sequences });
-    });
+**1. Create the Mock Data Directory Structure:**
+*   Create a new directory at the project root: `test/mock-data/`.
+*   Inside `test/mock-data/`, replicate the structure of a real `.claude` directory:
+    ```
+    test/mock-data/
+    └── .claude/
+        ├── state/
+        └── logs/
     ```
 
-### 4. Implement State Management with Pinia
-
-*   **Objective:** To create a single, reactive source of truth for the entire frontend application.
-*   **Task:** Create a Pinia store for tasks and sequences in `src/frontend/src/stores/taskStore.js`.
-
-*   **Code Snippet (`src/frontend/src/stores/taskStore.js`):**
-    ```javascript
-    import { defineStore } from 'pinia';
-
-    export const useTaskStore = defineStore('tasks', {
-      state: () => ({
-        tasks: [],
-        sequences: [],
-        liveTask: null,
-        isLive: false,
-      }),
-      actions: {
-        updateFromHistory(historyData) {
-          this.tasks = historyData.tasks;
-          this.sequences = historyData.sequences;
-        },
-        handleTaskUpdate(taskData) {
-          // Logic to update a single task in the `tasks` array
-          // or set it as the new `liveTask`.
-          this.liveTask = taskData;
-          this.isLive = taskData.phase === 'running';
-        },
-      },
-    });
-    ```
-
-### 5. Integrate WebSocket Client with the Pinia Store
-
-*   **Objective:** To make real-time updates from the server automatically reactive in the UI.
-*   **Task:** Create a WebSocket service that imports the Pinia store and calls actions when messages arrive.
-
-*   **Code Snippet (`src/frontend/src/services/websocket.js`):**
-    ```javascript
-    import { useTaskStore } from '@/stores/taskStore';
-
-    export function initializeWebSocket() {
-      const taskStore = useTaskStore();
-      const ws = new WebSocket(`ws://${window.location.host}/ws`);
-
-      ws.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-        switch (message.type) {
-          case 'task_update':
-            // The WebSocket's only job is to call the Pinia action.
-            // Vue's reactivity does the rest.
-            taskStore.handleTaskUpdate(message.data);
-            break;
-          // ... handle other message types
+**2. Create Mock State Files:**
+*   **File:** `test/mock-data/.claude/state/task-completed-sample.state.json`
+*   **Content:** This file simulates a successfully completed task. It **must include a `tokenUsage` object** so the `TokenUsageCard` can be tested.
+    ```json
+    {
+      "version": 2,
+      "taskId": "task-completed-sample",
+      "taskPath": "claude-Tasks/completed-sample.md",
+      "phase": "done",
+      "currentStep": "review",
+      "steps": { "plan": "done", "implement": "done", "review": "done" },
+      "tokenUsage": {
+        "claude-3-5-sonnet-20241022": {
+          "inputTokens": 15000, "outputTokens": 4500,
+          "cacheCreationInputTokens": 18000, "cacheReadInputTokens": 2000
         }
-      };
-    }
-    ```
-
-### 6. Build Reusable UI Components with Vue & Vuetify
-
-*   **Objective:** To build the UI with maintainable, self-contained components.
-*   **Task:** Create Vue components in `src/frontend/src/components/`. Start with a simple `StatusBadge.vue`.
-
-*   **Code Snippet (`src/frontend/src/components/StatusBadge.vue`):**
-    ```vue
-    <template>
-      <v-chip :color="color" size="small" label>
-        <v-icon :icon="icon" start />
-        {{ phase }}
-      </v-chip>
-    </template>
-
-    <script setup>
-    import { computed } from 'vue';
-
-    const props = defineProps({
-      phase: {
-        type: String,
-        required: true,
       },
-    });
-
-    const color = computed(() => {
-      switch (props.phase) {
-        case 'running': return 'blue';
-        case 'done': return 'success';
-        case 'failed': return 'error';
-        default: return 'grey';
-      }
-    });
-
-    // Compute icon based on phase as well...
-    </script>
+      "stats": { "totalDuration": 123.45 },
+      "lastUpdate": "2025-08-15T10:00:00Z"
+    }
     ```
-
-### 7. Replace EJS Views with a Vue SPA
-
-*   **Objective:** To complete the migration by making the web server serve the new Vue app.
-*   **Task:**
-    1.  Configure `src/tools/web.ts` to serve the static files produced by Vite's build process.
-    2.  Add a catch-all route to serve `index.html` for client-side routing.
-    3.  Delete the `src/templates/web` and `src/public/js` directories.
-
-*   **Code Snippet (`src/tools/web.ts`):**
-    ```typescript
-    import express from "express";
-    import path from "node:path";
-    
-    export async function startWebServer() {
-      // ...
-      const app = express();
-      const server = createServer(app);
-      
-      const frontendDistPath = path.resolve(projectRoot, 'dist/frontend'); // Or wherever Vite builds to
-      
-      // Serve the static assets (JS, CSS, images)
-      app.use(express.static(frontendDistPath));
-
-      // Serve the API routes
-      app.use('/api', createApiRouter(stateDir, logsDir, config));
-
-      // For any other GET request, serve the Vue app's index.html
-      // This is crucial for client-side routing to work.
-      app.get('*', (req, res) => {
-        res.sendFile(path.join(frontendDistPath, 'index.html'));
-      });
-      
-      setupWebSockets(server, stateDir, logsDir);
-      // ... server.listen ...
+*   **File:** `test/mock-data/.claude/state/sequence-running-sample.state.json`
+*   **Content:** This simulates a running sequence.
+    ```json
+    {
+      "version": 1,
+      "sequenceId": "sequence-running-sample",
+      "phase": "running",
+      "currentTaskPath": "claude-Tasks/feature-A/02-implement.md",
+      "completedTasks": ["claude-Tasks/feature-A/01-plan.md"],
+      "lastUpdate": "2025-08-15T11:00:00Z"
     }
     ```
 
-### 8. Update Project Documentation
+**3. Create Mock Log Files:**
+*   **Directory:** Create `test/mock-data/.claude/logs/task-completed-sample/`
+*   **File:** `test/mock-data/.claude/logs/task-completed-sample/02-implement.reasoning.log`
+*   **Content:** A simple text file to test the log viewer.
+    ```log
+    [ASSISTANT] Starting the implementation step.
+    [TOOL_USE] Reading PLAN.md to understand the requirements.
+    [TOOL_RESULT] Read file content successfully.
+    [ASSISTANT] The plan is clear. I will now write the necessary code.
+    ```
 
-*   **Objective:** To ensure the project's documentation accurately reflects its new architecture.
-*   **Task:**
-    *   **Update `ARCHITECTURE.MD`:**
-        *   In the "Interface Layer" section, replace the description of the Web Dashboard. Describe it as a Vue 3 Single Page Application.
-        *   Mention the new `src/frontend` directory and its purpose.
-        *   Detail the build process using Vite.
-        *   Update the data flow diagram to show that the `Web Dashboard` now communicates with a `Backend API` via HTTP (for initial data) and WebSockets (for real-time updates), which in turn reads from the `State Layer`.
-    *   **Update `README.md`:**
-        *   Add a section under "How to Test Locally (for Developers)" explaining how to run the frontend development server (`npm run dev` in `src/frontend`) alongside the main application for a better development experience.
+**4. Create a Script to Prepare the Mocks:**
+*   Create a new script file: `tools/setup-mocks.sh`
+*   **Content:** This script will be used in the verification loop.
+    ```bash
+    #!/bin/bash
+    
+    # 1. Remove any old mock data from the project root
+    echo "Cleaning up old mock data..."
+    rm -rf .claude
+    
+    # 2. Copy the fresh, consistent mock data to the root
+    echo "Copying fresh mock data..."
+    cp -r test/mock-data/.claude .
+    
+    echo "Mock data is ready."
+    ```
+*   Make the script executable: `chmod +x tools/setup-mocks.sh`
 
 ---
 
-## Error Handling & Warnings
+## The AI's Implementation & Verification Loop
 
-*   **API Failures:** The Vue app should handle API fetch errors gracefully. For example, if the `/api/history` call fails, the UI should display a "Could not load run history" message instead of a blank screen.
-*   **WebSocket State:** The UI should clearly indicate the WebSocket connection status (e.g., a small icon showing connected, reconnecting, or disconnected).
-*   **Build Process Errors:** The `README.md` should instruct developers that a frontend build (`npm run build` in `src/frontend`) is required after making any changes to the UI before running the production `claude-project web` command.
+To implement the plan, the agent will follow this repeatable script. This ensures a consistent environment for every Playwright check.
+
+1.  **AI Action:** Make code changes to files in `src/frontend/`.
+2.  **Run Verification Script:** Execute the following commands from the project root:
+
+```bash
+#!/bin/bash
+
+# --- PREPARE THE ENVIRONMENT ---
+echo "Step 1: Setting up mock data..."
+./tools/setup-mocks.sh
+if [ $? -ne 0 ]; then echo "Mock setup failed!"; exit 1; fi
+
+# --- BUILD THE FRONTEND ---
+echo "Step 2: Building the Vue application..."
+npm run build --prefix src/frontend
+if [ $? -ne 0 ]; then echo "Frontend build failed!"; exit 1; fi
+echo "Build successful."
+
+# --- RUN THE SERVER ---
+echo "Step 3: Starting the web server in the background..."
+claude-project web &
+SERVER_PID=$!
+echo "Server started with PID: $SERVER_PID. Waiting for it to initialize..."
+sleep 3
+
+# --- VERIFY THE UI ---
+echo "Step 4: Running Playwright MCP to verify UI..."
+# (Agent invokes Playwright MCP here, e.g., to view http://localhost:5177/task/task-completed-sample)
+
+# --- CLEAN UP ---
+echo "Step 5: Shutting down the web server..."
+kill $SERVER_PID
+wait $SERVER_PID 2>/dev/null
+echo "Server stopped. Loop complete."
+```
+
+---
+
+### 1. Implement the History View
+
+*   **Objective:** To create a functional main dashboard page that serves as the primary entry point, displaying all past and current runs.
+*   **File to Modify:** `src/frontend/src/views/HistoryView.vue`
+*   **Existing Components to Use:**
+    *   `SequenceCard.vue` (Path: `src/frontend/src/components/SequenceCard.vue`)
+    *   `TaskCard.vue` (Path: `src/frontend/src/components/TaskCard.vue`)
+*   **Component Layout:**
+    1.  **Header:** A main title "Run History" (`<h1 class="text-h4">`).
+    2.  **Live Activity Banner:** An alert (`<v-alert>`) that should only be visible if `taskStore.hasLiveActivity` is `true`. It should contain a link to the `/live` page.
+    3.  **Sequences Section:**
+        *   A sub-header "Recent Sequences" (`<h2 class="text-h5">`).
+        *   A container (`<div>`) that uses `v-for` to loop through `taskStore.sequences` and renders an instance of the existing **`<SequenceCard>`** for each item.
+        *   An empty state message inside a `<v-card>` if `taskStore.sequences` is empty.
+    4.  **Standalone Tasks Section:**
+        *   A sub-header "Recent Standalone Tasks" (`<h2 class="text-h5">`).
+        *   A container (`<div>`) that uses `v-for` to loop through `taskStore.standaloneTasks` and renders an instance of the existing **`<TaskCard>`** for each item.
+        *   An empty state message inside a `<v-card>` if `taskStore.standaloneTasks` is empty.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   When the page loads, it should display two sections: "Recent Sequences" and "Recent Standalone Tasks".
+    *   Each sequence is rendered using a `SequenceCard` component.
+    *   Each task is rendered using a `TaskCard` component.
+    *   If a task is running, a "Live Activity Detected" banner is visible.
+
+### 2. Implement the Live Activity View
+
+*   **Objective:** To provide a real-time view of a running task, including streaming its logs directly to the user.
+*   **File to Modify:** `src/frontend/src/views/LiveActivityView.vue`
+*   **Existing Components to Use:**
+    *   `PipelineSteps.vue` (Path: `src/frontend/src/components/PipelineSteps.vue`)
+    *   `LogViewer.vue` (Path: `src/frontend/src/components/LogViewer.vue`)
+    *   `StatusBadge.vue` (Path: `src/frontend/src/components/StatusBadge.vue`)
+*   **Component Layout:**
+    1.  **Header:** "Live Activity" title.
+    2.  **Empty State (Conditional):** If `taskStore.hasLiveActivity` is `false`, display a large message "No Live Activity".
+    3.  **Live Content (Conditional):** If `taskStore.hasLiveActivity` is `true`:
+        *   **Task/Sequence Info:** A `<v-card>` displaying the details of the `taskStore.liveTask` (or `liveSequence`), including a **`<StatusBadge>`**.
+        *   **Pipeline Progress:** An instance of the existing **`<PipelineSteps>`** component showing the status of each step for the `liveTask`.
+        *   **Live Log Viewer:** An instance of the existing **`<LogViewer>`** component. This component needs to be modified to accept and display streaming text content from the WebSocket.
+*   **Implementation Details:**
+    *   Enhance the WebSocket service (`websocket.ts`) and the Pinia store (`taskStore.ts`) to handle real-time log content. The store should have a new state property, e.g., `liveLogContent: string`.
+    *   Modify the **`<LogViewer>`** component to check if it's in "live" mode. If so, it should display the `taskStore.liveLogContent` instead of fetching a static log file.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   When a task is running, the page shows the task's details and its pipeline progress using the `PipelineSteps` component.
+    *   The `LogViewer` component is visible and actively streaming text output from the current step's log. New text appears without the page reloading.
+    *   When no task is running, the "No Live Activity" message is displayed.
+
+### 3. Implement the Task Detail View
+
+*   **Objective:** To build the comprehensive view for a single task, wiring up the interaction between components.
+*   **File to Modify:** `src/frontend/src/views/TaskDetailView.vue`
+*   **Existing Components to Use:**
+    *   `BreadcrumbNav.vue` (Path: `src/frontend/src/components/BreadcrumbNav.vue`)
+    *   `StatusBadge.vue` (Path: `src/frontend/src/components/StatusBadge.vue`)
+    *   `PipelineSteps.vue` (Path: `src/frontend/src/components/PipelineSteps.vue`)
+    *   `LogViewer.vue` (Path: `src/frontend/src/components/LogViewer.vue`)
+    *   `TokenUsageCard.vue` (Path: `src/frontend/src/components/TokenUsageCard.vue`)
+*   **Component Layout:**
+    1.  **Navigation:** An instance of **`<BreadcrumbNav>`** at the top.
+    2.  **Task Overview:** A main `<v-card>` showing the task's core details and an instance of **`<StatusBadge>`**.
+    3.  **Pipeline Steps & Logs:**
+        *   A `<v-card>` containing an instance of the existing **`<PipelineSteps>`** component.
+        *   **This component must be modified** to render clickable buttons (`<v-btn>`) for each available log type on every step.
+    4.  **Log Viewer:** An instance of the existing **`<LogViewer>`** component.
+    5.  **Token Usage:** An instance of the existing **`<TokenUsageCard>`**, conditionally rendered with `v-if="task.tokenUsage"`.
+*   **Implementation Details:**
+    *   On mount, fetch data from `/api/task/:id`.
+    *   Create a local `ref` called `selectedLog` in the view's script.
+    *   The `<PipelineSteps>` component should emit an event when a log button is clicked. This view will listen for that event and update `selectedLog`.
+    *   The `<LogViewer>` component will receive `selectedLog` as a prop, which will trigger it to fetch and display the correct log file.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   A list of pipeline steps is visible, rendered by `PipelineSteps`.
+    *   Clicking the "Reasoning" button on a step loads the correct log content into the `LogViewer` component.
+    *   The `TokenUsageCard` is visible for completed tasks.
+
+### 4. Implement the Sequence Detail View
+
+*   **Objective:** To build the detailed view for a sequence, including its list of associated tasks.
+*   **File to Modify:** `src/frontend/src/views/SequenceDetailView.vue`
+*   **Existing Components to Use:**
+    *   `BreadcrumbNav.vue` (Path: `src/frontend/src/components/BreadcrumbNav.vue`)
+    *   `StatusBadge.vue` (Path: `src/frontend/src/components/StatusBadge.vue`)
+    *   `TaskCard.vue` (Path: `src/frontend/src/components/TaskCard.vue`)
+    *   `TokenUsageCard.vue` (Path: `src/frontend/src/components/TokenUsageCard.vue`)
+*   **Component Layout:**
+    1.  **Navigation:** An instance of **`<BreadcrumbNav>`**.
+    2.  **Sequence Overview:** A main `<v-card>` with the sequence's details, progress bar, and a **`<StatusBadge>`**.
+    3.  **Task List:** A sub-header "Tasks in this Sequence" followed by a container that uses `v-for` to render an instance of the existing **`<TaskCard>`** for each task in the sequence.
+    4.  **Token Usage:** An instance of the existing **`<TokenUsageCard>`** for the sequence's aggregated token usage.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The page displays the details for the specified sequence.
+    *   A list of individual `TaskCard` components is displayed, one for each task in the sequence.
+    *   Clicking a task card navigates to that task's detail page.
+
+### 5. Implement Global UI Components
+
+*   **Objective:** To improve the overall application experience with shared, consistent UI elements.
+*   **Files to Modify:** `App.vue`, `stores/taskStore.ts`.
+*   **Existing Components to Use:**
+    *   `BreadcrumbNav.vue` (Path: `src/frontend/src/components/BreadcrumbNav.vue`)
+*   **Implementation Details:**
+    1.  **Global Error Banner:** In `App.vue`, add a `<v-alert type="error">` at the top of the main content area, controlled by `v-if="taskStore.error"`.
+    2.  **Loading Indicators:** Use `v-if="taskStore.isLoading"` in views like `HistoryView` to show a `<v-progress-linear indeterminate>` while fetching data.
+    3.  **Breadcrumbs:** Ensure the **`<BreadcrumbNav>`** component is correctly integrated into the detail views and dynamically builds its items based on route params and fetched data.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   If an API call fails, a red error banner appears at the top of the page.
+    *   When viewing a task that belongs to a sequence, the breadcrumb bar shows links for "History" and the parent sequence.
+
+### 6. Update Project Documentation
+
+*   **Objective:** To ensure the documentation reflects the completed architecture.
+*   **File to Modify:** `ARCHITECTURE.MD` and `README.md`.
+*   **Acceptance Criteria (for Playwright MCP):**
+    *   The documentation correctly describes the final state of the project.
