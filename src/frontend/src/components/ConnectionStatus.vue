@@ -12,10 +12,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useTaskStore } from '@/stores/taskStore'
 import { webSocketService, ConnectionState } from '@/services/websocket'
-
-const taskStore = useTaskStore()
 const connectionState = ref<ConnectionState>(ConnectionState.DISCONNECTED)
 
 // Update connection state periodically
@@ -89,11 +86,11 @@ onUnmounted(() => {
 })
 
 // Force reconnect when clicked (useful for debugging)
-const handleClick = () => {
-  if (connectionState.value === ConnectionState.ERROR || connectionState.value === ConnectionState.DISCONNECTED) {
-    webSocketService.forceReconnect()
-  }
-}
+// const handleClick = () => {
+//   if (connectionState.value === ConnectionState.ERROR || connectionState.value === ConnectionState.DISCONNECTED) {
+//     webSocketService.forceReconnect()
+//   }
+// }
 </script>
 
 <style scoped>

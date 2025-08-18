@@ -104,7 +104,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+// import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import type { TaskStatus } from '@/stores/types';
 import StatusBadge from './StatusBadge.vue';

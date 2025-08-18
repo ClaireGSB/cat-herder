@@ -6,13 +6,15 @@ interface WebSocketMessage {
   data: TaskDetails | SequenceDetails | LiveActivity;
 }
 
-export enum ConnectionState {
-  CONNECTING = 'connecting',
-  CONNECTED = 'connected',
-  DISCONNECTED = 'disconnected',
-  RECONNECTING = 'reconnecting',
-  ERROR = 'error'
-}
+export const ConnectionState = {
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+  RECONNECTING: 'reconnecting',
+  ERROR: 'error'
+} as const;
+
+export type ConnectionState = typeof ConnectionState[keyof typeof ConnectionState];
 
 class WebSocketService {
   private ws: WebSocket | null = null;
@@ -190,6 +192,11 @@ class WebSocketService {
 
 // Export a singleton instance
 export const webSocketService = new WebSocketService();
+
+// Export convenience function for initialization
+export const initializeWebSocket = () => {
+  webSocketService.initialize();
+};
 
 // Export the service class for testing
 export { WebSocketService };

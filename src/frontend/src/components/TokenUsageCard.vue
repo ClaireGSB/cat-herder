@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+// import { computed } from 'vue';
 
 export interface TokenUsage {
   inputTokens?: number;
@@ -78,7 +78,8 @@ export interface TokenUsageCardProps {
   tokenUsage?: Record<string, TokenUsage> | null;
 }
 
-const props = defineProps<TokenUsageCardProps>();
+// const props = defineProps<TokenUsageCardProps>();
+defineProps<TokenUsageCardProps>();
 
 const formatTokenCount = (count?: number): string => {
   if (!count || count === 0) return '0';

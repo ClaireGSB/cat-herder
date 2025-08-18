@@ -191,10 +191,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { ref, computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { useTaskStore } from '@/stores/taskStore';
-import type { TaskDetails } from '@/stores/types';
+import type { TaskDetails, SelectedLog } from '@/stores/types';
 import StatusBadge from '@/components/StatusBadge.vue';
 import DurationDisplay from '@/components/DurationDisplay.vue';
 import PipelineSteps from '@/components/PipelineSteps.vue';
@@ -203,16 +203,16 @@ import TokenUsageCard from '@/components/TokenUsageCard.vue';
 import BreadcrumbNav from '@/components/BreadcrumbNav.vue';
 
 const route = useRoute();
-const router = useRouter();
+// const router = useRouter();
 const taskStore = useTaskStore();
 
 const taskId = computed(() => route.params.id as string);
 const task = ref<TaskDetails | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const selectedLog = ref<{ step: string; type: string } | null>(null);
+const selectedLog = ref<SelectedLog | null>(null);
 const logViewerRef = ref<InstanceType<typeof LogViewer> | null>(null);
-const showDebugInfo = ref(process.env.NODE_ENV === 'development');
+const showDebugInfo = ref(import.meta.env.DEV);
 
 // Check if this task is currently live
 const isLive = computed(() => {
@@ -243,7 +243,7 @@ const loadTaskDetails = async () => {
 
 // Handle log loading from pipeline steps
 const onLoadLog = (stepName: string, logType: string) => {
-  selectedLog.value = { step: stepName, type: logType };
+  selectedLog.value = { step: stepName, type: logType as 'raw' | 'log' | 'reasoning' };
   
   // Tell the log viewer to select this log type
   if (logViewerRef.value) {

@@ -58,7 +58,7 @@ const router = createRouter({
 })
 
 // Navigation guards
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // Set page title based on route meta
   if (to.meta?.title) {
     document.title = `${to.meta.title} - Claude Project Dashboard`

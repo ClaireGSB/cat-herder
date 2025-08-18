@@ -97,24 +97,24 @@
             </v-btn>
           </div>
           
-          <div v-if="step.duration" class="step-duration">
+          <div v-if="(step as any).duration" class="step-duration">
             <v-icon icon="mdi-clock-outline" size="x-small" class="me-1" />
-            <DurationDisplay :duration="step.duration" />
+            <DurationDisplay :duration="(step as any).duration" />
           </div>
           
-          <div v-if="step.description" class="step-description text-caption text-medium-emphasis">
-            {{ step.description }}
+          <div v-if="(step as any).description" class="step-description text-caption text-medium-emphasis">
+            {{ (step as any).description }}
           </div>
           
           <!-- Error message for failed steps -->
           <v-alert
-            v-if="step.status === 'failed' && step.error"
+            v-if="step.status === 'failed' && (step as any).error"
             type="error"
             variant="tonal"
             density="compact"
             class="mt-2"
           >
-            {{ step.error }}
+            {{ (step as any).error }}
           </v-alert>
         </div>
       </div>

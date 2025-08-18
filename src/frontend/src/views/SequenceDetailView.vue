@@ -199,7 +199,7 @@
             <TaskCard
               v-for="task in sequence.tasks"
               :key="task.taskId"
-              :task="task"
+              :task="task as any"
               :is-live="isLiveTask(task.taskId)"
             />
           </div>
@@ -280,7 +280,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute } from 'vue-router';
 import { useTaskStore } from '@/stores/taskStore';
 import type { SequenceDetails } from '@/stores/types';
 import StatusBadge from '@/components/StatusBadge.vue';
@@ -290,14 +290,14 @@ import TokenUsageCard from '@/components/TokenUsageCard.vue';
 import BreadcrumbNav from '@/components/BreadcrumbNav.vue';
 
 const route = useRoute();
-const router = useRouter();
+// const router = useRouter();
 const taskStore = useTaskStore();
 
 const sequenceId = computed(() => route.params.id as string);
 const sequence = ref<SequenceDetails | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
-const showDebugInfo = ref(process.env.NODE_ENV === 'development');
+const showDebugInfo = ref(import.meta.env.DEV);
 
 // Check if this sequence is currently live
 const isLive = computed(() => {

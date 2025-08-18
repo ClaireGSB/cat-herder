@@ -4,6 +4,8 @@
 export interface TaskStatus {
   taskId: string;
   taskPath: string;
+  filename?: string;
+  status?: string;
   phase: string;
   currentStep?: string;
   lastUpdate: string;
@@ -18,8 +20,17 @@ export interface TaskStatus {
   parentSequenceId?: string;
 }
 
+export interface PipelineStep {
+  name: string;
+  status: 'running' | 'done' | 'failed' | 'pending';
+  duration?: number;
+  description?: string;
+  error?: string;
+  logs?: any;
+}
+
 export interface TaskDetails extends TaskStatus {
-  steps?: Array<{ name: string; status: string; duration?: number }>;
+  steps?: PipelineStep[];
   logs?: {
     [stepName: string]: {
       log?: string;
@@ -27,6 +38,11 @@ export interface TaskDetails extends TaskStatus {
       raw?: string;
     };
   };
+}
+
+export interface SelectedLog {
+  step: string;
+  type: 'raw' | 'log' | 'reasoning';
 }
 
 export interface SequenceTaskInfo {
@@ -51,6 +67,7 @@ export interface SequenceStatus {
   branch?: string;
   folderPath?: string;
   currentTaskPath?: string;
+  tasks?: SequenceTaskInfo[];
 }
 
 export interface SequenceDetails extends SequenceStatus {

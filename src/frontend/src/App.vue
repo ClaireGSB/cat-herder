@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useTaskStore } from '@/stores/taskStore'
 import { initializeWebSocket } from '@/services/websocket'
 
-const router = useRouter()
 const route = useRoute()
 const taskStore = useTaskStore()
 const drawer = ref(false)

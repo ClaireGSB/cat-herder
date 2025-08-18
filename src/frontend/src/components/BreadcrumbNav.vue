@@ -11,8 +11,8 @@
         class="breadcrumb-item"
       >
         <v-icon 
-          v-if="item.icon" 
-          :icon="item.icon" 
+          v-if="(item as any).icon" 
+          :icon="(item as any).icon" 
           size="small" 
           class="me-1" 
         />

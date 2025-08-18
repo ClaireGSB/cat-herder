@@ -16,12 +16,17 @@ export async function startWebServer() {
   const app = express();
   const server = createServer(app);
   
-  app.set("view engine", "ejs");
-  app.set("views", path.resolve(new URL("../templates/web", import.meta.url).pathname));
-  app.use(express.static(path.resolve(new URL("../public", import.meta.url).pathname)));
+  // Serve Vue SPA static files
+  const frontendDistPath = path.resolve(projectRoot, "src/frontend/dist");
+  app.use(express.static(frontendDistPath));
 
   // Use the router from routes.ts
   app.use(createRouter(stateDir, logsDir, config));
+
+  // Catch-all handler for client-side routing - must be after API routes
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(frontendDistPath, 'index.html'));
+  });
 
   // Set up WebSockets from websockets.ts
   setupWebSockets(server, stateDir, logsDir);

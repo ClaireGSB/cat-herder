@@ -33,7 +33,7 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "build": "rm -rf dist && npm run build:frontend && tsc -p tsconfig.json && cp -r src/backend/dot-claude dist/ && cp -r src/backend/tasks dist/ && cp -r src/backend/templates dist/ && cp -r src/backend/public dist/ && cp -r src/frontend/dist dist/frontend && chmod +x dist/index.js",
+    "build": "rm -rf dist && npm run build:frontend && tsc -p tsconfig.json && cp -r src/backend/dot-claude dist/ && cp -r src/backend/tasks dist/ && cp -r src/backend/templates dist/ && cp -r src/frontend/dist dist/frontend && chmod +x dist/index.js",
     "build:frontend": "cd src/frontend && npm run build",
     "dev": "tsx src/backend/index.ts",
     "dev:frontend": "cd src/frontend && npm run dev",
