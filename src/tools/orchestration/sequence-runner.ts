@@ -7,7 +7,7 @@ import { getConfig, getProjectRoot } from "../../config.js";
 import { folderPathToSequenceId, taskPathToTaskId } from "../../utils/id-generation.js";
 import { ensureCorrectGitBranchForSequence } from "./git.js";
 import { executePipelineForTask } from "./pipeline-runner.js";
-import { InterruptedError } from "./step-runner.js";
+import { InterruptedError } from "./errors.js";
 
 /**
  * Finds the next available task to execute in a sequence.

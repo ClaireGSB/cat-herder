@@ -150,9 +150,6 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
     writeJsonAtomic(file, s);
 }
 
-// Re-export ID generation functions from utils
-export { taskPathToTaskId, folderPathToSequenceId } from "../utils/id-generation.js";
-
 // Journal utility functions for run-journal.json
 
 // Helper to get the journal file path

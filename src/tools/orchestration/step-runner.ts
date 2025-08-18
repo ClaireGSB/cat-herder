@@ -2,16 +2,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { runStreaming, killActiveProcess } from "../proc.js";
-import { updateStatus, readStatus } from "../status.js";
+import { updateStatus, readStatus, updateSequenceStatus } from "../status.js"; 
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
+import { InterruptedError } from "./errors.js";
 
-export class InterruptedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "InterruptedError";
-  }
-}
 
 // Global state for graceful shutdown handling
 let isInterrupted = false;
@@ -123,7 +118,6 @@ export async function executeStep(
           });
 
           if (sequenceStatusFile) {
-            const { updateSequenceStatus } = await import("../status.js");
             updateSequenceStatus(sequenceStatusFile, s => {
               (s.phase as any) = "waiting_for_reset";
               if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };

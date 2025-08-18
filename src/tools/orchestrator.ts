@@ -7,7 +7,7 @@ import { validatePipeline } from "./validator.js";
 import { taskPathToTaskId } from "../utils/id-generation.js";
 import { ensureCorrectGitBranch } from "./orchestration/git.js";
 import { executePipelineForTask } from "./orchestration/pipeline-runner.js";
-import { InterruptedError } from "./orchestration/step-runner.js";
+import { InterruptedError } from "./orchestration/errors.js";
 
 // Re-export the sequence runner for backward compatibility
 export { runTaskSequence } from "./orchestration/sequence-runner.js";
