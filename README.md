@@ -170,15 +170,11 @@ Your test environment is now ready.
 
 This is the loop you will follow every time you make changes to `claude-project` and want to test them.
 
-1.  **Rebuild Your Tool:** After saving changes in your `claude-project` source code, you must rebuild both the backend and frontend.
+1.  **Rebuild Your Tool:** After saving changes in your `claude-project` source code, you must rebuild the package.
 ```bash
 # In your claude-project repository root
 npm run build
-
-# If you made frontend changes, also build the Vue app
-cd src/frontend
-npm run build
-cd ../..
+# This automatically builds both backend TypeScript and frontend Vue app
 ```
 
 2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
@@ -841,6 +837,8 @@ npm run build
 # The compiled files will be in src/frontend/dist/
 # The main web server will serve these files
 ```
+
+**Important**: The frontend files are automatically built and bundled with the `claude-project` package during the build process. When users run `claude-project web` in their projects, the web server serves the pre-built frontend files from the installed package, not from their project directory.
 
 #### Architecture
 The frontend uses:

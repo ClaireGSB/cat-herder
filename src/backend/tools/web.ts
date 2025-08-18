@@ -16,8 +16,8 @@ export async function startWebServer() {
   const app = express();
   const server = createServer(app);
   
-  // Serve Vue SPA static files
-  const frontendDistPath = path.resolve(projectRoot, "src/frontend/dist");
+  // Serve Vue SPA static files from the installed package directory
+  const frontendDistPath = path.resolve(new URL('../frontend', import.meta.url).pathname);
   app.use(express.static(frontendDistPath));
 
   // Use the router from routes.ts
