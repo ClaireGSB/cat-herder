@@ -1,5 +1,11 @@
 <template>
   <div class="live-activity-view">
+    <!-- Breadcrumbs -->
+    <BreadcrumbNav 
+      current-page="live"
+      :items="[{ title: 'Live Activity', icon: 'mdi-broadcast', disabled: true }]"
+    />
+    
     <!-- Header -->
     <div class="d-flex justify-space-between align-center mb-6">
       <div class="d-flex align-center">
@@ -332,6 +338,7 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import DurationDisplay from '@/components/DurationDisplay.vue';
 import PipelineSteps from '@/components/PipelineSteps.vue';
 import LogViewer from '@/components/LogViewer.vue';
+import BreadcrumbNav from '@/components/BreadcrumbNav.vue';
 
 const taskStore = useTaskStore();
 

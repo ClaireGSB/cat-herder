@@ -182,6 +182,16 @@ const loadInitialData = async () => {
 
     <!-- Main Content -->
     <v-main>
+      <!-- Global Loading Progress Bar -->
+      <v-progress-linear
+        v-if="taskStore.isLoading"
+        indeterminate
+        color="primary"
+        height="3"
+        class="position-absolute"
+        style="top: 0; left: 0; right: 0; z-index: 1000;"
+      />
+      
       <!-- Global Error Alert -->
       <v-alert
         v-if="taskStore.error"

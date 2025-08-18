@@ -1,7 +1,15 @@
 <template>
   <div class="history-view">
-    <!-- Header -->
-    <div class="d-flex justify-space-between align-center mb-6">
+    <!-- Loading State for Initial Data -->
+    <div v-if="initialLoading" class="loading-container">
+      <v-progress-circular indeterminate size="64" class="mb-4" />
+      <p class="text-h6">Loading dashboard...</p>
+    </div>
+    
+    <!-- Main Content -->
+    <div v-else>
+      <!-- Header -->
+      <div class="d-flex justify-space-between align-center mb-6">
       <div class="d-flex align-center">
         <v-icon icon="mdi-history" size="large" color="primary" class="me-3" />
         <div>
@@ -151,16 +159,18 @@
         </v-card-text>
       </v-card>
     </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useTaskStore } from '@/stores/taskStore';
 import TaskCard from '@/components/TaskCard.vue';
 import SequenceCard from '@/components/SequenceCard.vue';
 
 const taskStore = useTaskStore();
+const initialLoading = ref(true);
 
 // Get live activity info
 const liveActivity = computed(() => taskStore.currentLiveActivity);
@@ -175,7 +185,7 @@ const isLiveSequence = (sequenceId: string) => {
 };
 
 // Refresh data from API
-const refreshData = async () => {
+const refreshData = async (isInitial = false) => {
   try {
     taskStore.setLoading(true);
     
@@ -200,12 +210,15 @@ const refreshData = async () => {
     taskStore.setError(error instanceof Error ? error.message : 'Failed to refresh data');
   } finally {
     taskStore.setLoading(false);
+    if (isInitial) {
+      initialLoading.value = false;
+    }
   }
 };
 
 // Auto-refresh data on mount
 onMounted(() => {
-  refreshData();
+  refreshData(true);
 });
 
 // Clean up on unmount
@@ -219,6 +232,15 @@ onUnmounted(() => {
   padding: 24px;
   max-width: 1200px;
   margin: 0 auto;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  text-align: center;
 }
 
 .sequences-grid,
