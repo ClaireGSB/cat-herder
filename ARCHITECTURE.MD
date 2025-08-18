@@ -169,7 +169,49 @@ To maintain the project's quality and clarity, all new features and refactors sh
 
 ---
 
-## 7. A Living Document
+## 7. Code and Module Best Practices
+
+To support the guiding principles, we adhere to specific best practices for code structure and module design. These rules are derived from lessons learned during development and are critical for maintaining a clean, scalable, and bug-resistant codebase.
+
+### A. Keep Dependencies Flowing Downhill
+
+**The Principle:** Dependencies must always flow from high-level modules (which orchestrate complex logic) to low-level, stable modules (which provide focused utilities or types). A low-level module should **never** import a high-level module.
+
+*   **High-Level (Uphill):** Orchestrators, runners, CLI actions (`orchestrator.ts`, `step-runner.ts`, `cli-actions.ts`).
+*   **Low-Level (Downhill):** Utilities, types, configurations, standalone classes (`utils/`, `config.ts`, `tools/orchestration/errors.ts`).
+
+**Why it Matters:** This is the single most important rule for **preventing circular dependencies**. When a high-level module like `sequence-runner.ts` imports another high-level module like `step-runner.ts`, it creates a tight coupling that can easily lead to import loops as the project grows.
+
+**Practical Example:**
+*   **Problem:** We encountered a circular dependency because `sequence-runner.ts` needed `InterruptedError`, which was defined inside `step-runner.ts`. This forced a high-level module to depend on another high-level module for a low-level concept.
+*   **Solution:** We applied this principle by extracting `InterruptedError` into its own low-level, stable module (`src/tools/orchestration/errors.ts`). Now, both `step-runner.ts` and `sequence-runner.ts` can depend "downhill" on `errors.ts`, breaking the circular dependency between them.
+
+### B. Prefer Static over Dynamic Imports for Module Logic
+
+**The Principle:** All imports for inter-module dependencies and Node.js built-ins should be standard, static `import` statements at the top of the file. Avoid using dynamic `await import(...)` inside functions for this purpose.
+
+**Why it Matters:**
+*   **Clarity:** Static imports clearly declare a module's dependencies at a glance. Dynamic imports hide them within the implementation logic.
+*   **Static Analysis:** Tools like TypeScript and bundlers rely on static imports to analyze the dependency graph, detect circular dependencies, and perform tree-shaking.
+*   **Safety:** Errors in static imports (e.g., a typo in the path) are caught at compile time. Errors in dynamic imports are only discovered at runtime when the function is executed.
+
+**Practical Example:**
+*   **Problem:** The `step-runner.ts` file used `await import('node:child_process')` and `await import('../status.js')` inside its main function. This was a workaround for other architectural issues.
+*   **Solution:** Once the circular dependency was resolved, we replaced all dynamic imports with standard `import { execSync } from 'node:child_process';` and `import { updateSequenceStatus } from '../status.js';` at the top of the file.
+
+### C. Import Directly from the Source of Truth
+
+**The Principle:** When importing a function, class, or type, the import path should point directly to the file that defines it. Avoid re-exporting modules from intermediary "index" or "barrel" files unless it's a public-facing API for a large library.
+
+**Why it Matters:** This practice makes the codebase much easier to navigate and refactor. When a developer sees `import { runTaskSequence } from './orchestration/sequence-runner.js'`, they know exactly where to find that code. An indirect import, like `from './orchestrator.js'`, would be misleading.
+
+**Practical Example:**
+*   **Problem:** Initially, `orchestrator.ts` re-exported the `runTaskSequence` function from `sequence-runner.ts`. The `cli-actions.ts` file then imported it from `orchestrator.ts`.
+*   **Solution:** We removed the re-export from `orchestrator.ts` and updated `cli-actions.ts` to import `runTaskSequence` directly from its source file, `src/tools/orchestration/sequence-runner.js`. This makes the dependency path clear and honest.
+
+---
+
+## 8. A Living Document
 
 This document is not static. It must evolve with the project.
 
@@ -177,6 +219,6 @@ This document is not static. It must evolve with the project.
 
 1.  Create a `PLAN.md` outlining the proposed changes.
 2.  Implement the changes as described.
-3.  **As the final step, update this `ARCHITECTURE.md` file** to reflect any changes to the system's structure, components, or guiding principles.
+3.  **As the final step, update this `ARCHITECTURE.md` file** (as well as the README.md of course) to reflect any changes to the system's structure, components, or guiding principles.
 
 By following this process, we ensure that our documentation remains an accurate and valuable resource for everyone involved in the project.
