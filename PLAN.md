@@ -29,7 +29,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
 -   [x] **3. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
 -   [x] **4. Implement State Management with Pinia:** Create a central Pinia store to manage all application state, including tasks, sequences, and live activity data.
 -   [x] **5. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
--   [ ] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
+-   [x] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
 -   [ ] **7. Replace EJS Views with a Vue SPA:** Configure the Express server to serve the compiled Vue application and remove all EJS templates and old client-side JavaScript files.
 -   [ ] **8. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new monorepo structure, SPA architecture, and data flow.
 

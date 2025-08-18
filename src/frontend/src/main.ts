@@ -1,37 +1,56 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
 
 // Vuetify
 import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import '@mdi/font/css/materialdesignicons.css'
+import { aliases, mdi } from 'vuetify/iconsets/mdi'
 
 import './style.css'
 import App from './App.vue'
-import { webSocketService } from './services/websocket'
+import router from './router'
 
 // Create Vuetify instance
 const vuetify = createVuetify({
+  icons: {
+    defaultSet: 'mdi',
+    aliases,
+    sets: {
+      mdi,
+    },
+  },
   theme: {
-    defaultTheme: 'light'
-  }
+    defaultTheme: 'light',
+    themes: {
+      light: {
+        colors: {
+          primary: '#1976D2',
+          secondary: '#424242',
+          accent: '#82B1FF',
+          error: '#FF5252',
+          info: '#2196F3',
+          success: '#4CAF50',
+          warning: '#FFC107',
+        },
+      },
+      dark: {
+        colors: {
+          primary: '#2196F3',
+          secondary: '#424242',
+          accent: '#FF4081',
+          error: '#FF5252',
+          info: '#2196F3',
+          success: '#4CAF50',
+          warning: '#FFC107',
+        },
+      },
+    },
+  },
 })
 
 // Create Pinia store
 const pinia = createPinia()
-
-// Create router (we'll add routes later)
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      name: 'Home',
-      component: () => import('./components/TaskStoreTest.vue')
-    }
-  ]
-})
 
 const app = createApp(App)
   .use(pinia)
@@ -39,11 +58,3 @@ const app = createApp(App)
   .use(vuetify)
 
 app.mount('#app')
-
-// Initialize WebSocket service after the app is mounted and Pinia is available
-webSocketService.initialize()
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-  webSocketService.disconnect()
-})
