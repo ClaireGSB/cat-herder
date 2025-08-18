@@ -9,9 +9,6 @@ import { ensureCorrectGitBranch } from "./orchestration/git.js";
 import { executePipelineForTask } from "./orchestration/pipeline-runner.js";
 import { InterruptedError } from "./orchestration/errors.js";
 
-// Re-export the sequence runner for backward compatibility
-export { runTaskSequence } from "./orchestration/sequence-runner.js";
-
 export async function runTask(taskRelativePath: string, pipelineOption?: string) {
   const config = await getConfig();
   if (!config) {

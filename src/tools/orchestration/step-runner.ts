@@ -6,6 +6,7 @@ import { updateStatus, readStatus, updateSequenceStatus } from "../status.js";
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
 import { InterruptedError } from "./errors.js";
+import { execSync } from "node:child_process";
 
 
 // Global state for graceful shutdown handling
@@ -131,7 +132,6 @@ export async function executeStep(
           console.log(pc.green(`[Orchestrator] Resuming step: ${name}`));
           updateStatus(statusFile, s => { s.phase = "running"; });
           if (sequenceStatusFile) {
-            const { updateSequenceStatus } = await import("../status.js");
             updateSequenceStatus(sequenceStatusFile, s => { s.phase = "running"; });
           }
 
@@ -157,7 +157,6 @@ export async function executeStep(
 
     if (checkResult.success) {
       if (config.autoCommit) {
-        const { execSync } = await import("node:child_process");
         console.log(`[Orchestrator] Committing checkpoint for step: ${name}`);
         execSync(`git add -A`, { stdio: "inherit", cwd: projectRoot });
         execSync(`git commit -m "chore(${name}): checkpoint"`, { stdio: "inherit", cwd: projectRoot });

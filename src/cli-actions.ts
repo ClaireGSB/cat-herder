@@ -4,7 +4,8 @@ import path from "path";
 import readline from "readline";
 
 import { init } from "./init.js";
-import { runTask, runTaskSequence } from "./tools/orchestrator.js";
+import { runTask } from "./tools/orchestrator.js";
+import { runTaskSequence } from "./tools/orchestration/sequence-runner.js";
 import { startWebServer } from "./tools/web.js";
 import { startTui } from "./tools/tui.js";
 import { showStatus } from "./tools/status-cli.js";
