@@ -9,6 +9,7 @@ import '@mdi/font/css/materialdesignicons.css'
 
 import './style.css'
 import App from './App.vue'
+import { webSocketService } from './services/websocket'
 
 // Create Vuetify instance
 const vuetify = createVuetify({
@@ -32,8 +33,17 @@ const router = createRouter({
   ]
 })
 
-createApp(App)
+const app = createApp(App)
   .use(pinia)
   .use(router)
   .use(vuetify)
-  .mount('#app')
+
+app.mount('#app')
+
+// Initialize WebSocket service after the app is mounted and Pinia is available
+webSocketService.initialize()
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+  webSocketService.disconnect()
+})
