@@ -25,12 +25,13 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
 ## Summary Checklist
 
 -   [x] **1. Set Up New Frontend Development Environment:** Initialize a Vite + Vue 3 project within the repository and install all necessary dependencies (Vue, Vuetify, Pinia).
--   [ ] **2. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
--   [ ] **3. Implement State Management with Pinia:** Create a central Pinia store to manage all application state, including tasks, sequences, and live activity data.
--   [ ] **4. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
--   [ ] **5. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library (e.g., `v-chip`, `v-data-table`).
--   [ ] **6. Replace EJS Views with a Vue SPA:** Configure the Express server to serve the compiled Vue application and remove all EJS templates and old client-side JavaScript files.
--   [ ] **7. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new SPA architecture, build process, and data flow.
+-   [ ] **2. Isolate the Backend Source Code:** Create a `src/backend` directory and move all existing Node.js CLI source code into it to create a clean separation from the frontend.
+-   [ ] **3. Convert Backend Routes to a Data API:** Modify the existing Express routes to serve JSON data instead of rendering EJS templates.
+-   [ ] **4. Implement State Management with Pinia:** Create a central Pinia store to manage all application state, including tasks, sequences, and live activity data.
+-   [ ] **5. Integrate WebSocket Client with the Pinia Store:** Set up the WebSocket client to receive real-time updates from the backend and commit them directly to the Pinia store.
+-   [ ] **6. Build Reusable UI Components with Vue & Vuetify:** Recreate the UI using Vue Single File Components (`.vue`) and Vuetify's component library.
+-   [ ] **7. Replace EJS Views with a Vue SPA:** Configure the Express server to serve the compiled Vue application and remove all EJS templates and old client-side JavaScript files.
+-   [ ] **8. Update Project Documentation:** Update `ARCHITECTURE.MD` and `README.md` to reflect the new monorepo structure, SPA architecture, and data flow.
 
 ---
 
@@ -45,7 +46,32 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     3.  Install necessary dependencies: `npm install vue-router pinia vuetify`.
     4.  Follow the Vuetify installation guide to integrate it with Vite.
 
-### 2. Convert Backend Routes to a Data API
+### 2. Isolate the Backend Source Code
+
+*   **Objective:** To create a logical and scalable file structure that explicitly separates the backend and frontend applications, improving clarity and maintainability.
+*   **Task:**
+    1.  **Create Directory:** In the `src/` folder, create a new directory named `backend`.
+    2.  **Move Directories:** Move the following directories from `src/` into the new `src/backend/` directory:
+        *   `tools/`
+        *   `init/`
+        *   `utils/`
+        *   `dot-claude/`
+        *   `public/`
+        *   `tasks/`
+        *   `templates/`
+    3.  **Move Files:** Move the following files from `src/` into `src/backend/`:
+        *   `cli-actions.ts`
+        *   `config.ts`
+        *   `index.ts`
+        *   `init.ts`
+    4.  **Update TypeScript Config:** In the **root** `tsconfig.json`, update the paths to point to the new backend source directory.
+        *   **Before:** `"rootDir": "./src"`, `"include": ["src/**/*"]`
+        *   **After:** `"rootDir": "./src/backend"`, `"include": ["src/backend/**/*"]`
+    5.  **Check Build Scripts:** In the **root** `package.json`, check if any scripts in the `"scripts"` section reference paths like `src/index.ts`. Update them to point to `src/backend/index.ts` if needed.
+    6.  **Verify Imports:** After moving the files, some relative import paths inside the backend code might be broken. Run `npm run build` from the root directory. The TypeScript compiler (`tsc`) will tell you exactly which files have incorrect import paths so you can fix them.
+    7.  **Test:** Once it builds successfully, run a simple command like `claude-project validate` from your terminal to ensure the CLI is still functioning correctly.
+
+### 3. Convert Backend Routes to a Data API
 
 *   **Objective:** To decouple the backend from the frontend by making it serve pure data.
 *   **Task:** Modify the routes in `src/tools/web/routes.ts`. Instead of calling `res.render()`, they should now call `res.json()`.
@@ -67,7 +93,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     });
     ```
 
-### 3. Implement State Management with Pinia
+### 4. Implement State Management with Pinia
 
 *   **Objective:** To create a single, reactive source of truth for the entire frontend application.
 *   **Task:** Create a Pinia store for tasks and sequences in `src/frontend/src/stores/taskStore.js`.
@@ -98,7 +124,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     });
     ```
 
-### 4. Integrate WebSocket Client with the Pinia Store
+### 5. Integrate WebSocket Client with the Pinia Store
 
 *   **Objective:** To make real-time updates from the server automatically reactive in the UI.
 *   **Task:** Create a WebSocket service that imports the Pinia store and calls actions when messages arrive.
@@ -125,7 +151,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     }
     ```
 
-### 5. Build Reusable UI Components with Vue & Vuetify
+### 6. Build Reusable UI Components with Vue & Vuetify
 
 *   **Objective:** To build the UI with maintainable, self-contained components.
 *   **Task:** Create Vue components in `src/frontend/src/components/`. Start with a simple `StatusBadge.vue`.
@@ -162,7 +188,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     </script>
     ```
 
-### 6. Replace EJS Views with a Vue SPA
+### 7. Replace EJS Views with a Vue SPA
 
 *   **Objective:** To complete the migration by making the web server serve the new Vue app.
 *   **Task:**
@@ -199,7 +225,7 @@ The new architecture will use **Vite** as a build tool, **Vue 3** for a reactive
     }
     ```
 
-### 7. Update Project Documentation
+### 8. Update Project Documentation
 
 *   **Objective:** To ensure the project's documentation accurately reflects its new architecture.
 *   **Task:**
