@@ -27,7 +27,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'Home',
-      component: () => import('./components/HelloWorld.vue')
+      component: () => import('./components/TaskStoreTest.vue')
     }
   ]
 })
