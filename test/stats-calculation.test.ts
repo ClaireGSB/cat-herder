@@ -152,7 +152,7 @@ Execute the test command.
     // Now simulate what happens when pause time is tracked during rate limits
     // by manually updating the state file with pause time (this is what the 
     // orchestrator does in the rate limit handling code)
-    const stateFile = path.join(tempDir, '.claude/state/task-pause-test.state.json');
+    const stateFile = path.join(tempDir, '.claude/state/task-task-pause-test.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
     
     // Simulate 30 seconds of pause time being tracked
@@ -285,7 +285,7 @@ Execute the test command.
     const expectedTotalDuration = (finalTime.getTime() - startTime.getTime()) / 1000;
 
     // --- ASSERT ---
-    const stateFile = path.join(tempDir, '.claude/state/task-no-pause.state.json');
+    const stateFile = path.join(tempDir, '.claude/state/task-task-no-pause.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
 
     expect(status.phase).toBe('done');
@@ -335,7 +335,7 @@ Execute the test command.
     await runTask('task-multi-pause.md');
 
     // Simulate multiple pause accumulations (this tests the += logic in the orchestrator)
-    const stateFile = path.join(tempDir, '.claude/state/task-multi-pause.state.json');
+    const stateFile = path.join(tempDir, '.claude/state/task-task-multi-pause.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
     
     // Initialize stats and simulate two separate pause accumulations

@@ -39,16 +39,9 @@ export interface ValidationResult {
 }
 
 /**
- * Validates a pipeline configuration against available commands and providers.
- * @returns A ValidationResult object with validation status, errors, and missing permissions.
+ * Validates top-level configuration properties.
  */
-export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
-  const errors: string[] = [];
-  const missingPermissions: string[] = []; // New array for fixable errors
-  const knownContextKeys = Object.keys(contextProviders);
-  const validCheckTypes = ["none", "fileExists", "shell"];
-
-  // --- Top-Level Config Validation ---
+function validateTopLevelConfig(config: ClaudeProjectConfig, errors: string[]): void {
   if (config.manageGitBranch !== undefined && typeof config.manageGitBranch !== 'boolean') {
     errors.push(`Top-level config error: 'manageGitBranch' must be a boolean (true or false).`);
   }
@@ -67,8 +60,14 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
   if (config.defaultPipeline !== undefined && typeof config.defaultPipeline !== 'string') {
     errors.push(`Top-level config error: 'defaultPipeline' must be a string.`);
   }
+}
 
-  // 1. Load settings.json permissions
+/**
+ * Loads project settings and scripts from .claude/settings.json and package.json.
+ * @returns Object containing allowedPermissions and userScripts, or null if critical files are missing.
+ */
+function loadProjectSettings(projectRoot: string, errors: string[]): { allowedPermissions: string[], userScripts: Record<string, string> } | null {
+  // Load settings.json permissions
   const settingsPath = path.join(projectRoot, ".claude", "settings.json");
   let allowedPermissions: string[] = [];
   if (fs.existsSync(settingsPath)) {
@@ -82,7 +81,7 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     errors.push(".claude/settings.json not found. Please run `claude-project init` to create a default one.");
   }
 
-  // 2. Load user-defined scripts from package.json
+  // Load user-defined scripts from package.json
   const pkgPath = path.join(projectRoot, "package.json");
   let userScripts: Record<string, string> = {};
   if (fs.existsSync(pkgPath)) {
@@ -96,7 +95,14 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     errors.push("A package.json file was not found in the project root.");
   }
 
-  // 2. Validate pipelines structure
+  return { allowedPermissions, userScripts };
+}
+
+/**
+ * Validates the pipeline structure and handles both new and legacy formats.
+ * @returns The normalized pipelines object or null if invalid.
+ */
+function validatePipelineStructure(config: ClaudeProjectConfig, errors: string[]): { [key: string]: any[] } | null {
   let pipelines: { [key: string]: any[] };
   
   if (config.pipelines && typeof config.pipelines === 'object' && Object.keys(config.pipelines).length > 0) {
@@ -112,150 +118,219 @@ export function validatePipeline(config: ClaudeProjectConfig, projectRoot: strin
     pipelines = { default: (config as any).pipeline };
   } else {
     errors.push("Configuration is missing a 'pipelines' object with at least one defined pipeline, or a legacy 'pipeline' array.");
-    return { isValid: false, errors, missingPermissions: [] };
+    return null;
   }
 
-  // 3. Loop through each pipeline and validate its steps
+  // Validate each pipeline is an array
   for (const [pipelineName, pipeline] of Object.entries(pipelines)) {
     if (!Array.isArray(pipeline)) {
       errors.push(`Pipeline "${pipelineName}" is not a valid array of steps.`);
-      continue;
+    }
+  }
+
+  return pipelines;
+}
+
+/**
+ * Validates a single check object within a step.
+ */
+function validateCheckObject(check: any, checkId: string, userScripts: Record<string, string>, errors: string[]): void {
+  const validCheckTypes = ["none", "fileExists", "shell"];
+
+  if (!check || !check.type) {
+    errors.push(`${checkId}: is missing a valid 'check' object with a 'type' property.`);
+    return;
+  }
+
+  if (!validCheckTypes.includes(check.type)) {
+    errors.push(`${checkId}: Invalid check type '${check.type}'. Available: ${validCheckTypes.join(", ")}`);
+  }
+
+  // Validate npm script commands for shell checks
+  if (check.type === "shell" && check.command) {
+    const command = check.command;
+    // We specifically look for npm script commands
+    if (typeof command === 'string' && command.startsWith("npm ")) {
+      // e.g., "npm test" -> "test", "npm run lint" -> "lint"
+      const scriptName = command.split(" ").pop();
+      if (scriptName && !userScripts[scriptName]) {
+        errors.push(
+          `${checkId}: The command "${command}" requires a script named "${scriptName}" in your package.json, but it was not found.`
+        );
+      }
+    }
+  }
+
+  // Deepen Check Object Validation
+  switch (check.type) {
+    case 'fileExists':
+      if (typeof check.path !== 'string' || !check.path) {
+        errors.push(`${checkId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
+      }
+      break;
+    case 'shell':
+      if (typeof check.command !== 'string' || !check.command) {
+        errors.push(`${checkId}: Check type 'shell' requires a non-empty 'command' string property.`);
+      }
+      if (check.expect && !['pass', 'fail'].includes(check.expect)) {
+        errors.push(`${checkId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
+      }
+      break;
+  }
+}
+
+/**
+ * Validates the fileAccess property of a step.
+ */
+function validateFileAccess(fileAccess: any, stepId: string, errors: string[]): void {
+  if (fileAccess === undefined) {
+    return; // fileAccess is optional
+  }
+
+  if (typeof fileAccess !== 'object' || fileAccess === null || Array.isArray(fileAccess)) {
+    errors.push(`${stepId}: The 'fileAccess' property must be an object.`);
+    return;
+  }
+
+  if (fileAccess.allowWrite) {
+    if (!Array.isArray(fileAccess.allowWrite)) {
+      errors.push(`${stepId}: The 'fileAccess.allowWrite' property must be an array of strings.`);
+    } else {
+      fileAccess.allowWrite.forEach((pattern: any, i: number) => {
+        if (typeof pattern !== 'string' || !pattern) {
+          errors.push(`${stepId}: The 'fileAccess.allowWrite' array contains an invalid value at index ${i}. All values must be non-empty strings.`);
+        }
+      });
+    }
+  }
+}
+
+/**
+ * Validates permissions for a command file.
+ */
+function validatePermissions(commandFilePath: string, stepId: string, allowedPermissions: string[], errors: string[], missingPermissions: string[]): void {
+  if (!fs.existsSync(commandFilePath)) {
+    errors.push(`${stepId}: Command file not found at ${commandFilePath.replace(process.cwd() + '/', '')}`);
+    return;
+  }
+
+  const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
+  const frontmatter = parseFrontmatter(commandContent);
+  const toolsValue = frontmatter?.['allowed-tools'];
+  
+  let requiredTools: string[] = [];
+
+  if (typeof toolsValue === 'string') {
+    requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean); // filter(Boolean) removes empty strings
+  } else if (Array.isArray(toolsValue)) {
+    requiredTools = toolsValue;
+  }
+  
+  for (const tool of requiredTools) {
+    if (tool && !allowedPermissions.includes(tool)) {
+      // Instead of just a generic error, we add to both arrays
+      const errorMessage = `${stepId}: Requires missing permission "${tool}"`;
+      errors.push(errorMessage);
+      missingPermissions.push(tool); // Add to the structured list
+    }
+  }
+}
+
+/**
+ * Validates a single step within a pipeline.
+ */
+function validateStep(
+  step: any, 
+  stepIndex: number, 
+  pipelineName: string, 
+  userScripts: Record<string, string>, 
+  allowedPermissions: string[], 
+  projectRoot: string,
+  errors: string[], 
+  missingPermissions: string[]
+): void {
+  const stepId = `Pipeline '${pipelineName}', Step ${stepIndex + 1} ('${step.name || 'unnamed'}')`;
+
+  // Basic Step Structure Validation
+  if (!step.name) {
+    errors.push(`${stepId}: is missing the 'name' property.`);
+  }
+  if (!step.command) {
+    errors.push(`${stepId}: is missing the 'command' property.`);
+    return;
+  }
+  if (!step.check) {
+    errors.push(`${stepId}: is missing a 'check' property.`);
+    return;
+  }
+
+  // Handle both single check and array of checks
+  const checksToValidate = Array.isArray(step.check) ? step.check : [step.check];
+  
+  for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
+    const checkId = Array.isArray(step.check) 
+      ? `${stepId}, check #${checkIndex + 1}` 
+      : stepId;
+
+    validateCheckObject(singleCheck, checkId, userScripts, errors);
+  }
+
+  // Command File and Permission Validation
+  const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+  validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
+
+  // Retry Validation
+  if (step.retry !== undefined) {
+    if (typeof step.retry !== 'number' || !Number.isInteger(step.retry) || step.retry < 0) {
+      errors.push(`${stepId}: The 'retry' property must be a non-negative integer, but found '${step.retry}'.`);
+    }
+  }
+
+  // FileAccess Validation
+  validateFileAccess(step.fileAccess, stepId, errors);
+
+  // Model Validation
+  if (step.model !== undefined) {
+    if (typeof step.model !== 'string') {
+      errors.push(`${stepId}: The 'model' property must be a string.`);
+    } else if (!VALID_CLAUDE_MODELS.includes(step.model)) {
+      errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
+    }
+  }
+}
+
+/**
+ * Validates a pipeline configuration against available commands and providers.
+ * @returns A ValidationResult object with validation status, errors, and missing permissions.
+ */
+export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
+  const errors: string[] = [];
+  const missingPermissions: string[] = [];
+
+  // Top-Level Config Validation
+  validateTopLevelConfig(config, errors);
+
+  // Load project settings and scripts
+  const settings = loadProjectSettings(projectRoot, errors);
+  if (!settings) {
+    return { isValid: false, errors, missingPermissions: [] };
+  }
+  const { allowedPermissions, userScripts } = settings;
+
+  // Validate pipelines structure
+  const pipelines = validatePipelineStructure(config, errors);
+  if (!pipelines) {
+    return { isValid: false, errors, missingPermissions: [] };
+  }
+
+  // Loop through each pipeline and validate its steps
+  for (const [pipelineName, pipeline] of Object.entries(pipelines)) {
+    if (!Array.isArray(pipeline)) {
+      continue; // Error already added in validatePipelineStructure
     }
 
     for (const [index, step] of pipeline.entries()) {
-      const stepId = `Pipeline '${pipelineName}', Step ${index + 1} ('${step.name || 'unnamed'}')`;
-
-      // --- Basic Step Structure Validation ---
-      if (!step.name) {
-        errors.push(`${stepId}: is missing the 'name' property.`);
-      }
-      if (!step.command) {
-        errors.push(`${stepId}: is missing the 'command' property.`);
-        continue;
-      }
-      if (!step.check) {
-        errors.push(`${stepId}: is missing a 'check' property.`);
-        continue;
-      }
-
-      // Handle both single check and array of checks
-      const checksToValidate = Array.isArray(step.check) ? step.check : [step.check];
-      
-      for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
-        const checkId = Array.isArray(step.check) 
-          ? `${stepId}, check #${checkIndex + 1}` 
-          : stepId;
-
-        if (!singleCheck || !singleCheck.type) {
-          errors.push(`${checkId}: is missing a valid 'check' object with a 'type' property.`);
-          continue;
-        }
-
-        if (singleCheck?.type === "shell" && singleCheck.command) {
-          const command = singleCheck.command;
-          // We specifically look for npm script commands
-          if (typeof command === 'string' && command.startsWith("npm ")) {
-            // e.g., "npm test" -> "test", "npm run lint" -> "lint"
-            const scriptName = command.split(" ").pop();
-            if (scriptName && !userScripts[scriptName]) {
-              errors.push(
-                `${checkId}: The command "${command}" requires a script named "${scriptName}" in your package.json, but it was not found.`
-              );
-            }
-          }
-        }
-      }
-
-      // --- Command File and Permission Validation ---
-      const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-      if (!fs.existsSync(commandFilePath)) {
-        errors.push(`${stepId}: Command file not found at .claude/commands/${step.command}.md`);
-      } else {
-        const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
-        const frontmatter = parseFrontmatter(commandContent);
-        const toolsValue = frontmatter?.['allowed-tools'];
-        
-        let requiredTools: string[] = [];
-
-        if (typeof toolsValue === 'string') {
-          requiredTools = toolsValue.split(',').map(tool => tool.trim()).filter(Boolean); // filter(Boolean) removes empty strings
-        } else if (Array.isArray(toolsValue)) {
-          requiredTools = toolsValue;
-        }
-        
-        for (const tool of requiredTools) {
-          if (tool && !allowedPermissions.includes(tool)) {
-            // Instead of just a generic error, we add to both arrays
-            const errorMessage = `${stepId}: Requires missing permission "${tool}"`;
-            errors.push(errorMessage);
-            missingPermissions.push(tool); // Add to the structured list
-          }
-        }
-      }
-
-      // --- Context validation removed - context is now handled automatically by the orchestrator ---
-      
-      // --- Retry Validation ---
-      if (step.retry !== undefined) {
-        if (typeof step.retry !== 'number' || !Number.isInteger(step.retry) || step.retry < 0) {
-          errors.push(`${stepId}: The 'retry' property must be a non-negative integer, but found '${step.retry}'.`);
-        }
-      }
-
-      // --- Check Validation ---
-      // Re-use the same checksToValidate array from above
-      for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
-        const checkId = Array.isArray(step.check) 
-          ? `${stepId}, check #${checkIndex + 1}` 
-          : stepId;
-
-        if (!validCheckTypes.includes(singleCheck.type)) {
-          errors.push(`${checkId}: Invalid check type '${singleCheck.type}'. Available: ${validCheckTypes.join(", ")}`);
-        }
-
-        // --- Deepen Check Object Validation ---
-        switch (singleCheck.type) {
-          case 'fileExists':
-            if (typeof singleCheck.path !== 'string' || !singleCheck.path) {
-              errors.push(`${checkId}: Check type 'fileExists' requires a non-empty 'path' string property.`);
-            }
-            break;
-          case 'shell':
-            if (typeof singleCheck.command !== 'string' || !singleCheck.command) {
-              errors.push(`${checkId}: Check type 'shell' requires a non-empty 'command' string property.`);
-            }
-            if (singleCheck.expect && !['pass', 'fail'].includes(singleCheck.expect)) {
-              errors.push(`${checkId}: The 'expect' property for a shell check must be either "pass" or "fail".`);
-            }
-            break;
-        }
-      }
-
-      // --- FileAccess Validation ---
-      if (step.fileAccess !== undefined) {
-        if (typeof step.fileAccess !== 'object' || step.fileAccess === null || Array.isArray(step.fileAccess)) {
-          errors.push(`${stepId}: The 'fileAccess' property must be an object.`);
-        } else if (step.fileAccess.allowWrite) {
-          if (!Array.isArray(step.fileAccess.allowWrite)) {
-            errors.push(`${stepId}: The 'fileAccess.allowWrite' property must be an array of strings.`);
-          } else {
-            step.fileAccess.allowWrite.forEach((pattern: any, i: number) => {
-              if (typeof pattern !== 'string' || !pattern) {
-                errors.push(`${stepId}: The 'fileAccess.allowWrite' array contains an invalid value at index ${i}. All values must be non-empty strings.`);
-              }
-            });
-          }
-        }
-      }
-
-      // --- Model Validation ---
-      if (step.model !== undefined) {
-        if (typeof step.model !== 'string') {
-          errors.push(`${stepId}: The 'model' property must be a string.`);
-        } else if (!VALID_CLAUDE_MODELS.includes(step.model)) {
-          errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
-        }
-      }
+      validateStep(step, index, pipelineName, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
     }
   }
 

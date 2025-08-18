@@ -2,7 +2,7 @@
 description: Reads PLAN.md at project root, determines the next incomplete step, and creates a plan to implement it. The last step is to verify (typecheck/tests) and mark the step as done in PLAN.md.
 ---
 
-Carefully read @claude.md, @README.md, and @PLAN.md.
+Carefully read @claude.md, @README.md, @ARCHITECTURE.md, and @PLAN.md.
 
 At the top of PLAN.md, review the summary of completed and incomplete steps. Identify the next incomplete step.
 
@@ -12,4 +12,4 @@ Generate a step-by-step, detailed implementation plan to complete the next incom
 As the last steps,
 - verify the work (e.g. run typecheck or tests) 
 - mark the step as "done" in PLAN.md
-- Commit your work using the name and short description of the step you just finished as commit message
+- Commit your work using the name and short description of the step you just finished as commit message. Do not forget to git add any new files you created.
