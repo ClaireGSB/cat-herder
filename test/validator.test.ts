@@ -7,6 +7,17 @@ import path from 'path';
 // Mock filesystem functions
 vi.mock('fs');
 
+// Helper function to create a valid base config
+function createBaseConfig(overrides: Partial<ClaudeProjectConfig> = {}): ClaudeProjectConfig {
+  return {
+    taskFolder: "cat-herder-tasks",
+    statePath: "~/.cat-herder/state",
+    logsPath: "~/.cat-herder/logs",
+    structureIgnore: ["node_modules/**", ".git/**", "dist/**"],
+    ...overrides
+  };
+}
+
 describe('Validator - Retry Property Validation', () => {
   const mockProjectRoot = '/test/project';
   
@@ -39,7 +50,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should accept valid retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -50,7 +61,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -58,7 +69,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should accept retry value of 0', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -69,7 +80,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -77,7 +88,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should accept missing retry property', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -88,7 +99,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -96,7 +107,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject string retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -107,7 +118,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -117,7 +128,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject negative retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -128,7 +139,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -138,7 +149,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject decimal retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -149,7 +160,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -159,7 +170,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject null retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -170,7 +181,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -180,7 +191,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject object retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -191,7 +202,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -201,7 +212,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should reject array retry values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -212,7 +223,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -222,7 +233,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should handle multiple validation errors including retry', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -233,7 +244,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -247,7 +258,7 @@ describe('Validator - Retry Property Validation', () => {
   });
 
   it('should validate retry in multiple pipelines', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         pipeline1: [
           {
@@ -266,7 +277,7 @@ describe('Validator - Retry Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -311,7 +322,7 @@ describe('Validator - Check Object Validation', () => {
 
   describe('fileExists check validation', () => {
     it('should accept valid fileExists check with path', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -321,7 +332,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -329,7 +340,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject fileExists check without path property', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -339,7 +350,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -349,7 +360,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject fileExists check with empty path', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -359,7 +370,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -369,7 +380,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject fileExists check with non-string path', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -379,7 +390,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -391,7 +402,7 @@ describe('Validator - Check Object Validation', () => {
 
   describe('shell check validation', () => {
     it('should accept valid shell check with command and expect', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -401,7 +412,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -409,7 +420,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should accept valid shell check with command but no expect', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -419,7 +430,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -427,7 +438,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject shell check without command property', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -437,7 +448,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -447,7 +458,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject shell check with empty command', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -457,7 +468,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -467,7 +478,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject shell check with non-string command', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -477,7 +488,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -487,7 +498,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should reject shell check with invalid expect value', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -497,7 +508,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -507,7 +518,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should accept shell check with expect "fail"', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -517,7 +528,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -527,7 +538,7 @@ describe('Validator - Check Object Validation', () => {
 
   describe('none check validation', () => {
     it('should accept none check without additional properties', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -537,7 +548,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -547,7 +558,7 @@ describe('Validator - Check Object Validation', () => {
 
   describe('multiple check validation errors', () => {
     it('should handle multiple check validation errors in same config', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -562,7 +573,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -576,7 +587,7 @@ describe('Validator - Check Object Validation', () => {
     });
 
     it('should handle check validation alongside other validation errors', () => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -587,7 +598,7 @@ describe('Validator - Check Object Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(false);
@@ -637,7 +648,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should accept valid model name', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -648,7 +659,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -656,7 +667,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should accept step with no model property', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -667,7 +678,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -684,7 +695,7 @@ describe('Validator - Model Property Validation', () => {
     ];
 
     validModels.forEach((modelName, index) => {
-      const config: ClaudeProjectConfig = {
+      const config = createBaseConfig({
         pipelines: {
           default: [
             {
@@ -695,7 +706,7 @@ describe('Validator - Model Property Validation', () => {
             }
           ]
         }
-      };
+      });
 
       const result = validatePipeline(config, mockProjectRoot);
       expect(result.isValid).toBe(true);
@@ -704,7 +715,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should fail validation for invalid model name', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -715,7 +726,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -725,7 +736,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should fail validation for misspelled model name', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -736,7 +747,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -746,7 +757,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should fail validation for non-string model value', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -757,7 +768,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -767,7 +778,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should fail validation for null model value', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -778,7 +789,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -788,7 +799,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should fail validation for empty string model value', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -799,7 +810,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -809,7 +820,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should handle model validation alongside other validation errors', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -821,7 +832,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -838,7 +849,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should validate model in multiple pipelines', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         pipeline1: [
           {
@@ -857,7 +868,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -869,7 +880,7 @@ describe('Validator - Model Property Validation', () => {
   });
 
   it('should validate multiple steps with different model configurations', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -892,7 +903,7 @@ describe('Validator - Model Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -936,7 +947,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should accept valid fileAccess with allowWrite array of strings', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -949,7 +960,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -957,7 +968,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should accept missing fileAccess property', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -968,7 +979,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -976,7 +987,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should accept empty fileAccess object', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -987,7 +998,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -995,7 +1006,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject fileAccess as string', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1006,7 +1017,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1016,7 +1027,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject fileAccess as array', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1027,7 +1038,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1037,7 +1048,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject fileAccess as null', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1048,7 +1059,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1058,7 +1069,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject allowWrite as string instead of array', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1071,7 +1082,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1081,7 +1092,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject allowWrite as object', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1094,7 +1105,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1104,7 +1115,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject allowWrite array containing non-string values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1117,7 +1128,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1127,7 +1138,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject allowWrite array containing empty strings', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1140,7 +1151,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1150,7 +1161,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should reject allowWrite array containing null values', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1163,7 +1174,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1173,7 +1184,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should handle multiple fileAccess validation errors', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1192,7 +1203,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1206,7 +1217,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should handle fileAccess validation alongside other validation errors', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1220,7 +1231,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1237,7 +1248,7 @@ describe('Validator - FileAccess Property Validation', () => {
   });
 
   it('should validate fileAccess in multiple pipelines', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         pipeline1: [
           {
@@ -1260,7 +1271,7 @@ describe('Validator - FileAccess Property Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1303,7 +1314,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should accept valid array of checks', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1316,7 +1327,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1324,7 +1335,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should accept single check object (backward compatibility)', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1334,7 +1345,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1342,7 +1353,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should validate each check in array independently', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1356,7 +1367,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1364,7 +1375,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should reject invalid check type in array with proper indexing', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1377,7 +1388,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1387,7 +1398,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should reject missing required properties in array checks with proper indexing', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1401,7 +1412,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1414,7 +1425,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should reject invalid expect values in array checks with proper indexing', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1427,7 +1438,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1437,7 +1448,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should handle mixed valid and invalid checks in array', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1452,7 +1463,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1467,7 +1478,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should validate npm script requirements for each check in array', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1480,7 +1491,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1490,7 +1501,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should handle empty array of checks', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1500,7 +1511,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     // This should be valid as we treat empty arrays the same as having no checks
@@ -1508,7 +1519,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should handle checks with missing type in array', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1521,7 +1532,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1531,7 +1542,7 @@ describe('Validator - Array Check Validation', () => {
   });
 
   it('should validate array checks across multiple pipeline steps', () => {
-    const config: ClaudeProjectConfig = {
+    const config = createBaseConfig({
       pipelines: {
         default: [
           {
@@ -1550,7 +1561,7 @@ describe('Validator - Array Check Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1610,7 +1621,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1633,7 +1644,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1656,7 +1667,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1680,7 +1691,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1704,7 +1715,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1728,7 +1739,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1752,7 +1763,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1777,7 +1788,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1803,7 +1814,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1842,7 +1853,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1880,7 +1891,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1902,7 +1913,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    };
+    });
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
