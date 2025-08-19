@@ -40,7 +40,7 @@
                                     <a href="/sequence/<%= sequence.sequenceId %>"><strong><%= sequence.sequenceId %></strong></a>
                                 </td>
                                 <td>
-                                    <span class="badge status-<%= sequence.phase %>"><%= sequence.phase %></span>
+                                    <%- include('partials/_status-badge', { status: sequence.phase }) %>
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark"><%= sequence.folderPath %></span>
@@ -88,7 +88,7 @@
                                 <td>
                                     <a href="/task/<%= task.taskId %>"><strong><%= task.taskId %></strong></a>
                                 </td>
-                                <td><span class="badge status-<%= task.phase %>"><%= task.phase %></span></td>
+                                <td><%- include('partials/_status-badge', { status: task.phase }) %></td>
                                 <td><%= helpers.formatDuration(task.stats?.totalDuration) %></td>
                                 <td><%= new Date(task.lastUpdate).toLocaleString() %></td>
                                 <td>

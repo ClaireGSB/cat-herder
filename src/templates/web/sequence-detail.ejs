@@ -19,18 +19,7 @@
         </nav>
     </div>
     <div class="d-flex align-items-center gap-3">
-        <span class="badge status-<%= sequence.phase %> fs-6 sequence-status">
-            <% if (sequence.phase === 'running') { %>
-                <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-            <% } else if (sequence.phase === 'done') { %>
-                <i class="bi bi-check-circle-fill me-1"></i>
-            <% } else if (sequence.phase === 'failed') { %>
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>
-            <% } else if (sequence.phase === 'paused') { %>
-                <i class="bi bi-pause-circle-fill me-1"></i>
-            <% } %>
-            <%= sequence.phase %>
-        </span>
+        <%- include('partials/_status-badge', { status: sequence.phase, cssClass: 'fs-6 sequence-status' }) %>
     </div>
 </div>
 
@@ -150,18 +139,7 @@
                                             <%= task.filename || 'Unknown File' %>
                                             
                                             <!-- Status badge -->
-                                            <span class="badge status-<%= task.status %> ms-2 task-status-badge">
-                                                <% if (task.status === 'running') { %>
-                                                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-                                                <% } else if (task.status === 'done') { %>
-                                                    <i class="bi bi-check-circle-fill me-1"></i>
-                                                <% } else if (task.status === 'failed') { %>
-                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                                <% } else { %>
-                                                    <i class="bi bi-clock me-1"></i>
-                                                <% } %>
-                                                <%= task.status %>
-                                            </span>
+                                            <%- include('partials/_status-badge', { status: task.status, cssClass: 'ms-2 task-status-badge' }) %>
                                             
                                             <!-- Live activity link for running tasks -->
                                             <% if (task.status === 'running') { %>

@@ -7,15 +7,7 @@
                         <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
                         <%= stepName %>
                         
-                        <% if (stepStatus === 'done') { %>
-                            <i class="bi bi-check-circle-fill text-success ms-2"></i>
-                        <% } else if (stepStatus === 'running') { %>
-                            <i class="bi bi-arrow-repeat text-primary ms-2 spinner-border spinner-border-sm" role="status"></i>
-                        <% } else if (stepStatus === 'failed') { %>
-                            <i class="bi bi-x-circle-fill text-danger ms-2"></i>
-                        <% } else { %>
-                            <i class="bi bi-circle text-muted ms-2"></i>
-                        <% } %>
+                        <%- include('_status-badge', { status: stepStatus, cssClass: 'ms-2' }) %>
                         
                         <% if (task.phase === 'running' && stepStatus === 'running') { %>
                             <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">

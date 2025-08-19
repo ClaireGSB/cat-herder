@@ -16,7 +16,7 @@
                         <% parentSequence.tasks.forEach(task => { %>
                             <li class="list-group-item d-flex justify-content-between align-items-center <%= task.taskId === taskToShow.taskId ? 'active' : '' %>">
                                 <span><i class="bi bi-file-earmark-text me-2"></i><%= task.filename %></span>
-                                <span class="badge status-<%= task.status %>"><%= task.status %></span>
+                                <%- include('partials/_status-badge', { status: task.status }) %>
                             </li>
                         <% }); %>
                     </ul>
@@ -33,12 +33,7 @@
                         <% Object.entries(taskToShow.steps).forEach(([stepName, stepStatus]) => { %>
                             <li class="list-group-item d-flex justify-content-between align-items-center <%= stepName === taskToShow.currentStep ? 'active' : '' %>">
                                 <span><%= stepName %></span>
-                                <span class="badge status-<%= stepStatus %>">
-                                     <% if (stepStatus === 'running') { %>
-                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                     <% } %>
-                                    <%= stepStatus %>
-                                </span>
+                                <%- include('partials/_status-badge', { status: stepStatus }) %>
                             </li>
                         <% }); %>
                     <% } else { %>
@@ -78,7 +73,7 @@
                      <% if (parentSequence) { %>
                         <h6 class="card-subtitle mb-2 text-muted">
                             <i class="bi bi-collection me-1"></i>
-                            SEQUENCE: <%= parentSequence.sequenceId %> <span class="badge status-<%= parentSequence.phase %>"><%= parentSequence.phase %></span>
+                            SEQUENCE: <%= parentSequence.sequenceId %> <%- include('partials/_status-badge', { status: parentSequence.phase }) %>
                         </h6>
                     <% } %>
                 </div>

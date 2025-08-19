@@ -16,7 +16,7 @@ This refactor will extract common and complex UI sections into their own dedicat
 ## Summary Checklist
 
 -   [x] Create new EJS partials for reusable UI components.
--   [ ] Refactor `task-detail.ejs` to use the new partials.
+-   [x] Refactor `task-detail.ejs` to use the new partials.
 -   [ ] Refactor `sequence-detail.ejs` to use the new partials.
 -   [ ] Refactor `live-activity.ejs` to use the new partials.
 -   [ ] Manually test the web dashboard to ensure no visual or functional regressions.
