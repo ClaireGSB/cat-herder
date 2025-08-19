@@ -3,7 +3,7 @@ import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { readSequenceStatus, updateSequenceStatus, readStatus, logJournalEvent } from "../status.js";
-import { getConfig, getProjectRoot } from "../../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../../config.js";
 import { folderPathToSequenceId, taskPathToTaskId } from "../../utils/id-generation.js";
 import { ensureCorrectGitBranchForSequence } from "./git.js";
 import { executePipelineForTask } from "./pipeline-runner.js";
@@ -59,7 +59,8 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
 
   const sequenceId = folderPathToSequenceId(taskFolderPath);
   const branchName = `claude/${sequenceId}`;
-  const statusFile = path.resolve(projectRoot, config.statePath, `${sequenceId}.state.json`);
+  const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
+  const statusFile = path.join(resolvedStatePath, `${sequenceId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
 
   let sequenceStatus = readSequenceStatus(statusFile);
@@ -127,7 +128,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           console.warn(pc.yellow(`Warning: Failed to log task finish event. Error: ${error.message}`));
         }
 
-        const completedTaskStatusFile = path.resolve(projectRoot, config.statePath, `${nextTaskId}.state.json`);
+        const completedTaskStatusFile = path.join(resolvedStatePath, `${nextTaskId}.state.json`);
         const completedTaskStatus = readStatus(completedTaskStatusFile);
 
         updateSequenceStatus(statusFile, s => {
@@ -157,7 +158,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
         // --- ERROR / INTERRUPTION PATH ---
         
         // 1. Read the state of the task that was just interrupted/failed. It contains the partial token usage.
-        const taskStatusFile = path.resolve(projectRoot, config.statePath, `${nextTaskId}.state.json`);
+        const taskStatusFile = path.join(resolvedStatePath, `${nextTaskId}.state.json`);
         const taskStatus = readStatus(taskStatusFile);
         
         // 2. ALWAYS aggregate its token usage into the sequence stats.

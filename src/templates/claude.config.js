@@ -2,8 +2,8 @@
 /** @type {import('@your-scope/cat-herder').ClaudeProjectConfig} */
 module.exports = {
   taskFolder: "cat-herder-Tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: "~/.cat-herder/state",
+  logsPath: "~/.cat-herder/logs",
   structureIgnore: [
     "node_modules/**",
     ".git/**",

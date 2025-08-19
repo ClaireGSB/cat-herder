@@ -1585,8 +1585,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should accept valid top-level config properties', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**', '.git/**'],
       manageGitBranch: true,
       defaultPipeline: 'default',
@@ -1632,8 +1632,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should reject invalid manageGitBranch (string instead of boolean)', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: '.claude/state',
-      logsPath: '.claude/logs', 
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs', 
       structureIgnore: ['node_modules/**'],
       manageGitBranch: 'true' as any, // Invalid string value
       pipelines: {
@@ -1657,8 +1657,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should reject invalid taskFolder (number instead of string)', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 123 as any, // Invalid number value
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],
       pipelines: {
         default: [
@@ -1681,7 +1681,7 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should reject invalid statePath (object instead of string)', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: { path: '.claude/state' } as any, // Invalid object value
+      statePath: { path: '.test-cat-herder/state' } as any, // Invalid object value
       logsPath: '.claude/logs',
       structureIgnore: ['node_modules/**'],
       pipelines: {
@@ -1706,7 +1706,7 @@ describe('Validator - Top-Level Config Validation', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
       statePath: '.claude/state',
-      logsPath: ['.claude/logs'] as any, // Invalid array value
+      logsPath: ['.test-cat-herder/logs'] as any, // Invalid array value
       structureIgnore: ['node_modules/**'],
       pipelines: {
         default: [
@@ -1729,8 +1729,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should reject invalid structureIgnore (string instead of array)', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: 'node_modules/**' as any, // Invalid string value
       pipelines: {
         default: [
@@ -1753,8 +1753,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should reject invalid defaultPipeline (number instead of string)', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],
       defaultPipeline: 42 as any, // Invalid number value
       pipelines: {
@@ -1817,8 +1817,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should handle mix of top-level and pipeline validation errors', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 456 as any, // Invalid top-level
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],
       manageGitBranch: 'false' as any, // Invalid top-level
       pipelines: {
@@ -1856,8 +1856,8 @@ describe('Validator - Top-Level Config Validation', () => {
   it('should accept manageGitBranch as false', () => {
     const config: ClaudeProjectConfig = {
       taskFolder: 'claude-Tasks',
-      statePath: '.claude/state',
-      logsPath: '.claude/logs',
+      statePath: '.test-cat-herder/state',
+      logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],
       manageGitBranch: false, // Valid boolean value
       pipelines: {

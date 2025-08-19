@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 
 export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
 
@@ -156,7 +156,8 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
 async function getJournalPath(): Promise<string> {
     const projectRoot = getProjectRoot();
     const config = await getConfig();
-    return path.join(projectRoot, config.statePath, 'run-journal.json');
+    const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
+    return path.join(resolvedStatePath, 'run-journal.json');
 }
 
 // New function to read the journal

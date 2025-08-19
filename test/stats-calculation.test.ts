@@ -49,8 +49,8 @@ describe('Workflow Statistics Calculation', () => {
     // Mock getConfig to return a basic config
     vi.mocked(getConfig).mockResolvedValue({
       taskFolder: "tasks",
-      statePath: ".claude/state",
-      logsPath: ".claude/logs",
+      statePath: ".test-cat-herder/state",
+      logsPath: ".test-cat-herder/logs",
       defaultPipeline: "default",
       manageGitBranch: false,
       autoCommit: false,
@@ -117,8 +117,8 @@ Execute the test command.
     // Create config file
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -186,8 +186,8 @@ Execute the test command.
     // --- ARRANGE ---
     const configContent = `module.exports = {
   taskFolder: "my-sequence",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -250,8 +250,8 @@ Execute the test command.
     // --- ARRANGE ---
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -303,8 +303,8 @@ Execute the test command.
     // Create config file
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,

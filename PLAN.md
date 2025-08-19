@@ -24,7 +24,7 @@ The new behavior will involve creating a dedicated hidden directory, `.cat-herde
 
 - [x] Rename all relevant project files and directories from the old name to "cat-herder".
 - [x] Update all internal code references from the old name to "cat-herder".
-- [ ] Implement the creation of the new `.cat-herder` data directory.
+- [x] Implement the creation of the new `.cat-herder` data directory.
 - [ ] Modify the application logic to use `.cat-herder` for log and state files.
 - [ ] Ensure the `.claude/commands` directory is still utilized for sample commands.
 - [ ] Add functionality to create a `.gitignore` file within the `.cat-herder` directory.

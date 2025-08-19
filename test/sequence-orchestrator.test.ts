@@ -41,8 +41,8 @@ describe('Sequence Orchestrator Integration Tests', () => {
     // Create claude.config.js
     const configContent = `module.exports = {
   taskFolder: "test-sequence",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: true,
   autoCommit: true,

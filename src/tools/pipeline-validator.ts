@@ -4,6 +4,7 @@ import path from "path";
 import { minimatch } from "minimatch";
 import { cosmiconfig } from "cosmiconfig";
 import type { ClaudeProjectConfig, PipelineStep } from "../config.js";
+import { resolveDataPath } from "../config.js";
 import type { TaskStatus } from "./status.js";
 
 // Helper to block the tool with a clear error message
@@ -117,7 +118,7 @@ async function main() {
   const projectRoot = path.dirname(result.filepath);
 
   // 3. Find the most recent task state to know the current step
-  const stateDir = path.resolve(projectRoot, config.statePath);
+  const stateDir = resolveDataPath(config.statePath, projectRoot);
   if (!fs.existsSync(stateDir)) process.exit(0); // No state dir, no rules yet
 
   const stateFiles = fs.readdirSync(stateDir)
