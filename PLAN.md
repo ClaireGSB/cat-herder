@@ -11,11 +11,11 @@ Currently, the application uses generic `string` types for status phases (`runni
 This change will introduce a shared `StatusPhase` TypeScript type that defines all possible statuses. By using this type across our backend interfaces and logic, we leverage the TypeScript compiler to catch typos, prevent inconsistencies, and ensure that all possible states are handled correctly. This is a purely architectural refactor that will make the codebase more robust and maintainable without changing the user-facing experience.
 
 ### **Summary Checklist**
-- [ ] Create a central `StatusPhase` type in a new `src/types.ts` file.
-- [ ] Update backend interfaces in `src/tools/web/data-access.ts` to use the new `StatusPhase` type.
-- [ ] Refactor the status-checking logic in `getSequenceDetails` to be type-safe.
-- [ ] Verify that frontend EJS templates and CSS align with the `StatusPhase` values.
-- [ ] Update `ARCHITECTURE.MD` to document this new best practice.
+- [x] Create a central `StatusPhase` type in a new `src/types.ts` file.
+- [x] Update backend interfaces in `src/tools/web/data-access.ts` to use the new `StatusPhase` type.
+- [x] Refactor the status-checking logic in `getSequenceDetails` to be type-safe.
+- [x] Verify that frontend EJS templates and CSS align with the `StatusPhase` values.
+- [x] Update `ARCHITECTURE.MD` to document this new best practice.
 
 ---
 

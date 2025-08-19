@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJournal, JournalEvent } from "../status.js";
+import { StatusPhase } from "../../types.js";
 
 export interface TaskStatus {
   taskId: string;
   taskPath: string;
-  phase: string;
+  phase: StatusPhase;
   currentStep?: string;
   lastUpdate: string;
   stats?: { totalDuration?: number; totalDurationExcludingPauses?: number; totalPauseTime?: number; };
@@ -16,20 +17,20 @@ export interface TaskStatus {
 }
 
 export interface TaskDetails extends TaskStatus {
-  steps?: Array<{ name: string; status: string; duration?: number; }>;
+  steps?: Array<{ name: string; status: StatusPhase; duration?: number; }>;
   logs?: { [stepName: string]: { log?: string; reasoning?: string; raw?: string; }; };
 }
 
 export interface SequenceInfo {
   sequenceId: string;
-  phase: string;
+  phase: StatusPhase;
   folderPath?: string;
   branch?: string;
 }
 
 export interface SequenceStatus {
   sequenceId: string;
-  phase: string;
+  phase: StatusPhase;
   lastUpdate: string;
   stats?: { totalDuration?: number; totalDurationExcludingPauses?: number; totalPauseTime?: number; totalTokenUsage?: Record<string, any>; };
   branch?: string;
@@ -41,8 +42,8 @@ export interface SequenceTaskInfo {
   taskId: string;
   taskPath: string;
   filename: string;
-  status: string;
-  phase?: string;
+  status: StatusPhase;
+  phase?: StatusPhase;
   lastUpdate?: string;
 }
 
@@ -73,7 +74,7 @@ export function getAllTaskStatuses(stateDir: string): TaskStatus[] {
       });
     } catch (error) {
       console.error(`Error reading state file ${file}:`, error);
-      tasks.push({ taskId: `ERROR: ${file}`, taskPath: "unknown", phase: "error", lastUpdate: new Date().toISOString() });
+      tasks.push({ taskId: `ERROR: ${file}`, taskPath: "unknown", phase: "failed", lastUpdate: new Date().toISOString() });
     }
   }
   return tasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
@@ -100,7 +101,7 @@ export function getAllSequenceStatuses(stateDir: string): SequenceStatus[] {
             });
         } catch (error) {
             console.error(`Error reading sequence state file ${file}:`, error);
-            sequences.push({ sequenceId: `ERROR: ${file}`, phase: "error", lastUpdate: new Date().toISOString() });
+            sequences.push({ sequenceId: `ERROR: ${file}`, phase: "failed", lastUpdate: new Date().toISOString() });
         }
     }
     return sequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
@@ -214,12 +215,25 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
                 const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
                 const taskState = JSON.parse(taskStateContent);
                 if (taskState.parentSequenceId === sequenceId) {
-                    let taskStatus = 'pending';
-                    if (taskState.phase === 'running') taskStatus = 'running';
-                    else if (taskState.phase === 'failed') taskStatus = 'failed';
-                    else if (taskState.phase === 'done') taskStatus = 'done';
-                    else if (taskState.phase === 'interrupted') taskStatus = 'interrupted';
-                    else if (taskState.phase) taskStatus = 'started';
+                    const taskPhase: StatusPhase = taskState.phase || 'pending';
+                    let taskStatus: StatusPhase;
+
+                    switch (taskPhase) {
+                        case 'running':
+                        case 'failed':
+                        case 'done':
+                        case 'interrupted':
+                        case 'paused':
+                            taskStatus = taskPhase; // Directly use the valid phase
+                            break;
+                        case 'pending':
+                            taskStatus = 'pending';
+                            break;
+                        default:
+                            // This handles any other phase (like 'started') or acts as a safe fallback
+                            taskStatus = 'started';
+                            break;
+                    }
                     const taskPath = taskState.taskPath || 'unknown';
                     sequenceDetails.tasks.push({
                         taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
