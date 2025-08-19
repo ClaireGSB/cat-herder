@@ -1,175 +1,136 @@
 
 
-# PLAN: Frontend Template Refactor (V1)
+# PLAN: Introduce Shared TypeScript Types for Status Phases
 
-## Title & Goal
+### **Goal**
+To improve code reliability and prevent status-related bugs by creating a single, type-safe source of truth for all task and sequence lifecycle phases.
 
-**Title:** Frontend EJS Template Refactor into Reusable Partials
-**Goal:** To improve the maintainability and organization of the web dashboard's frontend code by breaking large EJS template files into smaller, reusable partials.
+### **Description**
+Currently, the application uses generic `string` types for status phases (`running`, `done`, `failed`, etc.). This is error-prone and recently led to a bug where an `interrupted` task was incorrectly displayed as `started` because the logic didn't explicitly handle that case.
 
-## Description
+This change will introduce a shared `StatusPhase` TypeScript type that defines all possible statuses. By using this type across our backend interfaces and logic, we leverage the TypeScript compiler to catch typos, prevent inconsistencies, and ensure that all possible states are handled correctly. This is a purely architectural refactor that will make the codebase more robust and maintainable without changing the user-facing experience.
 
-The current web dashboard templates (e.g., `task-detail.ejs`, `live-activity.ejs`) have grown large and contain a mix of page layout, data display, and UI components in single files. This makes them difficult to read, modify, and maintain.
+### **Summary Checklist**
+- [ ] Create a central `StatusPhase` type in a new `src/types.ts` file.
+- [ ] Update backend interfaces in `src/tools/web/data-access.ts` to use the new `StatusPhase` type.
+- [ ] Refactor the status-checking logic in `getSequenceDetails` to be type-safe.
+- [ ] Verify that frontend EJS templates and CSS align with the `StatusPhase` values.
+- [ ] Update `ARCHITECTURE.MD` to document this new best practice.
 
-This refactor will extract common and complex UI sections into their own dedicated "partial" EJS files. The main page templates will then include these partials, resulting in a cleaner, more component-based structure. **This is a purely structural refactor; there should be no change to the UI's appearance or functionality.**
+---
 
-## Summary Checklist
+### **Detailed Implementation Steps**
 
--   [x] Create new EJS partials for reusable UI components.
--   [x] Refactor `task-detail.ejs` to use the new partials.
--   [x] Refactor `sequence-detail.ejs` to use the new partials.
--   [x] Refactor `live-activity.ejs` to use the new partials.
--   [x] Manually test the web dashboard to ensure no visual or functional regressions.
--   [x] Update `ARCHITECTURE.MD` to reflect the improved frontend structure.
-
-## Detailed Implementation Steps
-
-### 1. Create New EJS Partials
-
-*   **Objective:** To create the individual, reusable template files for common UI components.
-*   **Task:** In the `src/templates/web/partials/` directory, create the following new files. We will use a leading underscore `_` to denote that these are partials intended for inclusion.
-
-    1.  `_log-viewer.ejs`: This will contain the log viewer window, including the header and the `<pre>` tag for content.
-    2.  `_task-steps.ejs`: This will contain the list of pipeline steps for a single task.
-    3.  `_sequence-task-list.ejs`: This will contain the list of tasks belonging to a sequence.
-    4.  `_token-usage.ejs`: This will contain the card that displays token usage statistics for a task or sequence.
-
-### 2. Refactor `task-detail.ejs`
-
-*   **Objective:** To simplify the `task-detail.ejs` template by replacing large blocks of HTML with includes for the new partials.
+#### 1. Create a Central `StatusPhase` Type
+*   **Objective:** Establish a single, authoritative source for all possible status strings in the application.
 *   **Task:**
-    1.  Open `src/templates/web/task-detail.ejs`.
-    2.  Locate the HTML block for the **Log Viewer**. Cut this entire block and paste it into the new `_log-viewer.ejs` file.
-    3.  Locate the HTML block for the **Token Usage**. Cut this block and paste it into the new `_token-usage.ejs` file.
-    4.  In `task-detail.ejs`, replace the removed blocks with `<%- include(...) %>` calls, passing the necessary data.
-
-*   **Code Snippet (Log Viewer):**
-
-    **Before:**
-    ```ejs
-    <!-- In task-detail.ejs -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                    <!-- ... card header content ... -->
-                </div>
-                <div class="card-body p-0">
-                    <div class="log-viewer" id="log-content">
-                        <!-- ... initial content ... -->
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+    1.  Create a new file at `src/types.ts`.
+    2.  Define and export a type alias named `StatusPhase` that includes all known lifecycle statuses.
+*   **Code Snippet (`src/types.ts`):**
+    ```typescript
+    /**
+     * Defines all possible lifecycle phases for tasks and sequences.
+     * This is the single source of truth for status strings.
+     */
+    export type StatusPhase =
+      | 'pending'
+      | 'running'
+      | 'done'
+      | 'failed'
+      | 'interrupted'
+      | 'paused'
+      | 'started';
     ```
 
-    **After:**
-    ```ejs
-    <!-- In task-detail.ejs -->
-    <%- include('partials/_log-viewer') %>
-    ```
-
-*   **Code Snippet (Token Usage):**
-
-    **Before:**
-    ```ejs
-    <!-- In task-detail.ejs -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <!-- ... Entire Token Usage card ... -->
-            </div>
-        </div>
-    </div>
-    ```
-
-    **After:**
-    ```ejs
-    <!-- In task-detail.ejs -->
-    <%- include('partials/_token-usage', { tokenUsage: task.tokenUsage, helpers: helpers }) %>
-    ```
-
-### 3. Refactor `sequence-detail.ejs`
-
-*   **Objective:** To simplify the `sequence-detail.ejs` template.
+#### 2. Update Data Access Interfaces
+*   **Objective:** Apply the new type to the interfaces that shape the data sent to the web dashboard, enabling compile-time checks.
 *   **Task:**
-    1.  Open `src/templates/web/sequence-detail.ejs`.
-    2.  Replace the "Total Token Usage" card with an include for the `_token-usage.ejs` partial.
-    3.  Cut the task list logic (the `forEach` loop over `sequence.tasks`) and move it into `_sequence-task-list.ejs`.
-    4.  Replace the removed block with an include for the new partial.
+    1.  Open `src/tools/web/data-access.ts`.
+    2.  Import the new `StatusPhase` type: `import { StatusPhase } from '../../types.js';`.
+    3.  In the `TaskStatus`, `SequenceStatus`, and `SequenceTaskInfo` interfaces, change the type of the `phase` and `status` properties from `string` to `StatusPhase`.
+*   **Code Snippet (Example from `src/tools/web/data-access.ts`):**
+    ```typescript
+    // Before
+    export interface TaskStatus {
+      // ...
+      phase: string;
+      // ...
+    }
 
-*   **Code Snippet (Token Usage):**
+    // After
+    import { StatusPhase } from '../../types.js';
 
-    ```ejs
-    <!-- In sequence-detail.ejs -->
-    <%- include('partials/_token-usage', { tokenUsage: sequence.stats.totalTokenUsage, helpers: helpers }) %>
+    export interface TaskStatus {
+      // ...
+      phase: StatusPhase; // <-- Use the specific type
+      // ...
+    }
     ```
 
-### 4. Refactor `live-activity.ejs`
-
-*   **Objective:** To simplify the most complex page, `live-activity.ejs`, using multiple partials.
+#### 3. Refactor Status-Checking Logic
+*   **Objective:** Replace the brittle `if/else` chain with a more robust and type-safe `switch` statement that the compiler can validate.
 *   **Task:**
-    1.  Open `src/templates/web/live-activity.ejs`.
-    2.  Replace the "Sequence Tasks" panel with an include for `_sequence-task-list.ejs`. You will pass `parentSequence.tasks` to it.
-    3.  Replace the "Task Steps" panel with an include for `_task-steps.ejs`. You will pass `taskToShow` to it.
-    4.  Replace the "Log Viewer" `<div>` with an include for `_log-viewer.ejs`.
+    1.  In `src/tools/web/data-access.ts`, locate the `getSequenceDetails` function.
+    2.  Find the logic block that determines the `taskStatus`.
+    3.  Replace it with the `switch` statement below. This correctly handles the `interrupted` case and provides a safer default.
+*   **Code Snippet (`src/tools/web/data-access.ts`):**
+    ```typescript
+    // Before
+    let taskStatus = 'pending';
+    if (taskState.phase === 'running') taskStatus = 'running';
+    else if (taskState.phase === 'failed') taskStatus = 'failed';
+    else if (taskState.phase === 'done') taskStatus = 'done';
+    else if (taskState.phase) taskStatus = 'started';
 
-*   **Code Snippet (Example - Task Steps):**
+    // After
+    const taskPhase: StatusPhase = taskState.phase || 'pending';
+    let taskStatus: StatusPhase;
 
-    **Before:**
-    ```ejs
-    <!-- In live-activity.ejs -->
-    <div class="card">
-        <div class="card-header">
-             <h6 class="mb-0"><i class="bi bi-list-ol me-2"></i>Task Steps</h6>
-        </div>
-        <ul class="list-group list-group-flush">
-             <% if (taskToShow.steps && Object.keys(taskToShow.steps).length > 0) { %>
-                <!-- ... forEach loop over steps ... -->
-            <% } else { %>
-                 <li class="list-group-item text-muted">Steps not yet started.</li>
-            <% } %>
-        </ul>
-    </div>
+    switch (taskPhase) {
+        case 'running':
+        case 'failed':
+        case 'done':
+        case 'interrupted':
+        case 'paused':
+            taskStatus = taskPhase; // Directly use the valid phase
+            break;
+        case 'pending':
+            taskStatus = 'pending';
+            break;
+        default:
+            // This handles any other phase (like 'started') or acts as a safe fallback
+            taskStatus = 'started';
+            break;
+    }
     ```
 
-    **After:**
-    ```ejs
-    <!-- In live-activity.ejs -->
-    <%- include('partials/_task-steps', { task: taskToShow }) %>
-    ```
-
-### 5. Manual Testing
-
-*   **Objective:** To confirm that the refactor did not introduce any bugs or visual changes.
+#### 4. Verify Frontend Templates
+*   **Objective:** Ensure that our frontend assets (CSS and templates) correctly correspond to the authoritative `StatusPhase` type.
 *   **Task:**
-    1.  Start the web server using `npm run cat-herder:web`.
-    2.  Navigate to the dashboard at `http://localhost:5177`.
-    3.  Click through all pages:
-        *   Live Activity (`/live`)
-        *   Run History (`/history`)
-        *   A Sequence Detail page
-        *   A Task Detail page
-    4.  Verify that all UI elements appear correctly and that data is displayed as it was before the refactor.
-    5.  On the Task Detail page, confirm that clicking the log buttons still loads the log content correctly into the viewer.
+    1.  No code changes are expected here. This is a verification step.
+    2.  Check the CSS classes defined in `src/templates/web/partials/header.ejs` (e.g., `.status-running`, `.status-failed`).
+    3.  Confirm that every value in the `StatusPhase` type has a corresponding CSS class.
+    4.  Review `src/templates/web/partials/_status-badge.ejs` to see how these statuses are used.
 
-## Documentation Changes
+### **Error Handling & Warnings**
+*   **Compile-Time:** The primary benefit of this change is compile-time safety. If a developer attempts to use an invalid status string (e.g., `task.phase = 'finished'`), the TypeScript compiler (`npm run typecheck`) will immediately throw an error.
+*   **Runtime:** If a `.state.json` file on disk contains a status not defined in `StatusPhase` (e.g., from an older version of the tool), the `switch` statement's `default` case will gracefully handle it by assigning it the `started` status, preventing the application from crashing.
 
-### Update ARCHITECTURE.MD
-
-*   **Objective:** To ensure our architectural documentation reflects the current state of the codebase.
-*   **Task:** The principle of "Maintain Small, Focused Modules" is already in the document, which is great. We just need to add a small note to explicitly mention how this applies to the frontend.
-
+### **Documentation Changes**
+*   **Objective:** Update the project's architectural documentation to reflect this new best practice, ensuring future development follows this pattern.
+*   **Task:**
     1.  Open `ARCHITECTURE.MD`.
-    2.  Navigate to section `2. Core Architectural Concepts` -> `A. Separation of Concerns` -> `1. Interface Layer (CLI & Web)`.
-    3.  Find the bullet point for **Web Dashboard**.
-    4.  Add a sentence to clarify the template structure.
+    2.  Navigate to section **"7. Code and Module Best Practices"**.
+    3.  Add a new sub-section that explains the importance of using shared types for core concepts like status phases.
+*   **Suggested Addition to `ARCHITECTURE.MD`:**
+    ```markdown
+    ### D. Use Shared Types for Core Concepts
 
-*   **Code Snippet:**
+    **The Principle:** For core data concepts that are used across multiple modules, such as lifecycle statuses ('running', 'done', 'failed'), define them once in a central `src/types.ts` file and import them wherever needed. Avoid using primitive types like `string` for these concepts.
 
-    **Current Text:**
-    > *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
+    **Why it Matters:** This creates a single source of truth that the TypeScript compiler can enforce. It eliminates a whole class of bugs related to typos or unhandled states. For example, by defining `type StatusPhase = 'running' | 'done'`, the compiler will immediately flag any code that attempts to set a status to an incorrect value like `'runing'` or `'completed'`.
 
-    **Proposed New Text:**
-    > *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
+    **Practical Example:**
+    *   **Problem:** A bug occurred where an `'interrupted'` task was displayed as `'started'` because the data-access layer didn't have an explicit check for it and fell back to a generic case.
+    *   **Solution:** We created a `StatusPhase` type containing all possible statuses. By applying this type to our interfaces, the compiler would have warned us if a `switch` statement was not exhaustively handling all defined phases, making the logic gap obvious during development.
+    ```
