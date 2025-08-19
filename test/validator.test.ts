@@ -1621,7 +1621,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1644,7 +1644,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1667,7 +1667,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1691,7 +1691,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1715,7 +1715,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1739,7 +1739,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1763,7 +1763,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1788,7 +1788,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1814,7 +1814,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1853,7 +1853,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
@@ -1891,7 +1891,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(true);
@@ -1913,7 +1913,7 @@ describe('Validator - Top-Level Config Validation', () => {
           }
         ]
       }
-    });
+    };
 
     const result = validatePipeline(config, mockProjectRoot);
     expect(result.isValid).toBe(false);
