@@ -33,7 +33,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
-    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `.claude/state` directory.
+    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory.
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
 
@@ -103,7 +103,7 @@ This section documents key design choices and their rationale, providing context
     *   **Rationale:** This approach allows our tool to seamlessly inherit the user's existing environment. Authentication, custom settings (`settings.json`), and default model configurations are handled by the `claude` tool, simplifying our logic and respecting the user's setup.
     *   **Trade-off:** We are dependent on the CLI's stability and its JSON streaming output format. This is a favorable trade-off for the initial version as it significantly reduces complexity.
 
-*   **Decision: Use a file-based system (`.claude/state/*.json`) for state management.**
+*   **Decision: Use a file-based system (`~/.cat-herder/state/*.json`) for state management.**
     *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions.
     *   **Trade-off:** The system is not designed for high-concurrency parallelism on a single repository. This is acceptable as the primary use case is a single, sequential workflow per user action.
 

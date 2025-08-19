@@ -179,7 +179,7 @@ npm run build
 2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
 ```bash
 # In your my-test-app directory
-rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
+rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
 ```
 
 
@@ -230,8 +230,8 @@ This tool is driven by a `pipelines` object in your `cat-herder.config.js` file.
 // cat-herder.config.js
 module.exports = {
   taskFolder: "cat-herder-tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: "~/.cat-herder/state",
+  logsPath: "~/.cat-herder/logs",
   structureIgnore: [
     "node_modules/**",
     ".git/**",
@@ -589,7 +589,7 @@ With this setting, instead of failing, the tool will pause execution and log a w
 
 ### Debugging and Logs
 
-The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `.claude/logs/` directory:
+The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `~/.cat-herder/logs/` directory:
 
 - **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
 - **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
@@ -608,7 +608,7 @@ The reasoning logs are particularly valuable when:
 
 ### State Files
 
-The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `.claude/state` directory.
+The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `~/.cat-herder/state` directory.
 
 **Task State File (`<task-id>.state.json`):**
 This file contains the status of a single task. It includes the `startTime` of the task and a `stats` object with total duration and pause time metrics.
