@@ -217,6 +217,17 @@ npm install
 echo "\n✅ Fresh test environment is ready!"
 ```
 
+### Part 3: Testing the Web Dashboard
+
+To test the web dashboard UI without running a live task, you can use the built-in test environment, which uses a static set of mock data from the `test/e2e-data/` directory.
+
+```bash
+# In your cat-herder repository root
+npm run test:manual:web
+```
+
+This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes without needing to run a live AI task or having existing data in your `~/.cat-herder` directory.
+
 ## How It Works
 
 ### Configurable Pipelines (`cat-herder.config.js`)

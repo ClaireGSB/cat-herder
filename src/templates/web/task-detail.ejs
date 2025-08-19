@@ -55,15 +55,7 @@
                                         <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
                                         <%= stepName %>
                                         
-                                        <% if (stepStatus === 'done') { %>
-                                            <i class="bi bi-check-circle-fill text-success ms-2"></i>
-                                        <% } else if (stepStatus === 'running') { %>
-                                            <i class="bi bi-arrow-repeat text-primary ms-2 spinner-border spinner-border-sm" role="status"></i>
-                                        <% } else if (stepStatus === 'failed') { %>
-                                            <i class="bi bi-x-circle-fill text-danger ms-2"></i>
-                                        <% } else { %>
-                                            <i class="bi bi-circle text-muted ms-2"></i>
-                                        <% } %>
+                                        <%- include('partials/_status-badge', { status: stepStatus, cssClass: 'ms-2' }) %>
                                         
                                         <% if (task.phase === 'running' && stepStatus === 'running') { %>
                                             <a href="/live" class="ms-2 btn btn-danger btn-sm" title="View Live Activity">
@@ -118,82 +110,9 @@
 </div>
 
 
-<!-- Log Viewer -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                <h5 class="card-title mb-0">
-                    <i class="bi bi-terminal me-2"></i>
-                    Log Viewer
-                </h5>
-                <div id="loading-spinner" class="loading-spinner">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                </div>
-            </div>
-            <div class="card-body p-0">
-                <div class="log-viewer" id="log-content">
-                    <div class="text-muted p-4 text-center">
-                        <i class="bi bi-file-text display-4 mb-3"></i>
-                        <p>Select a step log above to view its content here.</p>
-                        <small>Logs will be loaded asynchronously for better performance.</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<%- include('partials/_log-viewer') %>
 
-<!-- Token Usage & Stats -->
-<% if (task.tokenUsage && Object.keys(task.tokenUsage).length > 0) { %>
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-transparent">
-                    <h5 class="card-title mb-0">
-                        <i class="bi bi-graph-up me-2"></i>
-                        Token Usage
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <% Object.entries(task.tokenUsage).forEach(([model, usage]) => { %>
-                            <div class="col-lg-6 mb-3">
-                                <div class="task-stats h-100">
-                                    <h6 class="mb-3">
-                                        <i class="bi bi-cpu me-1"></i>
-                                        <%= helpers.formatModelName(model) %>
-                                    </h6>
-                                    
-                                    <div class="row text-center">
-                                        <div class="col-md-3 col-6 mb-2">
-                                            <h5 class="text-primary mb-0"><%= usage.inputTokens?.toLocaleString() || '0' %></h5>
-                                            <small class="text-muted">Input</small>
-                                        </div>
-                                        <div class="col-md-3 col-6 mb-2">
-                                            <h5 class="text-success mb-0"><%= usage.outputTokens?.toLocaleString() || '0' %></h5>
-                                            <small class="text-muted">Output</small>
-                                        </div>
-                                        <div class="col-md-3 col-6 mb-2">
-                                            <h5 class="text-info mb-0"><%= usage.cacheCreationInputTokens?.toLocaleString() || '0' %></h5>
-                                            <small class="text-muted">Cache Write</small>
-                                        </div>
-                                        <div class="col-md-3 col-6 mb-2">
-                                            <h5 class="text-warning mb-0"><%= usage.cacheReadInputTokens?.toLocaleString() || '0' %></h5>
-                                            <small class="text-muted">Cache Read</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        <% }); %>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-<% } %>
+<%- include('partials/_token-usage', { tokenUsage: task.tokenUsage, helpers: helpers }) %>
 
 <!-- Raw Task Data (Debug) -->
 <% if (process.env.NODE_ENV === 'development' || true) { %>

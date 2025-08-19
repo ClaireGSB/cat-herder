@@ -18,7 +18,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 1.  **Interface Layer (CLI & Web):** The user's entry point. This layer is responsible for parsing user input and presenting status information.
     *   **CLI (`src/index.ts`, `src/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
-    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
+    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
     *   It reads the user's pipeline configuration (`cat-herder.config.js`).
@@ -209,6 +209,16 @@ To support the guiding principles, we adhere to specific best practices for code
 **Practical Example:**
 *   **Problem:** Initially, `orchestrator.ts` re-exported the `runTaskSequence` function from `sequence-runner.ts`. The `cli-actions.ts` file then imported it from `orchestrator.ts`.
 *   **Solution:** We removed the re-export from `orchestrator.ts` and updated `cli-actions.ts` to import `runTaskSequence` directly from its source file, `src/tools/orchestration/sequence-runner.js`. This makes the dependency path clear and honest.
+
+### D. Use Shared Types for Core Concepts
+
+**The Principle:** For core data concepts that are used across multiple modules, such as lifecycle statuses ('running', 'done', 'failed'), define them once in a central `src/types.ts` file and import them wherever needed. Avoid using primitive types like `string` for these concepts.
+
+**Why it Matters:** This creates a single source of truth that the TypeScript compiler can enforce. It eliminates a whole class of bugs related to typos or unhandled states. For example, by defining `type StatusPhase = 'running' | 'done'`, the compiler will immediately flag any code that attempts to set a status to an incorrect value like `'runing'` or `'completed'`.
+
+**Practical Example:**
+*   **Problem:** A bug occurred where an `'interrupted'` task was displayed as `'started'` because the data-access layer didn't have an explicit check for it and fell back to a generic case.
+*   **Solution:** We created a `StatusPhase` type containing all possible statuses. By applying this type to our interfaces, the compiler would have warned us if a `switch` statement was not exhaustively handling all defined phases, making the logic gap obvious during development.
 
 ---
 

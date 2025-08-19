@@ -19,18 +19,7 @@
         </nav>
     </div>
     <div class="d-flex align-items-center gap-3">
-        <span class="badge status-<%= sequence.phase %> fs-6 sequence-status">
-            <% if (sequence.phase === 'running') { %>
-                <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-            <% } else if (sequence.phase === 'done') { %>
-                <i class="bi bi-check-circle-fill me-1"></i>
-            <% } else if (sequence.phase === 'failed') { %>
-                <i class="bi bi-exclamation-triangle-fill me-1"></i>
-            <% } else if (sequence.phase === 'paused') { %>
-                <i class="bi bi-pause-circle-fill me-1"></i>
-            <% } %>
-            <%= sequence.phase %>
-        </span>
+        <%- include('partials/_status-badge', { status: sequence.phase, cssClass: 'fs-6 sequence-status' }) %>
     </div>
 </div>
 
@@ -46,7 +35,7 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="task-stats">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted">Folder Path</span>
@@ -66,7 +55,7 @@
                             <% } %>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="task-stats h-100">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted">Total Duration</span>
@@ -85,7 +74,7 @@
                             <% } %>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="task-stats">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="text-muted">Total Tasks</span>
@@ -99,34 +88,14 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
-                        <div class="task-stats h-100">
-                            <h6 class="mb-3 text-muted">
-                                <i class="bi bi-graph-up me-1"></i>
-                                Total Token Usage
-                            </h6>
-                            <% if (sequence.stats?.totalTokenUsage && Object.keys(sequence.stats.totalTokenUsage).length > 0) { %>
-                                <% Object.entries(sequence.stats.totalTokenUsage).forEach(([model, usage]) => { %>
-                                    <div class="mb-2 p-2 border rounded bg-light">
-                                        <small class="fw-bold d-block mb-1"><%= helpers.formatModelName(model) %></small>
-                                        <div class="token-usage small">
-                                            <span class="badge bg-primary">Input: <%= (usage.inputTokens || 0).toLocaleString() %></span>
-                                            <span class="badge bg-success">Output: <%= (usage.outputTokens || 0).toLocaleString() %></span>
-                                            <span class="badge bg-info">Cache Write: <%= (usage.cacheCreationInputTokens || 0).toLocaleString() %></span>
-                                            <span class="badge bg-warning text-dark">Cache Read: <%= (usage.cacheReadInputTokens || 0).toLocaleString() %></span>
-                                        </div>
-                                    </div>
-                                <% }); %>
-                            <% } else { %>
-                                <div class="text-muted">N/A</div>
-                            <% } %>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Token Usage Section -->
+<%- include('partials/_token-usage', { tokenUsage: sequence.stats?.totalTokenUsage, helpers: helpers }) %>
 
 <!-- Tasks List -->
 <div class="row">
@@ -139,75 +108,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <% if (sequence.tasks && sequence.tasks.length > 0) { %>
-                    <% sequence.tasks.forEach((task, index) => { %>
-                        <div class="pipeline-step <% if (task.status === 'done') { %>completed<% } else if (task.status === 'running') { %>running<% } else if (task.status === 'failed') { %>failed<% } %> mb-3" data-task-id="<%= task.taskId %>">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1">
-                                            <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
-                                            <%= task.filename || 'Unknown File' %>
-                                            
-                                            <!-- Status badge -->
-                                            <span class="badge status-<%= task.status %> ms-2 task-status-badge">
-                                                <% if (task.status === 'running') { %>
-                                                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-                                                <% } else if (task.status === 'done') { %>
-                                                    <i class="bi bi-check-circle-fill me-1"></i>
-                                                <% } else if (task.status === 'failed') { %>
-                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
-                                                <% } else { %>
-                                                    <i class="bi bi-clock me-1"></i>
-                                                <% } %>
-                                                <%= task.status %>
-                                            </span>
-                                            
-                                            <!-- Live activity link for running tasks -->
-                                            <% if (task.status === 'running') { %>
-                                                <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
-                                                    <i class="bi bi-broadcast me-1"></i>LIVE
-                                                </a>
-                                            <% } %>
-                                        </h6>
-                                        
-                                        <div class="small text-muted mb-2">
-                                            <strong>Task ID:</strong> <%= task.taskId %>
-                                        </div>
-                                        
-                                        <% if (task.lastUpdate) { %>
-                                            <div class="small text-muted">
-                                                <strong>Last Update:</strong> <%= new Date(task.lastUpdate).toLocaleString() %>
-                                            </div>
-                                        <% } %>
-                                    </div>
-                                    
-                                    <div class="ms-3">
-                                        <% if (task.taskId) { %>
-                                            <a href="/task/<%= task.taskId %>" class="btn btn-sm btn-outline-primary" title="View Task Details">
-                                                <i class="bi bi-eye me-1"></i>
-                                                Details
-                                            </a>
-                                        <% } else { %>
-                                            <button class="btn btn-sm btn-outline-secondary" disabled title="Task not yet started">
-                                                <i class="bi bi-eye me-1"></i>
-                                                Details
-                                            </button>
-                                        <% } %>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <% }); %>
-                <% } else { %>
-                    <div class="text-center py-4">
-                        <i class="bi bi-inbox display-6 text-muted mb-3"></i>
-                        <h5 class="text-muted mb-2">No Tasks Found</h5>
-                        <p class="text-muted">
-                            This sequence doesn't contain any task files, or the task folder could not be read.
-                        </p>
-                    </div>
-                <% } %>
+                <%- include('partials/_sequence-task-list', { tasks: sequence.tasks }) %>
             </div>
         </div>
     </div>

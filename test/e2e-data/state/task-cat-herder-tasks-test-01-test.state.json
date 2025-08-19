@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "taskId": "task-cat-herder-tasks-test-01-test",
+  "taskPath": "cat-herder-tasks/test/01-test.md",
+  "startTime": "2025-08-19T03:27:44.671Z",
+  "branch": "",
+  "currentStep": "review",
+  "phase": "interrupted",
+  "steps": {
+    "implement": "done",
+    "review": "interrupted"
+  },
+  "tokenUsage": {
+    "claude-3-5-haiku-20241022": {
+      "inputTokens": 57,
+      "outputTokens": 524,
+      "cacheCreationInputTokens": 51193,
+      "cacheReadInputTokens": 145182
+    }
+  },
+  "stats": null,
+  "lastUpdate": "2025-08-19T03:29:29.174Z",
+  "pipeline": "implement-and-review",
+  "parentSequenceId": "sequence-test"
+}

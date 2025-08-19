@@ -7,45 +7,10 @@
     <div class="col-lg-4 order-lg-1">
         <% if (taskToShow) { %>
             <!-- Sequence Context Panel -->
-            <% if (parentSequence) { %>
-                <div class="card mb-3">
-                    <div class="card-header">
-                        <h6 class="mb-0"><i class="bi bi-collection me-2"></i>Sequence Tasks</h6>
-                    </div>
-                    <ul class="list-group list-group-flush">
-                        <% parentSequence.tasks.forEach(task => { %>
-                            <li class="list-group-item d-flex justify-content-between align-items-center <%= task.taskId === taskToShow.taskId ? 'active' : '' %>">
-                                <span><i class="bi bi-file-earmark-text me-2"></i><%= task.filename %></span>
-                                <span class="badge status-<%= task.status %>"><%= task.status %></span>
-                            </li>
-                        <% }); %>
-                    </ul>
-                </div>
-            <% } %>
+            <%- include('partials/_live-sequence-tasks', { parentSequence: parentSequence, taskToShow: taskToShow }) %>
 
             <!-- Current Task Steps Panel -->
-            <div class="card">
-                <div class="card-header">
-                     <h6 class="mb-0"><i class="bi bi-list-ol me-2"></i>Task Steps</h6>
-                </div>
-                <ul class="list-group list-group-flush">
-                     <% if (taskToShow.steps && Object.keys(taskToShow.steps).length > 0) { %>
-                        <% Object.entries(taskToShow.steps).forEach(([stepName, stepStatus]) => { %>
-                            <li class="list-group-item d-flex justify-content-between align-items-center <%= stepName === taskToShow.currentStep ? 'active' : '' %>">
-                                <span><%= stepName %></span>
-                                <span class="badge status-<%= stepStatus %>">
-                                     <% if (stepStatus === 'running') { %>
-                                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                     <% } %>
-                                    <%= stepStatus %>
-                                </span>
-                            </li>
-                        <% }); %>
-                    <% } else { %>
-                         <li class="list-group-item text-muted">Steps not yet started.</li>
-                    <% } %>
-                </ul>
-            </div>
+            <%- include('partials/_live-task-steps', { taskToShow: taskToShow }) %>
         <% } %>
     </div>
 
@@ -78,7 +43,7 @@
                      <% if (parentSequence) { %>
                         <h6 class="card-subtitle mb-2 text-muted">
                             <i class="bi bi-collection me-1"></i>
-                            SEQUENCE: <%= parentSequence.sequenceId %> <span class="badge status-<%= parentSequence.phase %>"><%= parentSequence.phase %></span>
+                            SEQUENCE: <%= parentSequence.sequenceId %> <%- include('partials/_status-badge', { status: parentSequence.phase }) %>
                         </h6>
                     <% } %>
                 </div>
@@ -99,20 +64,7 @@
         <% } %>
 
         <!-- Log Viewer -->
-        <div class="log-viewer mt-3">
-            <pre id="live-log-content" class="log-content"><% 
-                if (initialLogContent) {
-                    // We just print the raw text content here. The script below will colorize it.
-                    %><%- initialLogContent %><%
-                } else if (isLive) {
-                    %>Connecting to live log stream...<%
-                } else if (taskToShow) {
-                    %>Log for last step not available.<%
-                } else {
-                    %>Waiting for a task to start...<%
-                }
-            %></pre>
-        </div>
+        <%- include('partials/_live-log-viewer', { initialLogContent: initialLogContent, isLive: isLive, taskToShow: taskToShow }) %>
     </div>
 </div>
 

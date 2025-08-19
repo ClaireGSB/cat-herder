@@ -1,0 +1,34 @@
+<%
+// Status badge partial - handles all status types with consistent styling
+// Parameters:
+//   status (required) - the status string (done, running, failed, interrupted, paused, pending, etc.)
+//   showIcon (optional) - whether to show icon (default: true)
+//   size (optional) - badge size modifier (default: '')
+//   cssClass (optional) - additional CSS classes
+
+const showIcon = typeof locals.showIcon !== 'undefined' ? locals.showIcon : true;
+const size = locals.size || '';
+const cssClass = locals.cssClass || '';
+const badgeClasses = `badge status-${status} ${size} ${cssClass}`.trim();
+%>
+
+<span class="<%= badgeClasses %>">
+    <% if (showIcon) { %>
+        <% if (status === 'running') { %>
+            <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+        <% } else if (status === 'done') { %>
+            <i class="bi bi-check-circle-fill me-1"></i>
+        <% } else if (status === 'failed') { %>
+            <i class="bi bi-exclamation-triangle-fill me-1"></i>
+        <% } else if (status === 'interrupted') { %>
+            <i class="bi bi-pause-circle-fill me-1"></i>
+        <% } else if (status === 'paused') { %>
+            <i class="bi bi-pause-circle-fill me-1"></i>
+        <% } else if (status === 'pending') { %>
+            <i class="bi bi-clock me-1"></i>
+        <% } else { %>
+            <i class="bi bi-circle me-1"></i>
+        <% } %>
+    <% } %>
+    <%= status %>
+</span>

@@ -89,7 +89,10 @@ export async function validateAction(): Promise<void> {
   }
 }
 
-export const webAction = startWebServer;
+export async function webAction(): Promise<void> {
+  // Call with no options to use the default config-based paths from ~/.cat-herder
+  await startWebServer();
+}
 
 export const tuiAction = startTui;
 

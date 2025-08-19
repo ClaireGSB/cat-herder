@@ -1,0 +1,15 @@
+<!-- Log Viewer -->
+<div class="log-viewer mt-3">
+    <pre id="live-log-content" class="log-content"><% 
+        if (initialLogContent) {
+            // We just print the raw text content here. The script below will colorize it.
+            %><%- initialLogContent %><%
+        } else if (isLive) {
+            %>Connecting to live log stream...<%
+        } else if (taskToShow) {
+            %>Log for last step not available.<%
+        } else {
+            %>Waiting for a task to start...<%
+        }
+    %></pre>
+</div>
