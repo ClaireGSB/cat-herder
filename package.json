@@ -37,6 +37,7 @@
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:manual:web": "tsx scripts/start-web-test.ts",
     "typecheck": "tsc --noEmit"
   }
 }

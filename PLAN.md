@@ -16,10 +16,10 @@ This plan outlines the creation of a self-contained test environment. We will ca
 ## Summary Checklist
 
 -   [X] Capture and store mock state and log files in the repository.
--   [ ] Create a new test runner script to start the server in "test mode".
--   [ ] Refactor the `startWebServer` function to accept custom data paths.
--   [ ] Update the `webAction` CLI command to use the newly refactored function.
--   [ ] Add a new `npm` script to easily run the test server.
+-   [X] Create a new test runner script to start the server in "test mode".
+-   [X] Refactor the `startWebServer` function to accept custom data paths.
+-   [X] Update the `webAction` CLI command to use the newly refactored function.
+-   [X] Add a new `npm` script to easily run the test server.
 -   [ ] Update the `README.md` with instructions for the new testing workflow.
 
 ## Detailed Implementation Steps
