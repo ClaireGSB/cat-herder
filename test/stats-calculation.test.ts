@@ -41,7 +41,7 @@ describe('Workflow Statistics Calculation', () => {
     // Re-mock all dependencies fresh for each test
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
     vi.mocked(runCheck).mockResolvedValue({ success: true, output: 'success' });
-    vi.mocked(validatePipeline).mockReturnValue({ isValid: true, errors: [] });
+    vi.mocked(validatePipeline).mockReturnValue({ isValid: true, errors: [], missingPermissions: [] });
     
     // Use fake timers to control time during tests
     vi.useFakeTimers();
