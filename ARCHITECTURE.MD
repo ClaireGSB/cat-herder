@@ -33,7 +33,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
-    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory.
+    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
 
@@ -90,6 +90,7 @@ graph TD
 *   **`.claude/` (in user's project)**: The user-facing configuration directory.
     *   **`commands/`**: User-customizable markdown prompts for each pipeline step.
     *   **`settings.json`**: Permissions and hooks for the `claude` CLI tool.
+*   **`~/.cat-herder/` (in user's home directory)**: Application data directory.
     *   **`state/`**: Contains the JSON state files that track the progress of tasks and sequences. **This directory should be in `.gitignore`**.
     *   **`logs/`**: Detailed logs for each step of every task run, crucial for debugging. **This directory should also be in `.gitignore`**.
 
@@ -104,7 +105,7 @@ This section documents key design choices and their rationale, providing context
     *   **Trade-off:** We are dependent on the CLI's stability and its JSON streaming output format. This is a favorable trade-off for the initial version as it significantly reduces complexity.
 
 *   **Decision: Use a file-based system (`~/.cat-herder/state/*.json`) for state management.**
-    *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions.
+    *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions. By placing these files in the user's home directory rather than the project directory, we avoid conflicts with existing project files and ensure the data persists across different projects.
     *   **Trade-off:** The system is not designed for high-concurrency parallelism on a single repository. This is acceptable as the primary use case is a single, sequential workflow per user action.
 
 *   **Decision: Expose AI prompts as user-editable `.md` files in `.claude/commands/`.**

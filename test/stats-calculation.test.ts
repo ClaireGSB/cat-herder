@@ -9,7 +9,17 @@ vi.mock('node:child_process');
 vi.mock('../src/tools/proc.js');
 vi.mock('../src/tools/check-runner.js');
 vi.mock('../src/tools/validator.js');
-vi.mock('../src/config.js');
+import * as config from '../src/config.js';
+
+vi.mock('../src/config.js', async (importOriginal) => {
+    const originalModule = await importOriginal<typeof config>();
+    return {
+        ...originalModule,
+        // Mock only the functions we need to control
+        getConfig: vi.fn(),
+        getProjectRoot: vi.fn(),
+    };
+});
 
 // Import the functions after mocking
 const { runStreaming } = await import('../src/tools/proc.js');
