@@ -1,0 +1,15 @@
+<% if (parentSequence) { %>
+    <div class="card mb-3">
+        <div class="card-header">
+            <h6 class="mb-0"><i class="bi bi-collection me-2"></i>Sequence Tasks</h6>
+        </div>
+        <ul class="list-group list-group-flush">
+            <% parentSequence.tasks.forEach(task => { %>
+                <li class="list-group-item d-flex justify-content-between align-items-center <%= task.taskId === taskToShow.taskId ? 'active' : '' %>">
+                    <span><i class="bi bi-file-earmark-text me-2"></i><%= task.filename %></span>
+                    <%- include('_status-badge', { status: task.status }) %>
+                </li>
+            <% }); %>
+        </ul>
+    </div>
+<% } %>
