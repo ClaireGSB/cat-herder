@@ -182,6 +182,8 @@ npm run build
 rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
 ```
 
+**Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts in `.claude/commands/` are preserved.
+
 
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash

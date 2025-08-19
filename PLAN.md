@@ -29,7 +29,7 @@ The new behavior will involve creating a dedicated hidden directory, `.cat-herde
 - [x] Ensure the `.claude/commands` directory is still utilized for sample commands.
 - [x] Add functionality to create a `.gitignore` file within the `.cat-herder` directory.
 - [x] Update all tests to reflect the new project name and directory structure.
-- [ ] Update the `README.md` and `ARCHITECTURE.md` files to document the changes.
+- [x] Update the `README.md` and `ARCHITECTURE.md` files to document the changes.
 
 ---
 
