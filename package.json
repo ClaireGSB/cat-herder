@@ -33,7 +33,7 @@
     "ws": "^8.18.0"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/dot-claude dist/ && cp -r src/tasks dist/ && cp -r src/templates dist/ && cp -r src/public dist/ && chmod +x dist/index.js",
+    "build": "rm -rf dist && tsc -p tsconfig.json && cp -r src/dot-claude dist/ && cp -r src/tasks dist/ && cp -r src/templates dist/tools/ && cp -r src/public dist/tools/ && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
