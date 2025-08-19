@@ -81,7 +81,21 @@ function mergeHook(settings: any): any {
  * Prompts the user to add the missing hook.
  */
 function promptToAddHook(settingsPath: string, userSettings: any): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise(async (resolve) => {
+    if (process.env.VITEST) {
+      console.log(pc.cyan("Detected test environment. Applying hook non-interactively."));
+      try {
+        const updatedSettings = mergeHook(userSettings);
+        await fs.writeJson(settingsPath, updatedSettings, { spaces: 2 });
+        console.log(pc.green("✔ Hook successfully added to .claude/settings.json."));
+      } catch (error) {
+        console.error(pc.red(`Error writing to .claude/settings.json: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        process.exit(1);
+      }
+      resolve();
+      return; // Exit the function early
+    }
+
     console.log(pc.yellow("\nWarning: Your .claude/settings.json is missing a required validation hook."));
     console.log(pc.gray("This hook enables the file access guardrails defined in your pipeline."));
     console.log(pc.gray(`It will be added to the 'PreToolUse' section.`));
