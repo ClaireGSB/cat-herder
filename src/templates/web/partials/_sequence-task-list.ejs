@@ -1,0 +1,69 @@
+<% if (tasks && tasks.length > 0) { %>
+    <% tasks.forEach((task, index) => { %>
+        <div class="pipeline-step <% if (task.status === 'done') { %>completed<% } else if (task.status === 'running') { %>running<% } else if (task.status === 'failed') { %>failed<% } %> mb-3" data-task-id="<%= task.taskId %>">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">
+                            <span class="badge bg-light text-dark me-2"><%= index + 1 %></span>
+                            <%= task.filename || 'Unknown File' %>
+                            
+                            <!-- Status badge -->
+                            <span class="badge status-<%= task.status %> ms-2 task-status-badge">
+                                <% if (task.status === 'running') { %>
+                                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                                <% } else if (task.status === 'done') { %>
+                                    <i class="bi bi-check-circle-fill me-1"></i>
+                                <% } else if (task.status === 'failed') { %>
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                                <% } else { %>
+                                    <i class="bi bi-clock me-1"></i>
+                                <% } %>
+                                <%= task.status %>
+                            </span>
+                            
+                            <!-- Live activity link for running tasks -->
+                            <% if (task.status === 'running') { %>
+                                <a href="/live" class="ms-2 badge bg-danger text-decoration-none" title="View Live Activity">
+                                    <i class="bi bi-broadcast me-1"></i>LIVE
+                                </a>
+                            <% } %>
+                        </h6>
+                        
+                        <div class="small text-muted mb-2">
+                            <strong>Task ID:</strong> <%= task.taskId %>
+                        </div>
+                        
+                        <% if (task.lastUpdate) { %>
+                            <div class="small text-muted">
+                                <strong>Last Update:</strong> <%= new Date(task.lastUpdate).toLocaleString() %>
+                            </div>
+                        <% } %>
+                    </div>
+                    
+                    <div class="ms-3">
+                        <% if (task.taskId) { %>
+                            <a href="/task/<%= task.taskId %>" class="btn btn-sm btn-outline-primary" title="View Task Details">
+                                <i class="bi bi-eye me-1"></i>
+                                Details
+                            </a>
+                        <% } else { %>
+                            <button class="btn btn-sm btn-outline-secondary" disabled title="Task not yet started">
+                                <i class="bi bi-eye me-1"></i>
+                                Details
+                            </button>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <% }); %>
+<% } else { %>
+    <div class="text-center py-4">
+        <i class="bi bi-inbox display-6 text-muted mb-3"></i>
+        <h5 class="text-muted mb-2">No Tasks Found</h5>
+        <p class="text-muted">
+            This sequence doesn't contain any task files, or the task folder could not be read.
+        </p>
+    </div>
+<% } %>
