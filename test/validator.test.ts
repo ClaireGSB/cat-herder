@@ -1584,7 +1584,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should accept valid top-level config properties', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.test-cat-herder/state',
       logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**', '.git/**'],
@@ -1608,7 +1608,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should accept config with undefined optional properties', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.claude/state', 
       logsPath: '.claude/logs',
       structureIgnore: ['node_modules/**'],
@@ -1631,7 +1631,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should reject invalid manageGitBranch (string instead of boolean)', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.test-cat-herder/state',
       logsPath: '.test-cat-herder/logs', 
       structureIgnore: ['node_modules/**'],
@@ -1680,7 +1680,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should reject invalid statePath (object instead of string)', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: { path: '.test-cat-herder/state' } as any, // Invalid object value
       logsPath: '.claude/logs',
       structureIgnore: ['node_modules/**'],
@@ -1704,7 +1704,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should reject invalid logsPath (array instead of string)', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.claude/state',
       logsPath: ['.test-cat-herder/logs'] as any, // Invalid array value
       structureIgnore: ['node_modules/**'],
@@ -1728,7 +1728,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should reject invalid structureIgnore (string instead of array)', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.test-cat-herder/state',
       logsPath: '.test-cat-herder/logs',
       structureIgnore: 'node_modules/**' as any, // Invalid string value
@@ -1752,7 +1752,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should reject invalid defaultPipeline (number instead of string)', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.test-cat-herder/state',
       logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],
@@ -1855,7 +1855,7 @@ describe('Validator - Top-Level Config Validation', () => {
 
   it('should accept manageGitBranch as false', () => {
     const config: ClaudeProjectConfig = {
-      taskFolder: 'claude-Tasks',
+      taskFolder: 'cat-herder-tasks',
       statePath: '.test-cat-herder/state',
       logsPath: '.test-cat-herder/logs',
       structureIgnore: ['node_modules/**'],

@@ -124,8 +124,8 @@ describe('Init Integration Tests', () => {
     expect(await fs.pathExists(path.join(tempDir, '.claude', 'commands', 'implement.md'))).toBe(true);
     
     // Verify task directory and sample
-    expect(await fs.pathExists(path.join(tempDir, 'claude-Tasks'))).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, 'claude-Tasks', 'task-001-sample.md'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder-tasks'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder-tasks', 'task-001-sample.md'))).toBe(true);
     
     // Verify package.json was updated
     const pkg = await fs.readJson(path.join(tempDir, 'package.json'));

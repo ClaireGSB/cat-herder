@@ -36,7 +36,7 @@ export interface ClaudeProjectConfig {
 
 // Default configuration if the user's file is missing parts
 const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" | "pipeline"> = {
-  taskFolder: "cat-herder-Tasks",
+  taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
   structureIgnore: [

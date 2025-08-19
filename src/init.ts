@@ -31,7 +31,7 @@ export async function init(targetRoot: string) {
   console.log(pc.green("Created .claude/ directory with default commands and settings."));
 
   // 3. Create a sample task and folder
-  const taskFolder = "cat-herder-Tasks";
+  const taskFolder = "cat-herder-tasks";
   await fs.ensureDir(path.join(targetRoot, taskFolder));
   const sampleTaskTemplatePath = path.resolve(new URL("./tasks/sample.md", import.meta.url).pathname);
   const sampleTaskTargetPath = path.join(targetRoot, taskFolder, "task-001-sample.md");

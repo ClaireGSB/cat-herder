@@ -5,7 +5,7 @@ import { taskPathToTaskId } from "../../utils/id-generation.js";
 
 /**
  * Converts a task file path into a Git-friendly branch name.
- * e.g., "claude-Tasks/sequence-A/01-sample.md" -> "claude/claude-Tasks-sequence-A-01-sample"
+ * e.g., "cat-herder-tasks/sequence-A/01-sample.md" -> "claude/cat-herder-tasks-sequence-A-01-sample"
  * @param taskPath The path to the task file.
  * @param projectRoot The project root directory.
  */
