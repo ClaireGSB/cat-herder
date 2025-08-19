@@ -58,7 +58,7 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
   }
 
   const sequenceId = folderPathToSequenceId(taskFolderPath);
-  const branchName = `claude/${sequenceId}`;
+  const branchName = `cat-herder/${sequenceId}`;
   const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
   const statusFile = path.join(resolvedStatePath, `${sequenceId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });

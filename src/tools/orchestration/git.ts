@@ -1,11 +1,11 @@
 import { execSync } from "node:child_process";
 import pc from "picocolors";
-import { ClaudeProjectConfig } from "../../config.js";
+import { CatHerderConfig } from "../../config.js";
 import { taskPathToTaskId } from "../../utils/id-generation.js";
 
 /**
  * Converts a task file path into a Git-friendly branch name.
- * e.g., "cat-herder-tasks/sequence-A/01-sample.md" -> "claude/cat-herder-tasks-sequence-A-01-sample"
+ * e.g., "cat-herder-Tasks/sequence-A/01-sample.md" -> "cat-herder/cat-herder-Tasks-sequence-A-01-sample"
  * @param taskPath The path to the task file.
  * @param projectRoot The project root directory.
  */
@@ -13,7 +13,7 @@ export function taskPathToBranchName(taskPath: string, projectRoot: string): str
   const taskId = taskPathToTaskId(taskPath, projectRoot);
   // remove the "task-" prefix for the branch name for brevity
   const branchNameSegment = taskId.startsWith('task-') ? taskId.substring(5) : taskId;
-  return `claude/${branchNameSegment}`;
+  return `cat-herder/${branchNameSegment}`;
 }
 
 /**
@@ -24,7 +24,7 @@ export function taskPathToBranchName(taskPath: string, projectRoot: string): str
  * @param taskPath The path to the task file.
  * @returns The name of the branch the task will run on.
  */
-export function ensureCorrectGitBranch(config: ClaudeProjectConfig, projectRoot: string, taskPath: string): string {
+export function ensureCorrectGitBranch(config: CatHerderConfig, projectRoot: string, taskPath: string): string {
   const currentBranch = execSync('git branch --show-current', { cwd: projectRoot }).toString().trim();
 
   // SCENARIO A: User has disabled automatic branch management.

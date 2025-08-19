@@ -19,8 +19,8 @@ export interface PipelineStep {
 
 type PipelinesMap = { [key: string]: PipelineStep[] };
 
-// This is the type definition for the user's claude.config.js file
-export interface ClaudeProjectConfig {
+// This is the type definition for the user's cat-herder.config.js file
+export interface CatHerderConfig {
   taskFolder: string;
   statePath: string;
   logsPath: string;
@@ -35,7 +35,7 @@ export interface ClaudeProjectConfig {
 }
 
 // Default configuration if the user's file is missing parts
-const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" | "pipeline"> = {
+const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pipeline"> = {
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
@@ -47,10 +47,10 @@ const defaultConfig: Omit<ClaudeProjectConfig, "pipelines" | "defaultPipeline" |
   waitForRateLimitReset: false,
 };
 
-let loadedConfig: ClaudeProjectConfig | null = null;
+let loadedConfig: CatHerderConfig | null = null;
 let projectRoot: string | null = null;
 
-export async function getConfig(): Promise<ClaudeProjectConfig> {
+export async function getConfig(): Promise<CatHerderConfig> {
   if (loadedConfig) return loadedConfig;
 
   const explorer = cosmiconfig("cat-herder");
@@ -78,7 +78,7 @@ export async function getConfig(): Promise<ClaudeProjectConfig> {
     defaultPipeline = Object.keys(pipelines)[0];
   }
   
-  const finalConfig: ClaudeProjectConfig = { 
+  const finalConfig: CatHerderConfig = { 
     ...defaultConfig, 
     ...userConfig,
     pipelines,

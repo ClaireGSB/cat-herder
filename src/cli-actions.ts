@@ -44,7 +44,7 @@ export async function validateAction(): Promise<void> {
   try {
     const config = await getConfig();
     if (!config) {
-      console.error(pc.red("✖ Could not load claude.config.js configuration."));
+      console.error(pc.red("✖ Could not load cat-herder.config.js configuration."));
       process.exit(1);
     }
     

@@ -43,7 +43,7 @@ export async function executePipelineForTask(
     // New multi-pipeline format
     pipelineName = options.pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
     if (!pipelineName || !config.pipelines[pipelineName]) {
-      throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
+      throw new Error(`Pipeline "${pipelineName}" not found in cat-herder.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
     }
     selectedPipeline = config.pipelines[pipelineName];
 

@@ -1,4 +1,4 @@
-class ClaudeDashboard {
+class CatHerderDashboard {
     constructor() {
         this.websocket = null;
         this.reconnectInterval = 5000;
@@ -213,7 +213,7 @@ class ClaudeDashboard {
 }
 
 // --- Initialize Global Dashboard ---
-window.dashboard = new ClaudeDashboard();
+window.dashboard = new CatHerderDashboard();
 document.addEventListener('DOMContentLoaded', () => {
     if (window.dashboard) {
         window.dashboard.initWebSocket();

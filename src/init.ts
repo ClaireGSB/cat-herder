@@ -8,7 +8,7 @@ export async function init(targetRoot: string) {
   console.log(pc.cyan("Initializing cat-herder..."));
 
   // 1. Create the config file from the template
-  const configTemplatePath = path.resolve(new URL("./templates/claude.config.js", import.meta.url).pathname);
+  const configTemplatePath = path.resolve(new URL("./templates/cat-herder.config.js", import.meta.url).pathname);
   const targetConfigPath = path.join(targetRoot, "cat-herder.config.js");
   if (fs.existsSync(targetConfigPath)) {
     console.log(pc.yellow("cat-herder.config.js already exists, skipping."));
@@ -52,11 +52,11 @@ export async function init(targetRoot: string) {
 
   const delta = {
     scripts: {
-      "claude:run": "cat-herder run",
-      "claude:watch": "cat-herder watch",
-      "claude:status": "cat-herder status",
-      "claude:tui": "cat-herder tui",
-      "claude:web": "cat-herder web",
+      "cat-herder:run": "cat-herder run",
+      "cat-herder:watch": "cat-herder watch",
+      "cat-herder:status": "cat-herder status",
+      "cat-herder:tui": "cat-herder tui",
+      "cat-herder:web": "cat-herder web",
     },
     devDependencies: {
       "@your-scope/cat-herder": "0.1.0",

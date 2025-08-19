@@ -127,7 +127,7 @@ export function runStreaming(
       cwd: cwd,
       env: {
         ...process.env,
-        CLAUDE_PROJECT_ACTIVE: "true",
+        CAT_HERDER_ACTIVE: "true",
       },
     });
     activeProcess = p;
