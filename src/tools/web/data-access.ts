@@ -218,6 +218,7 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
                     if (taskState.phase === 'running') taskStatus = 'running';
                     else if (taskState.phase === 'failed') taskStatus = 'failed';
                     else if (taskState.phase === 'done') taskStatus = 'done';
+                    else if (taskState.phase === 'interrupted') taskStatus = 'interrupted';
                     else if (taskState.phase) taskStatus = 'started';
                     const taskPath = taskState.taskPath || 'unknown';
                     sequenceDetails.tasks.push({
