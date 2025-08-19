@@ -1,9 +1,9 @@
 {
-  "name": "@your-scope/catherder",
+  "name": "@your-scope/cat-herder",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "catherder": "./dist/index.js"
+    "cat-herder": "./dist/index.js"
   },
   "dependencies": {
     "chokidar": "^4.0.3",

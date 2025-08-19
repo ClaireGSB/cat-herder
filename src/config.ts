@@ -51,12 +51,12 @@ let projectRoot: string | null = null;
 export async function getConfig(): Promise<ClaudeProjectConfig> {
   if (loadedConfig) return loadedConfig;
 
-  const explorer = cosmiconfig("catherder");
+  const explorer = cosmiconfig("cat-herder");
   const result = await explorer.search();
 
   if (!result) {
-    console.error("Error: Configuration file (catherder.config.js) not found.");
-    console.error("Please run `catherder init` in your project root.");
+    console.error("Error: Configuration file (cat-herder.config.js) not found.");
+    console.error("Please run `cat-herder init` in your project root.");
     process.exit(1);
   }
 

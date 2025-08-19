@@ -14,14 +14,14 @@ import {
 
 const program = new Command();
 program
-  .name("catherder")
+  .name("cat-herder")
   .description("A CLI tool for orchestrating AI-driven development workflows.")
   .version("0.1.0");
 
 // `init` command
 program
   .command("init")
-  .description("Initializes CatHerder in the current repository.")
+  .description("Initializes cat-herder in the current repository.")
   .action(initAction);
 
 // `run` command
@@ -40,7 +40,7 @@ program
 // `validate` command
 program
   .command("validate")
-  .description("Validates the catherder.config.js pipeline and offers to fix permissions.")
+  .description("Validates the cat-herder.config.js pipeline and offers to fix permissions.")
   .action(validateAction);
 
 // `web` command

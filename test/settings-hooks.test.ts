@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 describe('Settings Hook Logic', () => {
   const requiredHook = {
     type: "command",
-    command: "node ./node_modules/@your-scope/catherder/dist/tools/pipeline-validator.js < /dev/stdin",
+    command: "node ./node_modules/@your-scope/cat-herder/dist/tools/pipeline-validator.js < /dev/stdin",
   };
   
   const requiredMatcher = "Edit|Write|MultiEdit";

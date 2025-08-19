@@ -100,7 +100,7 @@ describe('Init Integration Tests', () => {
     
     // Check that the required hook would be detected as missing
     const requiredMatcher = 'Edit|Write|MultiEdit';
-    const requiredCommand = 'node ./node_modules/@your-scope/catherder/dist/tools/pipeline-validator.js < /dev/stdin';
+    const requiredCommand = 'node ./node_modules/@your-scope/cat-herder/dist/tools/pipeline-validator.js < /dev/stdin';
     
     const matcherEntry = settings.hooks.PreToolUse.find(h => h.matcher === requiredMatcher);
     const hasRequiredHook = matcherEntry?.hooks?.some((h: any) => h.command === requiredCommand) || false;

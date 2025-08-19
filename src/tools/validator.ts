@@ -78,7 +78,7 @@ function loadProjectSettings(projectRoot: string, errors: string[]): { allowedPe
       errors.push("Could not parse .claude/settings.json. Please ensure it is valid JSON.");
     }
   } else {
-    errors.push(".claude/settings.json not found. Please run `catherder init` to create a default one.");
+    errors.push(".claude/settings.json not found. Please run `cat-herder init` to create a default one.");
   }
 
   // Load user-defined scripts from package.json
