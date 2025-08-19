@@ -20,7 +20,7 @@ This plan outlines the creation of a self-contained test environment. We will ca
 -   [X] Refactor the `startWebServer` function to accept custom data paths.
 -   [X] Update the `webAction` CLI command to use the newly refactored function.
 -   [X] Add a new `npm` script to easily run the test server.
--   [ ] Update the `README.md` with instructions for the new testing workflow.
+-   [X] Update the `README.md` with instructions for the new testing workflow.
 
 ## Detailed Implementation Steps
 
