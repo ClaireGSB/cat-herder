@@ -24,7 +24,6 @@ export interface CatHerderConfig {
   taskFolder: string;
   statePath: string;
   logsPath: string;
-  structureIgnore: string[];
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
@@ -39,9 +38,6 @@ const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pi
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
-  structureIgnore: [
-    "node_modules/**", ".git/**", "dist/**", ".claude/**", "*.lock",
-  ],
   manageGitBranch: true,
   autoCommit: false,
   waitForRateLimitReset: false,

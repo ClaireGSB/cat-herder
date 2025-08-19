@@ -4,13 +4,6 @@ module.exports = {
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
-  structureIgnore: [
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    ".claude/**",
-    "*.lock",
-  ],
 
   /**
    * If true (default), the orchestrator will automatically create and manage a

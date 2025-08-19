@@ -24,7 +24,7 @@ cd your-typescript-project
 ```
 
 2.  **Initialize the project:**
-This command sets up everything you need: it creates a `cat-herder.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `claude:*` helper scripts and recommended dependencies.
+This command sets up everything you need: it creates a `cat-herder.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `cat-herder:*` helper scripts and recommended dependencies.
 ```bash
 cat-herder init
 ```
@@ -38,7 +38,7 @@ npm install
 4.  **Run the automated workflow:**
 Use the npm script to execute the sample task.
 ```bash
-npm run claude:run -- cat-herder-tasks/task-001-sample.md
+npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
 ```
 
 The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
@@ -64,7 +64,7 @@ Execute a sequence of tasks from a folder:
 cat-herder run-sequence cat-herder-tasks/my-feature
 
 # Via npm script  
-npm run claude:run-sequence -- cat-herder-tasks/my-feature
+npm run cat-herder:run-sequence -- cat-herder-tasks/my-feature
 ```
 
 ### How It Works
@@ -188,7 +188,7 @@ rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
 # In your my-test-app directory
-npm run claude:run -- cat-herder-tasks/task-001-sample.md
+npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
 ```
 
 4. **Removing old test repo and creating fresh one** 
@@ -233,14 +233,7 @@ This tool is driven by a `pipelines` object in your `cat-herder.config.js` file.
 module.exports = {
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
-  logsPath: "~/.cat-herder/logs",
-  structureIgnore: [
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    ".claude/**",
-    "*.lock",
-  ],
+  logsPath: "~/.cat-herder/logs"
 
   /**
    * If true (default), the tool automatically creates a dedicated Git branch
@@ -352,7 +345,7 @@ The orchestrator selects a pipeline to run based on the following priority order
 cat-herder run cat-herder-tasks/my-task.md --pipeline docs-only
 
 # Via npm script (note the -- to pass arguments through)
-npm run claude:run -- cat-herder-tasks/my-task.md --pipeline docs-only
+npm run cat-herder:run -- cat-herder-tasks/my-task.md --pipeline docs-only
 ```
 
 2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
@@ -804,7 +797,7 @@ Start the web server using either command:
 cat-herder web
 
 # Via npm script
-npm run claude:web
+npm run cat-herder:web
 ```
 
 The dashboard will be available at `http://localhost:5177` in your browser.
@@ -827,14 +820,14 @@ All commands are available directly via the `cat-herder` executable.
 
 ### NPM Scripts
 
-The `init` command adds these `claude:*` scripts to your project's `package.json`:
+The `init` command adds these `cat-herder:*` scripts to your project's `package.json`:
 
--   `npm run claude:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
--   `npm run claude:run-sequence -- <folderPath>`: The recommended way to run a task sequence from a folder.
--   `npm run claude:watch`: Watches for new tasks.
--   `npm run claude:status`: Shows the latest task status.
--   `npm run claude:tui`: Launches the terminal UI.
--   `npm run claude:web`: Starts the interactive web dashboard with real-time monitoring.
+-   `npm run cat-herder:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
+-   `npm run cat-herder:run-sequence -- <folderPath>`: The recommended way to run a task sequence from a folder.
+-   `npm run cat-herder:watch`: Watches for new tasks.
+-   `npm run cat-herder:status`: Shows the latest task status.
+-   `npm run cat-herder:tui`: Launches the terminal UI.
+-   `npm run cat-herder:web`: Starts the interactive web dashboard with real-time monitoring.
 
 **Note:** Test scripts (like `npm test`) are not automatically added. The default pipeline includes test steps that assume you have `test`, `test:watch`, and `coverage` scripts, but you can customize your pipeline to use any testing framework or remove testing steps entirely.
 

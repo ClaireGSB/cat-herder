@@ -54,9 +54,6 @@ function validateTopLevelConfig(config: CatHerderConfig, errors: string[]): void
   if (config.logsPath !== undefined && typeof config.logsPath !== 'string') {
     errors.push(`Top-level config error: 'logsPath' must be a string.`);
   }
-  if (config.structureIgnore !== undefined && !Array.isArray(config.structureIgnore)) {
-    errors.push(`Top-level config error: 'structureIgnore' must be an array of strings.`);
-  }
   if (config.defaultPipeline !== undefined && typeof config.defaultPipeline !== 'string') {
     errors.push(`Top-level config error: 'defaultPipeline' must be a string.`);
   }
