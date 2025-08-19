@@ -38,7 +38,7 @@ describe('Sequence Orchestrator Integration Tests', () => {
     // Setup basic project structure in temp directory
     process.chdir(tempDir);
     
-    // Create claude.config.js
+    // Create cat-herder.config.js
     const configContent = `module.exports = {
   taskFolder: "test-sequence",
   statePath: ".test-cat-herder/state",
@@ -57,7 +57,7 @@ describe('Sequence Orchestrator Integration Tests', () => {
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeJson(path.join(tempDir, 'package.json'), {
       name: 'test-project',
@@ -66,8 +66,8 @@ describe('Sequence Orchestrator Integration Tests', () => {
     });
     
     await fs.ensureDir(path.join(tempDir, '.claude', 'commands'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'state'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'logs'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'state'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'logs'));
     
     // Create a proper command file
     const commandContent = `---

@@ -112,7 +112,7 @@ describe('Init Integration Tests', () => {
     await init(tempDir);
     
     // Verify main config file
-    expect(await fs.pathExists(path.join(tempDir, 'claude.config.js'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder.config.js'))).toBe(true);
     
     // Verify .claude directory structure
     expect(await fs.pathExists(path.join(tempDir, '.claude'))).toBe(true);

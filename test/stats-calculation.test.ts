@@ -71,8 +71,8 @@ describe('Workflow Statistics Calculation', () => {
     });
     
     await fs.ensureDir(path.join(tempDir, '.claude', 'commands'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'state'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'logs'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'state'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'logs'));
     
     // Create command files
     const commandContent = `---
@@ -127,7 +127,7 @@ Execute the test command.
     default: [{ name: "plan", command: "plan", check: { type: "none" } }]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-pause-test.md'), '# Pause Test Task');
 
@@ -198,7 +198,7 @@ Execute the test command.
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
 
     // Create a directory and two task files for the sequence.
     const sequenceFolder = path.join(tempDir, 'my-sequence');
@@ -262,7 +262,7 @@ Execute the test command.
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-no-pause.md'), '# No Pause Task');
 
@@ -313,7 +313,7 @@ Execute the test command.
     default: [{ name: "plan", command: "plan", check: { type: "none" } }]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-multi-pause.md'), '# Multi Pause Task');
 
