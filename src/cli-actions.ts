@@ -79,7 +79,7 @@ export async function validateAction(): Promise<void> {
         rl.close();
       });
     } else {
-      console.error(pc.gray("\nPlease fix the errors above and run 'claude-project validate' again."));
+      console.error(pc.gray("\nPlease fix the errors above and run 'catherder validate' again."));
       process.exit(1);
     }
 
@@ -113,7 +113,7 @@ export function fixPermissions(projectRoot: string, permissionsToAdd: string[]):
 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
     console.log(pc.green("\n✔ Successfully updated .claude/settings.json."));
-    console.log(pc.cyan("  Run 'claude-project validate' again to confirm."));
+    console.log(pc.cyan("  Run 'catherder validate' again to confirm."));
 
   } catch (e: any) {
     console.error(pc.red(`\nError updating settings.json: ${e.message}`));

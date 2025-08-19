@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This document outlines the architecture of the `@your-scope/claude-project` tool. Its purpose is to provide a high-level understanding of the system's components, their interactions, and the guiding principles for future development and refactoring.
+This document outlines the architecture of the `@your-scope/catherder` tool. Its purpose is to provide a high-level understanding of the system's components, their interactions, and the guiding principles for future development and refactoring.
 
 The project is a command-line tool that orchestrates an AI-driven, step-gated development workflow. It uses a user-defined pipeline configuration to execute a series of steps (e.g., planning, testing, implementing) for a given task, using the Claude CLI as its engine for AI-powered actions.
 
@@ -21,7 +21,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
-    *   It reads the user's pipeline configuration (`claude.config.js`).
+    *   It reads the user's pipeline configuration (`catherder.config.js`).
     *   It manages the overall flow of a task or sequence.
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
@@ -44,7 +44,7 @@ The following diagram illustrates the interaction between the core components wh
 ```mermaid
 graph TD
     subgraph User Interface
-        CLI[CLI: claude-project run]
+        CLI[CLI: catherder run]
         Web[Web Dashboard]
     end
 
@@ -56,7 +56,7 @@ graph TD
 
     subgraph State & Config
         State[State Files (.json)]
-        Config[claude.config.js]
+        Config[catherder.config.js]
         Prompts[Command Prompts (.md)]
     end
 
@@ -85,8 +85,8 @@ graph TD
 
 *   **`src/`**: The main application source code.
     *   **`src/tools/`**: Contains the core logic for orchestration, web UI, validation, and status management. This is the engine of the application.
-    *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`claude.config.js`).
-    *   **`src/init/`**: Logic related to the `claude-project init` command.
+    *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`catherder.config.js`).
+    *   **`src/init/`**: Logic related to the `catherder init` command.
 *   **`.claude/` (in user's project)**: The user-facing configuration directory.
     *   **`commands/`**: User-customizable markdown prompts for each pipeline step.
     *   **`settings.json`**: Permissions and hooks for the `claude` CLI tool.
@@ -126,7 +126,7 @@ Maintaining a high-quality, regression-free tool requires a multi-layered testin
     *   **Location:** In the `/test` directory.
 
 *   **End-to-End (E2E) Tests:** The highest level of testing, validating the entire user workflow from a black-box perspective.
-    *   **Methodology:** As described in the `README.md`, our E2E tests involve scripting the creation of a clean test project, running `claude-project init`, and executing a sample `claude-project run` command to ensure the entire pipeline executes successfully.
+    *   **Methodology:** As described in the `README.md`, our E2E tests involve scripting the creation of a clean test project, running `catherder init`, and executing a sample `catherder run` command to ensure the entire pipeline executes successfully.
     *   **Example:** `init-integration.test.ts`.
 
 ---
@@ -137,8 +137,8 @@ As a tool that executes commands and modifies code, security is a primary concer
 
 *   **Principle of Least Privilege:** The tool itself does not grant permissions. It is subject to the permissions defined by the user for the underlying `claude` CLI.
 *   **Centralized Permissions (`.claude/settings.json`):** All potentially sensitive operations, primarily `Bash` command execution, must be explicitly allowed by the user in this file. The tool will not run if a required permission is missing.
-*   **Proactive Validation:** The `claude-project validate` command acts as a safety check. It scans the pipeline configuration and cross-references it with `settings.json`, informing the user of any missing permissions *before* a run is attempted.
-*   **Step-Specific Guardrails (`fileAccess`):** The `fileAccess` property in `claude.config.js` provides a critical layer of defense against unintended file modifications. It ensures that each step of the pipeline can only write to a predefined set of files or directories, preventing, for instance, a documentation step from altering source code.
+*   **Proactive Validation:** The `catherder validate` command acts as a safety check. It scans the pipeline configuration and cross-references it with `settings.json`, informing the user of any missing permissions *before* a run is attempted.
+*   **Step-Specific Guardrails (`fileAccess`):** The `fileAccess` property in `catherder.config.js` provides a critical layer of defense against unintended file modifications. It ensures that each step of the pipeline can only write to a predefined set of files or directories, preventing, for instance, a documentation step from altering source code.
 
 ---
 
@@ -155,7 +155,7 @@ To maintain the project's quality and clarity, all new features and refactors sh
     *   Avoid in-memory state that is lost on exit. All progress must be written to a state file to ensure tasks can be resumed.
 
 3.  **Configuration Over Code.**
-    *   The tool's power comes from its flexibility. Prefer making new behaviors configurable in `claude.config.js` rather than hardcoding them.
+    *   The tool's power comes from its flexibility. Prefer making new behaviors configurable in `catherder.config.js` rather than hardcoding them.
     *   When adding new configurable options, ensure the `validate` command is updated to check them.
 
 4.  **Prioritize Developer Experience (DX).**

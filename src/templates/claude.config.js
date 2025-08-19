@@ -1,7 +1,7 @@
-// claude.config.js
-/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
+// catherder.config.js
+/** @type {import('@your-scope/catherder').ClaudeProjectConfig} */
 module.exports = {
-  taskFolder: "claude-Tasks",
+  taskFolder: "catherder-Tasks",
   statePath: ".claude/state",
   logsPath: ".claude/logs",
   structureIgnore: [

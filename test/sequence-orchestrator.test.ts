@@ -12,7 +12,7 @@ vi.mock('../src/tools/check-runner.js');
 // Import the functions after mocking
 const { runStreaming } = await import('../src/tools/proc.js');
 const { runCheck } = await import('../src/tools/check-runner.js');
-const { runTaskSequence } = await import('../src/tools/orchestrator.js');
+const { runTaskSequence } = await import('../src/tools/orchestration/sequence-runner.js');
 
 describe('Sequence Orchestrator Integration Tests', () => {
   let tempDir: string;

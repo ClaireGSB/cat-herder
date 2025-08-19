@@ -16,7 +16,8 @@ const { runStreaming } = await import('../src/tools/proc.js');
 const { runCheck } = await import('../src/tools/check-runner.js');
 const { validatePipeline } = await import('../src/tools/validator.js');
 const { getConfig, getProjectRoot } = await import('../src/config.js');
-const { runTask, runTaskSequence } = await import('../src/tools/orchestrator.js');
+const { runTask } = await import('../src/tools/orchestrator.js');
+const { runTaskSequence } = await import('../src/tools/orchestration/sequence-runner.js');
 
 describe('Workflow Statistics Calculation', () => {
   let tempDir: string;

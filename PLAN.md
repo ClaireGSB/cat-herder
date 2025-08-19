@@ -22,8 +22,8 @@ The new behavior will involve creating a dedicated hidden directory, `.CatHerder
 
 ## **Summary Checklist**
 
-- [ ] Rename all relevant project files and directories from the old name to "CatHerder".
-- [ ] Update all internal code references from the old name to "CatHerder".
+- [x] Rename all relevant project files and directories from the old name to "CatHerder".
+- [x] Update all internal code references from the old name to "CatHerder".
 - [ ] Implement the creation of the new `.CatHerder` data directory.
 - [ ] Modify the application logic to use `.CatHerder` for log and state files.
 - [ ] Ensure the `.claude/commands` directory is still utilized for sample commands.

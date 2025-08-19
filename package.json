@@ -1,9 +1,9 @@
 {
-  "name": "@your-scope/claude-project",
+  "name": "@your-scope/catherder",
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "claude-project": "./dist/index.js"
+    "catherder": "./dist/index.js"
   },
   "dependencies": {
     "chokidar": "^4.0.3",

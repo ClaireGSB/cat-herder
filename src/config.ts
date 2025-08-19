@@ -51,12 +51,12 @@ let projectRoot: string | null = null;
 export async function getConfig(): Promise<ClaudeProjectConfig> {
   if (loadedConfig) return loadedConfig;
 
-  const explorer = cosmiconfig("claude");
+  const explorer = cosmiconfig("catherder");
   const result = await explorer.search();
 
   if (!result) {
-    console.error("Error: Configuration file (claude.config.js) not found.");
-    console.error("Please run `claude-project init` in your project root.");
+    console.error("Error: Configuration file (catherder.config.js) not found.");
+    console.error("Please run `catherder init` in your project root.");
     process.exit(1);
   }
 

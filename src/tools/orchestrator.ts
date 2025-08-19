@@ -39,7 +39,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   if (!isValid) {
     console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
     for (const error of errors) console.error(pc.yellow(`  - ${error}`));
-    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
+    console.error(pc.cyan("\nPlease fix the errors or run 'catherder validate' for details."));
     process.exit(1);
   }
 

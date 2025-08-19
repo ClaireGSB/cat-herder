@@ -6,7 +6,7 @@ import readline from "readline";
 // Define the hook we need to ensure exists
 const requiredHook = {
   type: "command",
-  command: "node ./node_modules/@your-scope/claude-project/dist/tools/pipeline-validator.js < /dev/stdin",
+  command: "node ./node_modules/@your-scope/catherder/dist/tools/pipeline-validator.js < /dev/stdin",
 };
 
 const requiredMatcher = "Edit|Write|MultiEdit";
