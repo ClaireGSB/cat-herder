@@ -1,216 +1,175 @@
-\
 
-# PLAN: Implement a Self-Contained Web UI Testing Environment
+
+# PLAN: Frontend Template Refactor (V1)
 
 ## Title & Goal
 
-**Title:** Set Up a Local, Mock-Data-Driven Web Testing Infrastructure
-**Goal:** To create a consistent and reliable way for any developer to test the web dashboard UI locally using a static set of mock data, without needing to run a live AI task.
+**Title:** Frontend EJS Template Refactor into Reusable Partials
+**Goal:** To improve the maintainability and organization of the web dashboard's frontend code by breaking large EJS template files into smaller, reusable partials.
 
 ## Description
 
-Currently, testing the web dashboard is difficult because it depends on the state and log files located in a developer's personal `~/.cat-herder` directory. This data is inconsistent between developers, can be deleted, and requires running a slow, live task to be generated.
+The current web dashboard templates (e.g., `task-detail.ejs`, `live-activity.ejs`) have grown large and contain a mix of page layout, data display, and UI components in single files. This makes them difficult to read, modify, and maintain.
 
-This plan outlines the creation of a self-contained test environment. We will capture a "golden set" of mock data and commit it to the repository. We will then create a script that starts the web server configured to use this mock data instead of the live data. This will allow any developer to run a single command and view the web dashboard in a predictable, stable state for manual UI testing and verification.
+This refactor will extract common and complex UI sections into their own dedicated "partial" EJS files. The main page templates will then include these partials, resulting in a cleaner, more component-based structure. **This is a purely structural refactor; there should be no change to the UI's appearance or functionality.**
 
 ## Summary Checklist
 
--   [X] Capture and store mock state and log files in the repository.
--   [X] Create a new test runner script to start the server in "test mode".
--   [X] Refactor the `startWebServer` function to accept custom data paths.
--   [X] Update the `webAction` CLI command to use the newly refactored function.
--   [X] Add a new `npm` script to easily run the test server.
--   [X] Update the `README.md` with instructions for the new testing workflow.
+-   [ ] Create new EJS partials for reusable UI components.
+-   [ ] Refactor `task-detail.ejs` to use the new partials.
+-   [ ] Refactor `sequence-detail.ejs` to use the new partials.
+-   [ ] Refactor `live-activity.ejs` to use the new partials.
+-   [ ] Manually test the web dashboard to ensure no visual or functional regressions.
+-   [ ] Update `ARCHITECTURE.MD` to reflect the improved frontend structure.
 
 ## Detailed Implementation Steps
 
-### 1. Capture and Store Mock Data
+### 1. Create New EJS Partials
 
-*   **Objective:** To create a static, version-controlled set of realistic data that the test server can use.
+*   **Objective:** To create the individual, reusable template files for common UI components.
+*   **Task:** In the `src/templates/web/partials/` directory, create the following new files. We will use a leading underscore `_` to denote that these are partials intended for inclusion.
+
+    1.  `_log-viewer.ejs`: This will contain the log viewer window, including the header and the `<pre>` tag for content.
+    2.  `_task-steps.ejs`: This will contain the list of pipeline steps for a single task.
+    3.  `_sequence-task-list.ejs`: This will contain the list of tasks belonging to a sequence.
+    4.  `_token-usage.ejs`: This will contain the card that displays token usage statistics for a task or sequence.
+
+### 2. Refactor `task-detail.ejs`
+
+*   **Objective:** To simplify the `task-detail.ejs` template by replacing large blocks of HTML with includes for the new partials.
 *   **Task:**
-    1.  First, ensure you have good data to capture. Run a task sequence so that you have state files for sequences, tasks, and corresponding log files.
-    2.  In the project's root, create a new directory for this test data: `test/e2e-data/`.
-    3.  Go to your home directory and find the `.cat-herder` folder (usually at `~/.cat-herder`).
-    4.  Copy the `state` and `logs` directories from `~/.cat-herder` into the newly created `test/e2e-data/` directory.
-    5.  The final structure should look like this:
-        ```
-        test/
-        └── e2e-data/
-            ├── state/
-            │   ├── run-journal.json
-            │   └── *.state.json
-            └── logs/
-                └── <task-id>/
-                    └── *.log
-        ```
-    6.  This mock data can now be committed to Git.
+    1.  Open `src/templates/web/task-detail.ejs`.
+    2.  Locate the HTML block for the **Log Viewer**. Cut this entire block and paste it into the new `_log-viewer.ejs` file.
+    3.  Locate the HTML block for the **Token Usage**. Cut this block and paste it into the new `_token-usage.ejs` file.
+    4.  In `task-detail.ejs`, replace the removed blocks with `<%- include(...) %>` calls, passing the necessary data.
 
-### 2. Create the Test Runner Script
-
-*   **Objective:** To create a dedicated script that starts the web server and points it to our new mock data.
-*   **Task:**
-    1.  Create a new directory `scripts/` in the project root if it doesn't exist.
-    2.  Create a new file inside it named `start-web-test.ts`.
-    3.  Add the following code. This script will be our entry point for manual web testing.
-
-*   **Code Snippet (New File):**
-    ```typescript
-    // scripts/start-web-test.ts
-    import path from 'node:path';
-    import pc from 'picocolors';
-    // Note: We will modify startWebServer in the next step to make this work.
-    import { startWebServer } from '../src/tools/web.js';
-
-    async function run() {
-      console.log(pc.cyan("--- Starting Web Dashboard in Test Mode ---"));
-
-      const projectRoot = process.cwd();
-      const mockStateDir = path.join(projectRoot, 'test', 'e2e-data', 'state');
-      const mockLogsDir = path.join(projectRoot, 'test', 'e2e-data', 'logs');
-
-      console.log(pc.yellow(`› Using mock state from: ${mockStateDir}`));
-      console.log(pc.yellow(`› Using mock logs from:  ${mockLogsDir}`));
-
-      // We will update startWebServer to accept this options object
-      await startWebServer({
-        stateDir: mockStateDir,
-        logsDir: mockLogsDir,
-      });
-    }
-
-    run();
-    ```
-
-### 3. Refactor `startWebServer` Function
-
-*   **Objective:** To make the `startWebServer` function more flexible so it can use either the default live data paths or the custom mock paths we provide.
-*   **Task:** Modify `src/tools/web.ts` to accept an options object.
-
-*   **Code Snippet (`src/tools/web.ts`):**
+*   **Code Snippet (Log Viewer):**
 
     **Before:**
-    ```typescript
-    // ... imports
-    export async function startWebServer() {
-      const config = await getConfig();
-      const projectRoot = getProjectRoot();
-      const stateDir = resolveDataPath(config.statePath, projectRoot);
-      const logsDir = resolveDataPath(config.logsPath, projectRoot);
-
-      // ... rest of function
-    }
+    ```ejs
+    <!-- In task-detail.ejs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <!-- ... card header content ... -->
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-viewer" id="log-content">
+                        <!-- ... initial content ... -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     ```
 
     **After:**
-    ```typescript
-    // ... imports
-
-    // Define an interface for the options
-    interface WebServerOptions {
-      stateDir?: string;
-      logsDir?: string;
-    }
-
-    export async function startWebServer(options: WebServerOptions = {}) {
-      const config = await getConfig();
-      const projectRoot = getProjectRoot();
-
-      // Use the paths from options if they exist, otherwise fall back to the config
-      const stateDir = options.stateDir || resolveDataPath(config.statePath, projectRoot);
-      const logsDir = options.logsDir || resolveDataPath(config.logsPath, projectRoot);
-
-      // The rest of the function remains the same
-      const app = express();
-      const server = createServer(app);
-      
-      app.set("view engine", "ejs");
-      app.set("views", path.resolve(new URL("../templates/web", import.meta.url).pathname));
-      app.use(express.static(path.resolve(new URL("../public", import.meta.url).pathname)));
-      app.use(createRouter(stateDir, logsDir, config));
-      setupWebSockets(server, stateDir, logsDir);
-
-      const port = 5177;
-      server.listen(port, () => {
-        // Add a check to show if we're in test mode
-        if (options.stateDir) {
-          console.log(pc.inverse(pc.yellow(" RUNNING IN TEST MODE ")));
-        }
-        console.log(pc.green(`Status web server running.`));
-        console.log(pc.cyan(`›› Open http://localhost:${port} in your browser.`));
-      });
-    }
+    ```ejs
+    <!-- In task-detail.ejs -->
+    <%- include('partials/_log-viewer') %>
     ```
 
-### 4. Update the `webAction` CLI Command
-
-*   **Objective:** To ensure the real `cat-herder web` command continues to function correctly after our refactor.
-*   **Task:** Modify `src/cli-actions.ts` to call the updated `startWebServer` function without any options.
-
-*   **Code Snippet (`src/cli-actions.ts`):**
+*   **Code Snippet (Token Usage):**
 
     **Before:**
-    ```typescript
-    export const webAction = startWebServer;
+    ```ejs
+    <!-- In task-detail.ejs -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <!-- ... Entire Token Usage card ... -->
+            </div>
+        </div>
+    </div>
     ```
 
     **After:**
-    ```typescript
-    export async function webAction(): Promise<void> {
-      // Call with no options to use the default config-based paths from ~/.cat-herder
-      await startWebServer();
-    }
+    ```ejs
+    <!-- In task-detail.ejs -->
+    <%- include('partials/_token-usage', { tokenUsage: task.tokenUsage, helpers: helpers }) %>
     ```
 
-### 5. Add NPM Script
+### 3. Refactor `sequence-detail.ejs`
 
-*   **Objective:** To create a simple, memorable command for launching the web server in test mode.
-*   **Task:** Add a new script to the `scripts` section of `package.json`.
+*   **Objective:** To simplify the `sequence-detail.ejs` template.
+*   **Task:**
+    1.  Open `src/templates/web/sequence-detail.ejs`.
+    2.  Replace the "Total Token Usage" card with an include for the `_token-usage.ejs` partial.
+    3.  Cut the task list logic (the `forEach` loop over `sequence.tasks`) and move it into `_sequence-task-list.ejs`.
+    4.  Replace the removed block with an include for the new partial.
 
-*   **Code Snippet (`package.json`):**
-    ```json
-    {
-      "scripts": {
-        "build": "...",
-        "dev": "...",
-        "test": "...",
-        "test:watch": "...",
-        "test:manual:web": "tsx scripts/start-web-test.ts",
-        "typecheck": "..."
-      }
-    }
+*   **Code Snippet (Token Usage):**
+
+    ```ejs
+    <!-- In sequence-detail.ejs -->
+    <%- include('partials/_token-usage', { tokenUsage: sequence.stats.totalTokenUsage, helpers: helpers }) %>
     ```
 
-## How to Use the New Test Environment
+### 4. Refactor `live-activity.ejs`
 
-Once all the steps above are completed, the manual testing workflow is as follows:
+*   **Objective:** To simplify the most complex page, `live-activity.ejs`, using multiple partials.
+*   **Task:**
+    1.  Open `src/templates/web/live-activity.ejs`.
+    2.  Replace the "Sequence Tasks" panel with an include for `_sequence-task-list.ejs`. You will pass `parentSequence.tasks` to it.
+    3.  Replace the "Task Steps" panel with an include for `_task-steps.ejs`. You will pass `taskToShow` to it.
+    4.  Replace the "Log Viewer" `<div>` with an include for `_log-viewer.ejs`.
 
-1.  Run the new command from your terminal:
-    ```bash
-    npm run test:manual:web
+*   **Code Snippet (Example - Task Steps):**
+
+    **Before:**
+    ```ejs
+    <!-- In live-activity.ejs -->
+    <div class="card">
+        <div class="card-header">
+             <h6 class="mb-0"><i class="bi bi-list-ol me-2"></i>Task Steps</h6>
+        </div>
+        <ul class="list-group list-group-flush">
+             <% if (taskToShow.steps && Object.keys(taskToShow.steps).length > 0) { %>
+                <!-- ... forEach loop over steps ... -->
+            <% } else { %>
+                 <li class="list-group-item text-muted">Steps not yet started.</li>
+            <% } %>
+        </ul>
+    </div>
     ```
-2.  The server will start and log that it is using the mock data from `test/e2e-data/`.
-3.  Open `http://localhost:5177` in your browser.
-4.  You can now click through the entire UI, which will be populated with the consistent and predictable mock data.
+
+    **After:**
+    ```ejs
+    <!-- In live-activity.ejs -->
+    <%- include('partials/_task-steps', { task: taskToShow }) %>
+    ```
+
+### 5. Manual Testing
+
+*   **Objective:** To confirm that the refactor did not introduce any bugs or visual changes.
+*   **Task:**
+    1.  Start the web server using `npm run cat-herder:web`.
+    2.  Navigate to the dashboard at `http://localhost:5177`.
+    3.  Click through all pages:
+        *   Live Activity (`/live`)
+        *   Run History (`/history`)
+        *   A Sequence Detail page
+        *   A Task Detail page
+    4.  Verify that all UI elements appear correctly and that data is displayed as it was before the refactor.
+    5.  On the Task Detail page, confirm that clicking the log buttons still loads the log content correctly into the viewer.
 
 ## Documentation Changes
 
-### Update README.md
+### Update ARCHITECTURE.MD
 
-*   **Objective:** To inform other developers about this new, improved testing workflow.
-*   **Task:** Add a small section to the `README.md` under the "How to Test Locally (for Developers)" section.
+*   **Objective:** To ensure our architectural documentation reflects the current state of the codebase.
+*   **Task:** The principle of "Maintain Small, Focused Modules" is already in the document, which is great. We just need to add a small note to explicitly mention how this applies to the frontend.
 
-*   **Proposed Addition to `README.md`:**
+    1.  Open `ARCHITECTURE.MD`.
+    2.  Navigate to section `2. Core Architectural Concepts` -> `A. Separation of Concerns` -> `1. Interface Layer (CLI & Web)`.
+    3.  Find the bullet point for **Web Dashboard**.
+    4.  Add a sentence to clarify the template structure.
 
-    > ### Part 3: Testing the Web Dashboard
-    >
-    > To test the web dashboard UI without running a live task, you can use the built-in test environment, which uses a static set of mock data from the `test/e2e-data/` directory.
-    >
-    > ```bash
-    > # In your cat-herder repository root
-    > npm run test:manual:web
-    > ```    >
-    > This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes
+*   **Code Snippet:**
 
-### update claude.md
-*   **Objective:** To ensure the AI assistant is aware of the new testing workflow.
-*   **Task:** Add the same information about the new test command to `claude.md`.
+    **Current Text:**
+    > *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
+
+    **Proposed New Text:**
+    > *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
