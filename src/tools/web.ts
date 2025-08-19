@@ -2,7 +2,7 @@ import express from "express";
 import path from "node:path";
 import pc from "picocolors";
 import { createServer } from 'node:http';
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 import { createRouter } from "./web/routes.js";
 import { setupWebSockets } from "./web/websockets.js";
 
@@ -10,8 +10,8 @@ import { setupWebSockets } from "./web/websockets.js";
 export async function startWebServer() {
   const config = await getConfig();
   const projectRoot = getProjectRoot();
-  const stateDir = path.resolve(projectRoot, config.statePath);
-  const logsDir = path.resolve(projectRoot, config.logsPath);
+  const stateDir = resolveDataPath(config.statePath, projectRoot);
+  const logsDir = resolveDataPath(config.logsPath, projectRoot);
 
   const app = express();
   const server = createServer(app);

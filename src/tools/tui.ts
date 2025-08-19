@@ -2,7 +2,7 @@ import blessed from "blessed";
 import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 
 // Wrap the TUI logic in an exported function
 export async function startTui() {
@@ -11,7 +11,7 @@ export async function startTui() {
   if (!config) {
     throw new Error("Configuration is missing. Please ensure the config is properly set.");
   }
-  const stateDir = path.resolve(projectRoot, config.statePath);
+  const stateDir = resolveDataPath(config.statePath, projectRoot);
 
   const screen = blessed.screen({ smartCSR: true });
   screen.title = "Claude Project Status";

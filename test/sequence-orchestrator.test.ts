@@ -12,7 +12,7 @@ vi.mock('../src/tools/check-runner.js');
 // Import the functions after mocking
 const { runStreaming } = await import('../src/tools/proc.js');
 const { runCheck } = await import('../src/tools/check-runner.js');
-const { runTaskSequence } = await import('../src/tools/orchestrator.js');
+const { runTaskSequence } = await import('../src/tools/orchestration/sequence-runner.js');
 
 describe('Sequence Orchestrator Integration Tests', () => {
   let tempDir: string;
@@ -38,11 +38,11 @@ describe('Sequence Orchestrator Integration Tests', () => {
     // Setup basic project structure in temp directory
     process.chdir(tempDir);
     
-    // Create claude.config.js
+    // Create cat-herder.config.js
     const configContent = `module.exports = {
   taskFolder: "test-sequence",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: true,
   autoCommit: true,
@@ -57,7 +57,7 @@ describe('Sequence Orchestrator Integration Tests', () => {
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeJson(path.join(tempDir, 'package.json'), {
       name: 'test-project',
@@ -66,8 +66,8 @@ describe('Sequence Orchestrator Integration Tests', () => {
     });
     
     await fs.ensureDir(path.join(tempDir, '.claude', 'commands'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'state'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'logs'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'state'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'logs'));
     
     // Create a proper command file
     const commandContent = `---

@@ -1,16 +1,9 @@
-// claude.config.js
-/** @type {import('@your-scope/claude-project').ClaudeProjectConfig} */
+// cat-herder.config.js
+/** @type {import('@your-scope/cat-herder').ClaudeProjectConfig} */
 module.exports = {
-  taskFolder: "claude-Tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
-  structureIgnore: [
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    ".claude/**",
-    "*.lock",
-  ],
+  taskFolder: "cat-herder-tasks",
+  statePath: "~/.cat-herder/state",
+  logsPath: "~/.cat-herder/logs",
 
   /**
    * If true (default), the orchestrator will automatically create and manage a

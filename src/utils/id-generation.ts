@@ -14,7 +14,7 @@ export function taskPathToTaskId(taskPath: string, projectRoot: string): string 
 }
 
 export function folderPathToSequenceId(folderPath: string): string {
-    // Convert path like "claude-Tasks/my-feature" to "sequence-my-feature"
+    // Convert path like "cat-herder-tasks/my-feature" to "sequence-my-feature"
     const folderName = path.basename(path.resolve(folderPath));
     // Sanitize to make it a safe filename component
     const sanitizedName = folderName.replace(/[^a-z0-9-]/gi, '-');

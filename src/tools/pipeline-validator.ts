@@ -3,7 +3,8 @@ import fs from "fs";
 import path from "path";
 import { minimatch } from "minimatch";
 import { cosmiconfig } from "cosmiconfig";
-import type { ClaudeProjectConfig, PipelineStep } from "../config.js";
+import type { CatHerderConfig, PipelineStep } from "../config.js";
+import { resolveDataPath } from "../config.js";
 import type { TaskStatus } from "./status.js";
 
 // Helper to block the tool with a clear error message
@@ -90,7 +91,7 @@ function createHelpfulErrorMessage(
 
 // Main validation logic
 async function main() {
-  if (process.env.CLAUDE_PROJECT_ACTIVE !== "true") {
+  if (process.env.CAT_HERDER_ACTIVE !== "true") {
     process.exit(0);
   }
 
@@ -107,17 +108,17 @@ async function main() {
   }
 
   // 2. Load the user's configuration using cosmiconfig
-  const explorer = cosmiconfig("claude");
+  const explorer = cosmiconfig("cat-herder");
   const result = await explorer.search();
   if (!result || !result.config) {
-    block("Error: Could not load claude.config.js to check file access rules.");
+    block("Error: Could not load cat-herder.config.js to check file access rules.");
     return;
   }
-  const config = result.config as ClaudeProjectConfig;
+  const config = result.config as CatHerderConfig;
   const projectRoot = path.dirname(result.filepath);
 
   // 3. Find the most recent task state to know the current step
-  const stateDir = path.resolve(projectRoot, config.statePath);
+  const stateDir = resolveDataPath(config.statePath, projectRoot);
   if (!fs.existsSync(stateDir)) process.exit(0); // No state dir, no rules yet
 
   const stateFiles = fs.readdirSync(stateDir)

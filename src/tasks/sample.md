@@ -19,4 +19,4 @@ Create a simple utility function that adds two numbers. This task is for testing
 - The main `README.md` file should be updated with a short section describing this new math utility.
 
 ## Notes
-This is a sample task to demonstrate the claude-project workflow. It includes planning, testing, implementation, documentation, and review phases.
+This is a sample task to demonstrate the cat-herder workflow. It includes planning, testing, implementation, documentation, and review phases.

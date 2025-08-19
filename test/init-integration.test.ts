@@ -100,7 +100,7 @@ describe('Init Integration Tests', () => {
     
     // Check that the required hook would be detected as missing
     const requiredMatcher = 'Edit|Write|MultiEdit';
-    const requiredCommand = 'node ./node_modules/@your-scope/claude-project/dist/tools/pipeline-validator.js < /dev/stdin';
+    const requiredCommand = 'node ./node_modules/@your-scope/cat-herder/dist/tools/pipeline-validator.js < /dev/stdin';
     
     const matcherEntry = settings.hooks.PreToolUse.find(h => h.matcher === requiredMatcher);
     const hasRequiredHook = matcherEntry?.hooks?.some((h: any) => h.command === requiredCommand) || false;
@@ -112,7 +112,7 @@ describe('Init Integration Tests', () => {
     await init(tempDir);
     
     // Verify main config file
-    expect(await fs.pathExists(path.join(tempDir, 'claude.config.js'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder.config.js'))).toBe(true);
     
     // Verify .claude directory structure
     expect(await fs.pathExists(path.join(tempDir, '.claude'))).toBe(true);
@@ -124,12 +124,12 @@ describe('Init Integration Tests', () => {
     expect(await fs.pathExists(path.join(tempDir, '.claude', 'commands', 'implement.md'))).toBe(true);
     
     // Verify task directory and sample
-    expect(await fs.pathExists(path.join(tempDir, 'claude-Tasks'))).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, 'claude-Tasks', 'task-001-sample.md'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder-tasks'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, 'cat-herder-tasks', 'task-001-sample.md'))).toBe(true);
     
     // Verify package.json was updated
     const pkg = await fs.readJson(path.join(tempDir, 'package.json'));
-    expect(pkg.scripts['claude:run']).toBeDefined();
+    expect(pkg.scripts['cat-herder:run']).toBeDefined();
     expect(pkg.devDependencies['vitest']).toBeDefined();
   });
 });

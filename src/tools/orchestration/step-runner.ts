@@ -144,7 +144,7 @@ export async function executeStep(
         }
       } else {
         updateStatus(statusFile, s => { s.phase = "failed"; s.steps[name] = "failed"; });
-        throw new Error(`Workflow failed: Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleString()}.\nTo automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.\nYou can re-run the command after the reset time to continue from this step.`);
+        throw new Error(`Workflow failed: Claude AI usage limit reached. Your limit will reset at ${resetTime.toLocaleString()}.\nTo automatically wait and resume, set 'waitForRateLimitReset: true' in your cat-herder.config.js.\nYou can re-run the command after the reset time to continue from this step.`);
       }
     }
 

@@ -2,7 +2,7 @@ import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { updateStatus, readStatus } from "../status.js";
-import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
+import { getConfig, getProjectRoot, PipelineStep, resolveDataPath } from "../../config.js";
 import { contextProviders } from "../providers.js";
 import { taskPathToTaskId } from "../../utils/id-generation.js";
 import { parseTaskFrontmatter, assemblePrompt } from "./prompt-builder.js";
@@ -32,7 +32,8 @@ export async function executePipelineForTask(
 
   // Determine task ID and status file path
   const taskId = taskPathToTaskId(taskPath, projectRoot);
-  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
+  const statusFile = path.join(resolvedStatePath, `${taskId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
 
   // Determine which pipeline to use (priority: option > task frontmatter > config default > first available)
@@ -42,7 +43,7 @@ export async function executePipelineForTask(
     // New multi-pipeline format
     pipelineName = options.pipelineOption || taskPipelineName || config.defaultPipeline || Object.keys(config.pipelines)[0];
     if (!pipelineName || !config.pipelines[pipelineName]) {
-      throw new Error(`Pipeline "${pipelineName}" not found in claude.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
+      throw new Error(`Pipeline "${pipelineName}" not found in cat-herder.config.js. Available: ${Object.keys(config.pipelines).join(', ')}`);
     }
     selectedPipeline = config.pipelines[pipelineName];
 
@@ -78,7 +79,8 @@ export async function executePipelineForTask(
     }
   });
 
-  const logsDir = path.resolve(projectRoot, config.logsPath, taskId);
+  const resolvedLogsPath = resolveDataPath(config.logsPath, projectRoot);
+  const logsDir = path.join(resolvedLogsPath, taskId);
   mkdirSync(logsDir, { recursive: true });
 
   for (const [index, stepConfig] of selectedPipeline.entries()) {

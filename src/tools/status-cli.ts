@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 
 // Wrap the status logic in an exported function
 export async function showStatus() {
@@ -10,7 +10,7 @@ export async function showStatus() {
     console.log("Configuration not found.");
     return;
   }
-  const stateDir = path.resolve(projectRoot, config.statePath);
+  const stateDir = resolveDataPath(config.statePath, projectRoot);
 
   if (!fs.existsSync(stateDir)) {
     console.log("No status to show. State directory not found.");

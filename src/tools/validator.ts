@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
-import { ClaudeProjectConfig } from "../config.js";
+import { CatHerderConfig } from "../config.js";
 import { contextProviders } from "./providers.js";
 
 // Valid Claude model names for validation
@@ -41,7 +41,7 @@ export interface ValidationResult {
 /**
  * Validates top-level configuration properties.
  */
-function validateTopLevelConfig(config: ClaudeProjectConfig, errors: string[]): void {
+function validateTopLevelConfig(config: CatHerderConfig, errors: string[]): void {
   if (config.manageGitBranch !== undefined && typeof config.manageGitBranch !== 'boolean') {
     errors.push(`Top-level config error: 'manageGitBranch' must be a boolean (true or false).`);
   }
@@ -53,9 +53,6 @@ function validateTopLevelConfig(config: ClaudeProjectConfig, errors: string[]): 
   }
   if (config.logsPath !== undefined && typeof config.logsPath !== 'string') {
     errors.push(`Top-level config error: 'logsPath' must be a string.`);
-  }
-  if (config.structureIgnore !== undefined && !Array.isArray(config.structureIgnore)) {
-    errors.push(`Top-level config error: 'structureIgnore' must be an array of strings.`);
   }
   if (config.defaultPipeline !== undefined && typeof config.defaultPipeline !== 'string') {
     errors.push(`Top-level config error: 'defaultPipeline' must be a string.`);
@@ -78,7 +75,7 @@ function loadProjectSettings(projectRoot: string, errors: string[]): { allowedPe
       errors.push("Could not parse .claude/settings.json. Please ensure it is valid JSON.");
     }
   } else {
-    errors.push(".claude/settings.json not found. Please run `claude-project init` to create a default one.");
+    errors.push(".claude/settings.json not found. Please run `cat-herder init` to create a default one.");
   }
 
   // Load user-defined scripts from package.json
@@ -102,7 +99,7 @@ function loadProjectSettings(projectRoot: string, errors: string[]): { allowedPe
  * Validates the pipeline structure and handles both new and legacy formats.
  * @returns The normalized pipelines object or null if invalid.
  */
-function validatePipelineStructure(config: ClaudeProjectConfig, errors: string[]): { [key: string]: any[] } | null {
+function validatePipelineStructure(config: CatHerderConfig, errors: string[]): { [key: string]: any[] } | null {
   let pipelines: { [key: string]: any[] };
   
   if (config.pipelines && typeof config.pipelines === 'object' && Object.keys(config.pipelines).length > 0) {
@@ -303,7 +300,7 @@ function validateStep(
  * Validates a pipeline configuration against available commands and providers.
  * @returns A ValidationResult object with validation status, errors, and missing permissions.
  */
-export function validatePipeline(config: ClaudeProjectConfig, projectRoot: string): ValidationResult {
+export function validatePipeline(config: CatHerderConfig, projectRoot: string): ValidationResult {
   const errors: string[] = [];
   const missingPermissions: string[] = [];
 

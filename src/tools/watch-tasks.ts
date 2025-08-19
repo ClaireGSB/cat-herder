@@ -17,9 +17,9 @@ export async function startWatcher() {
 
   function run(taskPath: string) {
     console.log(pc.yellow(`\nNew task detected: ${path.basename(taskPath)}`));
-    // We spawn a new process running `claude-project run` to ensure each task
+    // We spawn a new process running `cat-herder run` to ensure each task
     // runs in a clean, independent state.
-    const p = spawn("claude-project", ["run", taskPath], {
+    const p = spawn("cat-herder", ["run", taskPath], {
       stdio: "inherit",
       // Run the new process from the user's project directory
       cwd: projectRoot,

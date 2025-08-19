@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-This document outlines the architecture of the `@your-scope/claude-project` tool. Its purpose is to provide a high-level understanding of the system's components, their interactions, and the guiding principles for future development and refactoring.
+This document outlines the architecture of the `@your-scope/cat-herder` tool. Its purpose is to provide a high-level understanding of the system's components, their interactions, and the guiding principles for future development and refactoring.
 
 The project is a command-line tool that orchestrates an AI-driven, step-gated development workflow. It uses a user-defined pipeline configuration to execute a series of steps (e.g., planning, testing, implementing) for a given task, using the Claude CLI as its engine for AI-powered actions.
 
@@ -21,7 +21,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
-    *   It reads the user's pipeline configuration (`claude.config.js`).
+    *   It reads the user's pipeline configuration (`cat-herder.config.js`).
     *   It manages the overall flow of a task or sequence.
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
@@ -33,7 +33,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
-    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `.claude/state` directory.
+    *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
 
@@ -44,7 +44,7 @@ The following diagram illustrates the interaction between the core components wh
 ```mermaid
 graph TD
     subgraph User Interface
-        CLI[CLI: claude-project run]
+        CLI[CLI: cat-herder run]
         Web[Web Dashboard]
     end
 
@@ -56,7 +56,7 @@ graph TD
 
     subgraph State & Config
         State[State Files (.json)]
-        Config[claude.config.js]
+        Config[cat-herder.config.js]
         Prompts[Command Prompts (.md)]
     end
 
@@ -85,11 +85,12 @@ graph TD
 
 *   **`src/`**: The main application source code.
     *   **`src/tools/`**: Contains the core logic for orchestration, web UI, validation, and status management. This is the engine of the application.
-    *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`claude.config.js`).
-    *   **`src/init/`**: Logic related to the `claude-project init` command.
+    *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`cat-herder.config.js`).
+    *   **`src/init/`**: Logic related to the `cat-herder init` command.
 *   **`.claude/` (in user's project)**: The user-facing configuration directory.
     *   **`commands/`**: User-customizable markdown prompts for each pipeline step.
     *   **`settings.json`**: Permissions and hooks for the `claude` CLI tool.
+*   **`~/.cat-herder/` (in user's home directory)**: Application data directory.
     *   **`state/`**: Contains the JSON state files that track the progress of tasks and sequences. **This directory should be in `.gitignore`**.
     *   **`logs/`**: Detailed logs for each step of every task run, crucial for debugging. **This directory should also be in `.gitignore`**.
 
@@ -103,8 +104,8 @@ This section documents key design choices and their rationale, providing context
     *   **Rationale:** This approach allows our tool to seamlessly inherit the user's existing environment. Authentication, custom settings (`settings.json`), and default model configurations are handled by the `claude` tool, simplifying our logic and respecting the user's setup.
     *   **Trade-off:** We are dependent on the CLI's stability and its JSON streaming output format. This is a favorable trade-off for the initial version as it significantly reduces complexity.
 
-*   **Decision: Use a file-based system (`.claude/state/*.json`) for state management.**
-    *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions.
+*   **Decision: Use a file-based system (`~/.cat-herder/state/*.json`) for state management.**
+    *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions. By placing these files in the user's home directory rather than the project directory, we avoid conflicts with existing project files and ensure the data persists across different projects.
     *   **Trade-off:** The system is not designed for high-concurrency parallelism on a single repository. This is acceptable as the primary use case is a single, sequential workflow per user action.
 
 *   **Decision: Expose AI prompts as user-editable `.md` files in `.claude/commands/`.**
@@ -126,7 +127,7 @@ Maintaining a high-quality, regression-free tool requires a multi-layered testin
     *   **Location:** In the `/test` directory.
 
 *   **End-to-End (E2E) Tests:** The highest level of testing, validating the entire user workflow from a black-box perspective.
-    *   **Methodology:** As described in the `README.md`, our E2E tests involve scripting the creation of a clean test project, running `claude-project init`, and executing a sample `claude-project run` command to ensure the entire pipeline executes successfully.
+    *   **Methodology:** As described in the `README.md`, our E2E tests involve scripting the creation of a clean test project, running `cat-herder init`, and executing a sample `cat-herder run` command to ensure the entire pipeline executes successfully.
     *   **Example:** `init-integration.test.ts`.
 
 ---
@@ -137,8 +138,8 @@ As a tool that executes commands and modifies code, security is a primary concer
 
 *   **Principle of Least Privilege:** The tool itself does not grant permissions. It is subject to the permissions defined by the user for the underlying `claude` CLI.
 *   **Centralized Permissions (`.claude/settings.json`):** All potentially sensitive operations, primarily `Bash` command execution, must be explicitly allowed by the user in this file. The tool will not run if a required permission is missing.
-*   **Proactive Validation:** The `claude-project validate` command acts as a safety check. It scans the pipeline configuration and cross-references it with `settings.json`, informing the user of any missing permissions *before* a run is attempted.
-*   **Step-Specific Guardrails (`fileAccess`):** The `fileAccess` property in `claude.config.js` provides a critical layer of defense against unintended file modifications. It ensures that each step of the pipeline can only write to a predefined set of files or directories, preventing, for instance, a documentation step from altering source code.
+*   **Proactive Validation:** The `cat-herder validate` command acts as a safety check. It scans the pipeline configuration and cross-references it with `settings.json`, informing the user of any missing permissions *before* a run is attempted.
+*   **Step-Specific Guardrails (`fileAccess`):** The `fileAccess` property in `cat-herder.config.js` provides a critical layer of defense against unintended file modifications. It ensures that each step of the pipeline can only write to a predefined set of files or directories, preventing, for instance, a documentation step from altering source code.
 
 ---
 
@@ -155,7 +156,7 @@ To maintain the project's quality and clarity, all new features and refactors sh
     *   Avoid in-memory state that is lost on exit. All progress must be written to a state file to ensure tasks can be resumed.
 
 3.  **Configuration Over Code.**
-    *   The tool's power comes from its flexibility. Prefer making new behaviors configurable in `claude.config.js` rather than hardcoding them.
+    *   The tool's power comes from its flexibility. Prefer making new behaviors configurable in `cat-herder.config.js` rather than hardcoding them.
     *   When adding new configurable options, ensure the `validate` command is updated to check them.
 
 4.  **Prioritize Developer Experience (DX).**

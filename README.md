@@ -1,16 +1,16 @@
 
-# Claude Project
+# cat-herder
 
-A command-line tool that orchestrates a structured, step-gated development workflow in your repository using Claude.
+A command-line tool that orchestrates a structured, step-gated development workflow in your repository using AI.
 
-`claude-project` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
+`cat-herder` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
 
 ## Installation
 
-Install the CLI globally using npm. This makes the `claude-project` command available anywhere on your system.
+Install the CLI globally using npm. This makes the `cat-herder` command available anywhere on your system.
 
 ```bash
-npm install -g @your-scope/claude-project
+npm install -g @your-scope/cat-herder
 ```
 
 ## Quick Start
@@ -24,9 +24,9 @@ cd your-typescript-project
 ```
 
 2.  **Initialize the project:**
-This command sets up everything you need: it creates a `claude.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `claude:*` helper scripts and recommended dependencies.
+This command sets up everything you need: it creates a `cat-herder.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `cat-herder:*` helper scripts and recommended dependencies.
 ```bash
-claude-project init
+cat-herder init
 ```
 
 3.  **Install dependencies:**
@@ -38,14 +38,14 @@ npm install
 4.  **Run the automated workflow:**
 Use the npm script to execute the sample task.
 ```bash
-npm run claude:run -- claude-Tasks/task-001-sample.md
+npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
 ```
 
 The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
 
 ## Running Task Sequences
 
-For complex features that require multiple, ordered steps that might not be known ahead of time, `claude-project` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
+For complex features that require multiple, ordered steps that might not be known ahead of time, `cat-herder` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
 
 ### The Dynamic Workflow Advantage
 
@@ -61,10 +61,10 @@ Execute a sequence of tasks from a folder:
 
 ```bash
 # Direct command
-claude-project run-sequence claude-Tasks/my-feature
+cat-herder run-sequence cat-herder-tasks/my-feature
 
 # Via npm script  
-npm run claude:run-sequence -- claude-Tasks/my-feature
+npm run cat-herder:run-sequence -- cat-herder-tasks/my-feature
 ```
 
 ### How It Works
@@ -79,7 +79,7 @@ npm run claude:run-sequence -- claude-Tasks/my-feature
 Tasks are executed alphabetically by filename. For workflows requiring specific ordering, use a numbered naming convention:
 
 ```
-claude-Tasks/my-feature/
+cat-herder-tasks/my-feature/
 ├── _PLAN.md
 ├── _notes_on_api_changes.md
 ├── 01-analyze-requirements.md
@@ -116,7 +116,7 @@ Use the Write tool to create:
 - `05-write-integration-tests.md`
 ```
 
-When you run `claude-project run-sequence claude-Tasks/new-feature`, the orchestrator will:
+When you run `cat-herder run-sequence cat-herder-tasks/new-feature`, the orchestrator will:
 
 1. Execute `01-break-down-prd.md`, which creates the additional task files
 2. Automatically discover and execute `02-setup-database-schema.md`
@@ -127,15 +127,15 @@ This creates a fully autonomous, multi-step development workflow where the initi
 
 ## How to Test Locally (for Developers)
 
-When developing the `claude-project` tool itself, you need a way to test your local changes without publishing to npm. This is done using `npm link`.
+When developing the `cat-herder` tool itself, you need a way to test your local changes without publishing to npm. This is done using `npm link`.
 
 ### Part 1: Initial One-Time Setup
 
-First, set up your `claude-project` tool and create a dedicated test environment.
+First, set up your `cat-herder` tool and create a dedicated test environment.
 
-1.  **Globally Link Your Tool:** In the root directory of your `claude-project` source code, run these commands. This builds your tool and creates a global symlink to it that your system can use.
+1.  **Globally Link Your Tool:** In the root directory of your `cat-herder` source code, run these commands. This builds your tool and creates a global symlink to it that your system can use.
 ```bash
-# In your claude-project repository root
+# In your cat-herder repository root
 npm run build
 npm link
 ```
@@ -156,10 +156,10 @@ git commit --allow-empty -m "Initial commit"
 # Inside the my-test-app directory
 
 # Run your tool's init command
-claude-project init
+cat-herder init
 
 # Link the dependency to your local source
-npm link @your-scope/claude-project
+npm link @your-scope/cat-herder
 
 # Install other dependencies like vitest and prettier
 npm install
@@ -168,25 +168,27 @@ Your test environment is now ready.
 
 ### Part 2: The Re-Testing Workflow (Every Time You Change Code)
 
-This is the loop you will follow every time you make changes to `claude-project` and want to test them.
+This is the loop you will follow every time you make changes to `cat-herder` and want to test them.
 
-1.  **Rebuild Your Tool:** After saving changes in your `claude-project` source code, you must rebuild it.
+1.  **Rebuild Your Tool:** After saving changes in your `cat-herder` source code, you must rebuild it.
 ```bash
-# In your claude-project repository root
+# In your cat-herder repository root
 npm run build
 ```
 
 2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
 ```bash
 # In your my-test-app directory
-rm -f PLAN.md && rm -rf .claude/state/ .claude/logs/ && git clean -fd src/ test/
+rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
 ```
+
+**Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts in `.claude/commands/` are preserved.
 
 
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 ```bash
 # In your my-test-app directory
-npm run claude:run -- claude-Tasks/task-001-sample.md
+npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
 ```
 
 4. **Removing old test repo and creating fresh one** 
@@ -207,9 +209,9 @@ git init > /dev/null
 git commit --allow-empty -m "Initial commit" > /dev/null
 
 # --- 3. Link and Initialize Your Tool ---
-echo "Linking to local claude-project and initializing..."
-npm link @your-scope/claude-project
-claude-project init
+echo "Linking to local cat-herder and initializing..."
+npm link @your-scope/cat-herder
+cat-herder init
 npm install
 
 echo "\n✅ Fresh test environment is ready!"
@@ -217,9 +219,9 @@ echo "\n✅ Fresh test environment is ready!"
 
 ## How It Works
 
-### Configurable Pipelines (`claude.config.js`)
+### Configurable Pipelines (`cat-herder.config.js`)
 
-This tool is driven by a `pipelines` object in your `claude.config.js` file. You can define multiple workflows for different kinds of tasks. Each pipeline is an array of steps, and each step is an object with these key properties:
+This tool is driven by a `pipelines` object in your `cat-herder.config.js` file. You can define multiple workflows for different kinds of tasks. Each pipeline is an array of steps, and each step is an object with these key properties:
 
 -   `name`: A unique identifier for the step.
 -   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
@@ -227,18 +229,11 @@ This tool is driven by a `pipelines` object in your `claude.config.js` file. You
 -   `check`: A validation object to confirm the step was successful.
 
 ```javascript
-// claude.config.js
+// cat-herder.config.js
 module.exports = {
-  taskFolder: "claude-Tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
-  structureIgnore: [
-    "node_modules/**",
-    ".git/**",
-    "dist/**",
-    ".claude/**",
-    "*.lock",
-  ],
+  taskFolder: "cat-herder-tasks",
+  statePath: "~/.cat-herder/state",
+  logsPath: "~/.cat-herder/logs"
 
   /**
    * If true (default), the tool automatically creates a dedicated Git branch
@@ -338,7 +333,7 @@ You can specify which Claude model to use for individual pipeline steps by addin
 }
 ```
 
-If no `model` is specified, the step will use your Claude CLI's default model configuration. Valid model names are validated by the `claude-project validate` command.
+If no `model` is specified, the step will use your Claude CLI's default model configuration. Valid model names are validated by the `cat-herder validate` command.
 
 **Pipeline Selection:**
 
@@ -347,10 +342,10 @@ The orchestrator selects a pipeline to run based on the following priority order
 1. **CLI Flag:** Use the `--pipeline <name>` option when running a task:
 ```bash
 # Direct command
-claude-project run claude-Tasks/my-task.md --pipeline docs-only
+cat-herder run cat-herder-tasks/my-task.md --pipeline docs-only
 
 # Via npm script (note the -- to pass arguments through)
-npm run claude:run -- claude-Tasks/my-task.md --pipeline docs-only
+npm run cat-herder:run -- cat-herder-tasks/my-task.md --pipeline docs-only
 ```
 
 2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
@@ -363,7 +358,7 @@ pipeline: docs-only
 Update the API documentation to reflect recent changes.
 ```
 
-3. **Configuration Default:** The `defaultPipeline` property in your `claude.config.js`:
+3. **Configuration Default:** The `defaultPipeline` property in your `cat-herder.config.js`:
 ```javascript
 module.exports = {
   defaultPipeline: "default",
@@ -567,15 +562,15 @@ By default, if the API limit is reached, the workflow will stop and display a me
 
 ```
 Workflow failed: Claude AI usage limit reached. Your limit will reset at 1:00:00 PM.
-To automatically wait and resume, set 'waitForRateLimitReset: true' in your claude.config.js.
+To automatically wait and resume, set 'waitForRateLimitReset: true' in your cat-herder.config.js.
 You can re-run the command after the reset time to continue from this step.
 ```
 
-Your progress is saved. Once your limit resets, simply run the exact same `claude-project run` command again, and the orchestrator will pick up right where it left off.
+Your progress is saved. Once your limit resets, simply run the exact same `cat-herder run` command again, and the orchestrator will pick up right where it left off.
 
 #### Automatic Wait & Resume (Opt-in)
 
-For a fully autonomous workflow, you can enable the auto-resume feature. In your `claude.config.js`, set:
+For a fully autonomous workflow, you can enable the auto-resume feature. In your `cat-herder.config.js`, set:
 
 ```javascript
 module.exports = {
@@ -589,7 +584,7 @@ With this setting, instead of failing, the tool will pause execution and log a w
 
 ### Debugging and Logs
 
-The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `.claude/logs/` directory:
+The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `~/.cat-herder/logs/` directory:
 
 - **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
 - **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
@@ -608,7 +603,7 @@ The reasoning logs are particularly valuable when:
 
 ### State Files
 
-The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `.claude/state` directory.
+The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `~/.cat-herder/state` directory.
 
 **Task State File (`<task-id>.state.json`):**
 This file contains the status of a single task. It includes the `startTime` of the task and a `stats` object with total duration and pause time metrics.
@@ -717,7 +712,7 @@ By default (`manageGitBranch: true`), the orchestrator automatically manages Git
 
 1.  It first checks that your repository has no uncommitted changes.
 2.  It switches to your local `main` branch. If you have a remote repository named `origin`, it attempts to pull the latest changes to ensure you're up to date. (If you have a local-only repository, it safely skips this step).
-3.  It then creates a unique, dedicated branch for the task (e.g., `claude/claude-Tasks-sequence-A-01-create-plan`).
+3.  It then creates a unique, dedicated branch for the task (e.g., `claude/cat-herder-tasks-sequence-A-01-create-plan`).
 4.  All commits generated by the AI during the pipeline are made to this task branch.
 
 This keeps your `main` branch clean and isolates all automated work, whether you are working locally or with a remote team.
@@ -728,10 +723,10 @@ This keeps your `main` branch clean and isolates all automated work, whether you
 
 By default, the orchestrator does not automatically commit changes after each pipeline step, giving you full control over your Git history. However, you can enable automatic commits or add commit instructions directly to your command prompts.
 
-To have the orchestrator automatically commit after each successful step, set the `autoCommit` flag to `true` in your `claude.config.js`:
+To have the orchestrator automatically commit after each successful step, set the `autoCommit` flag to `true` in your `cat-herder.config.js`:
 
 ```javascript
-// claude.config.js
+// cat-herder.config.js
 module.exports = {
   // ...
   autoCommit: true,
@@ -763,11 +758,11 @@ After you have verified that all tests pass, stage all changes and commit them w
 
 ### Permissions and Security (`.claude/settings.json`)
 
-For the orchestrator to run non-interactively, it needs permission to execute `Bash` commands like `npm test` and `git commit`. The `claude-project init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions to enable this.
+For the orchestrator to run non-interactively, it needs permission to execute `Bash` commands like `npm test` and `git commit`. The `cat-herder init` command scaffolds a `.claude/settings.json` file with a safe set of default permissions to enable this.
 
 This file pre-approves `Bash` commands that are essential for the default workflow using specific permission patterns like `Bash(git commit:*)` instead of broad glob patterns like `Bash(git *:*)`, which can be unreliable for commands with arguments, while denying network access. **Important:** If you have an existing `.claude/settings.json` file, the `init` command **will not overwrite it**. Instead, it will check if the necessary validation hooks are present. If they are missing, it will prompt you to add them, ensuring that security features like `fileAccess` work correctly while preserving your custom settings.
 
-Managing these permissions is simple, even when you customize your pipeline. The **`claude-project validate`** command is an essential tool for ensuring your workflow is correctly configured *before* you run it. It performs a comprehensive check of your `claude.config.js` and project setup, including:
+Managing these permissions is simple, even when you customize your pipeline. The **`cat-herder validate`** command is an essential tool for ensuring your workflow is correctly configured *before* you run it. It performs a comprehensive check of your `cat-herder.config.js` and project setup, including:
 
 - **Pipeline Structure**: Verifies that steps have required properties like `name` and `command`.
 - **Check Objects**: Ensures `check` steps are correctly formed (e.g., a `fileExists` check has a `path`).
@@ -791,7 +786,7 @@ The validator ensures both your security settings and project configuration stay
 
 ## Interactive Web Dashboard
 
-`claude-project` includes a powerful web-based dashboard for visual monitoring and real-time task and sequence tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, and watch Claude's reasoning process in real-time with full lifecycle awareness for both individual tasks and multi-task sequences.
+`cat-herder` includes a powerful web-based dashboard for visual monitoring and real-time task and sequence tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, and watch Claude's reasoning process in real-time with full lifecycle awareness for both individual tasks and multi-task sequences.
 
 ### Getting Started
 
@@ -799,10 +794,10 @@ Start the web server using either command:
 
 ```bash
 # Direct command
-claude-project web
+cat-herder web
 
 # Via npm script
-npm run claude:web
+npm run cat-herder:web
 ```
 
 The dashboard will be available at `http://localhost:5177` in your browser.
@@ -811,28 +806,28 @@ The dashboard will be available at `http://localhost:5177` in your browser.
 
 ### CLI Commands
 
-All commands are available directly via the `claude-project` executable.
+All commands are available directly via the `cat-herder` executable.
 
--   `claude-project init`: Scaffolds the workflow in the current repository.
--   `claude-project run <path-to-task.md>`: Runs the full workflow for a specific task.
+-   `cat-herder init`: Scaffolds the workflow in the current repository.
+-   `cat-herder run <path-to-task.md>`: Runs the full workflow for a specific task.
     -   `--pipeline <name>`: Specifies which pipeline to use, overriding config and task defaults.
--   `claude-project run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder, executing them in alphabetical order and re-scanning for new tasks after each completion.
--   `claude-project validate`: Validates your `claude.config.js` pipeline configuration.
--   `claude-project watch`: Watches the tasks directory and runs new tasks automatically.
--   `claude-project status`: Displays the status of the most recent task as JSON.
--   `claude-project tui`: Launches an interactive terminal UI to monitor task progress.
--   `claude-project web`: Starts the interactive web dashboard with real-time task monitoring and Live Activity streaming. See [Interactive Web Dashboard](#interactive-web-dashboard) for details.
+-   `cat-herder run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder, executing them in alphabetical order and re-scanning for new tasks after each completion.
+-   `cat-herder validate`: Validates your `cat-herder.config.js` pipeline configuration.
+-   `cat-herder watch`: Watches the tasks directory and runs new tasks automatically.
+-   `cat-herder status`: Displays the status of the most recent task as JSON.
+-   `cat-herder tui`: Launches an interactive terminal UI to monitor task progress.
+-   `cat-herder web`: Starts the interactive web dashboard with real-time task monitoring and Live Activity streaming. See [Interactive Web Dashboard](#interactive-web-dashboard) for details.
 
 ### NPM Scripts
 
-The `init` command adds these `claude:*` scripts to your project's `package.json`:
+The `init` command adds these `cat-herder:*` scripts to your project's `package.json`:
 
--   `npm run claude:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
--   `npm run claude:run-sequence -- <folderPath>`: The recommended way to run a task sequence from a folder.
--   `npm run claude:watch`: Watches for new tasks.
--   `npm run claude:status`: Shows the latest task status.
--   `npm run claude:tui`: Launches the terminal UI.
--   `npm run claude:web`: Starts the interactive web dashboard with real-time monitoring.
+-   `npm run cat-herder:run -- <path>`: The recommended way to run a task. Use `--` to pass additional flags like `--pipeline <name>`.
+-   `npm run cat-herder:run-sequence -- <folderPath>`: The recommended way to run a task sequence from a folder.
+-   `npm run cat-herder:watch`: Watches for new tasks.
+-   `npm run cat-herder:status`: Shows the latest task status.
+-   `npm run cat-herder:tui`: Launches the terminal UI.
+-   `npm run cat-herder:web`: Starts the interactive web dashboard with real-time monitoring.
 
 **Note:** Test scripts (like `npm test`) are not automatically added. The default pipeline includes test steps that assume you have `test`, `test:watch`, and `coverage` scripts, but you can customize your pipeline to use any testing framework or remove testing steps entirely.
 

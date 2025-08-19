@@ -9,14 +9,25 @@ vi.mock('node:child_process');
 vi.mock('../src/tools/proc.js');
 vi.mock('../src/tools/check-runner.js');
 vi.mock('../src/tools/validator.js');
-vi.mock('../src/config.js');
+import * as config from '../src/config.js';
+
+vi.mock('../src/config.js', async (importOriginal) => {
+    const originalModule = await importOriginal<typeof config>();
+    return {
+        ...originalModule,
+        // Mock only the functions we need to control
+        getConfig: vi.fn(),
+        getProjectRoot: vi.fn(),
+    };
+});
 
 // Import the functions after mocking
 const { runStreaming } = await import('../src/tools/proc.js');
 const { runCheck } = await import('../src/tools/check-runner.js');
 const { validatePipeline } = await import('../src/tools/validator.js');
 const { getConfig, getProjectRoot } = await import('../src/config.js');
-const { runTask, runTaskSequence } = await import('../src/tools/orchestrator.js');
+const { runTask } = await import('../src/tools/orchestrator.js');
+const { runTaskSequence } = await import('../src/tools/orchestration/sequence-runner.js');
 
 describe('Workflow Statistics Calculation', () => {
   let tempDir: string;
@@ -30,7 +41,7 @@ describe('Workflow Statistics Calculation', () => {
     // Re-mock all dependencies fresh for each test
     vi.mocked(execSync).mockReturnValue(Buffer.from(''));
     vi.mocked(runCheck).mockResolvedValue({ success: true, output: 'success' });
-    vi.mocked(validatePipeline).mockReturnValue({ isValid: true, errors: [] });
+    vi.mocked(validatePipeline).mockReturnValue({ isValid: true, errors: [], missingPermissions: [] });
     
     // Use fake timers to control time during tests
     vi.useFakeTimers();
@@ -48,8 +59,8 @@ describe('Workflow Statistics Calculation', () => {
     // Mock getConfig to return a basic config
     vi.mocked(getConfig).mockResolvedValue({
       taskFolder: "tasks",
-      statePath: ".claude/state",
-      logsPath: ".claude/logs",
+      statePath: ".test-cat-herder/state",
+      logsPath: ".test-cat-herder/logs",
       defaultPipeline: "default",
       manageGitBranch: false,
       autoCommit: false,
@@ -70,8 +81,8 @@ describe('Workflow Statistics Calculation', () => {
     });
     
     await fs.ensureDir(path.join(tempDir, '.claude', 'commands'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'state'));
-    await fs.ensureDir(path.join(tempDir, '.claude', 'logs'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'state'));
+    await fs.ensureDir(path.join(tempDir, '.test-cat-herder', 'logs'));
     
     // Create command files
     const commandContent = `---
@@ -116,8 +127,8 @@ Execute the test command.
     // Create config file
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -126,7 +137,7 @@ Execute the test command.
     default: [{ name: "plan", command: "plan", check: { type: "none" } }]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-pause-test.md'), '# Pause Test Task');
 
@@ -152,7 +163,7 @@ Execute the test command.
     // Now simulate what happens when pause time is tracked during rate limits
     // by manually updating the state file with pause time (this is what the 
     // orchestrator does in the rate limit handling code)
-    const stateFile = path.join(tempDir, '.claude/state/task-task-pause-test.state.json');
+    const stateFile = path.join(tempDir, '.test-cat-herder/state/task-task-pause-test.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
     
     // Simulate 30 seconds of pause time being tracked
@@ -185,8 +196,8 @@ Execute the test command.
     // --- ARRANGE ---
     const configContent = `module.exports = {
   taskFolder: "my-sequence",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -197,7 +208,7 @@ Execute the test command.
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
 
     // Create a directory and two task files for the sequence.
     const sequenceFolder = path.join(tempDir, 'my-sequence');
@@ -234,7 +245,7 @@ Execute the test command.
     await runTaskSequence('my-sequence');
 
     // --- ASSERT ---
-    const stateFile = path.join(tempDir, '.claude/state/sequence-my-sequence.state.json');
+    const stateFile = path.join(tempDir, '.test-cat-herder/state/sequence-my-sequence.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
 
     expect(status.phase).toBe('done');
@@ -249,8 +260,8 @@ Execute the test command.
     // --- ARRANGE ---
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -261,7 +272,7 @@ Execute the test command.
     ]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-no-pause.md'), '# No Pause Task');
 
@@ -285,7 +296,7 @@ Execute the test command.
     const expectedTotalDuration = (finalTime.getTime() - startTime.getTime()) / 1000;
 
     // --- ASSERT ---
-    const stateFile = path.join(tempDir, '.claude/state/task-task-no-pause.state.json');
+    const stateFile = path.join(tempDir, '.test-cat-herder/state/task-task-no-pause.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
 
     expect(status.phase).toBe('done');
@@ -302,8 +313,8 @@ Execute the test command.
     // Create config file
     const configContent = `module.exports = {
   taskFolder: "tasks",
-  statePath: ".claude/state",
-  logsPath: ".claude/logs",
+  statePath: ".test-cat-herder/state",
+  logsPath: ".test-cat-herder/logs",
   defaultPipeline: "default",
   manageGitBranch: false,
   autoCommit: false,
@@ -312,7 +323,7 @@ Execute the test command.
     default: [{ name: "plan", command: "plan", check: { type: "none" } }]
   }
 };`;
-    await fs.writeFile(path.join(tempDir, 'claude.config.js'), configContent);
+    await fs.writeFile(path.join(tempDir, 'cat-herder.config.js'), configContent);
     
     await fs.writeFile(path.join(tempDir, 'task-multi-pause.md'), '# Multi Pause Task');
 
@@ -335,7 +346,7 @@ Execute the test command.
     await runTask('task-multi-pause.md');
 
     // Simulate multiple pause accumulations (this tests the += logic in the orchestrator)
-    const stateFile = path.join(tempDir, '.claude/state/task-task-multi-pause.state.json');
+    const stateFile = path.join(tempDir, '.test-cat-herder/state/task-task-multi-pause.state.json');
     const status = JSON.parse(await fs.readFile(stateFile, 'utf-8'));
     
     // Initialize stats and simulate two separate pause accumulations

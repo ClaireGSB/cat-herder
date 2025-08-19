@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { updateStatus, readStatus, TaskStatus, logJournalEvent } from "./status.js";
-import { getConfig, getProjectRoot } from "../config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 import { validatePipeline } from "./validator.js";
 import { taskPathToTaskId } from "../utils/id-generation.js";
 import { ensureCorrectGitBranch } from "./orchestration/git.js";
@@ -20,7 +20,8 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   // 1. Determine paths and check status FIRST.
   const taskPath = path.resolve(projectRoot, taskRelativePath);
   const taskId = taskPathToTaskId(taskPath, projectRoot);
-  const statusFile = path.resolve(projectRoot, config.statePath, `${taskId}.state.json`);
+  const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
+  const statusFile = path.join(resolvedStatePath, `${taskId}.state.json`);
   mkdirSync(path.dirname(statusFile), { recursive: true });
   const status: TaskStatus = readStatus(statusFile);
 
@@ -39,7 +40,7 @@ export async function runTask(taskRelativePath: string, pipelineOption?: string)
   if (!isValid) {
     console.error(pc.red("✖ Pipeline configuration is invalid. Cannot run task.\n"));
     for (const error of errors) console.error(pc.yellow(`  - ${error}`));
-    console.error(pc.cyan("\nPlease fix the errors or run 'claude-project validate' for details."));
+    console.error(pc.cyan("\nPlease fix the errors or run 'cat-herder validate' for details."));
     process.exit(1);
   }
 
