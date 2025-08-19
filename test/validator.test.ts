@@ -14,22 +14,24 @@ describe('Validator - Retry Property Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
-      if (filePath.includes('settings.json')) {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
       }
-      if (filePath.includes('package.json')) {
+      if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
       }
-      if (filePath.includes('commands')) {
+      if (pathStr.includes('commands')) {
         return '---\nallowed-tools: []\n---\nTest command content';
       }
       return '';
@@ -283,22 +285,24 @@ describe('Validator - Check Object Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
-      if (filePath.includes('settings.json')) {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
       }
-      if (filePath.includes('package.json')) {
+      if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
       }
-      if (filePath.includes('commands')) {
+      if (pathStr.includes('commands')) {
         return '---\nallowed-tools: []\n---\nTest command content';
       }
       return '';
@@ -608,22 +612,24 @@ describe('Validator - Model Property Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
-      if (filePath.includes('settings.json')) {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
       }
-      if (filePath.includes('package.json')) {
+      if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
       }
-      if (filePath.includes('commands')) {
+      if (pathStr.includes('commands')) {
         return '---\nallowed-tools: []\n---\nTest command content';
       }
       return '';
@@ -905,22 +911,24 @@ describe('Validator - FileAccess Property Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
-      if (filePath.includes('settings.json')) {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
       }
-      if (filePath.includes('package.json')) {
+      if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
       }
-      if (filePath.includes('commands')) {
+      if (pathStr.includes('commands')) {
         return '---\nallowed-tools: []\n---\nTest command content';
       }
       return '';
@@ -1271,15 +1279,16 @@ describe('Validator - Array Check Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       if (filePath.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(npx tsc --noEmit)'] } });
       }
@@ -1560,22 +1569,24 @@ describe('Validator - Top-Level Config Validation', () => {
     vi.clearAllMocks();
     
     // Mock settings.json exists with basic permissions
-    vi.mocked(fs.existsSync).mockImplementation((filePath: string) => {
-      if (filePath.includes('settings.json')) return true;
-      if (filePath.includes('package.json')) return true;
-      if (filePath.includes('commands')) return true; // Mock command files exist
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands')) return true; // Mock command files exist
       return false;
     });
     
     // Mock file reads
-    vi.mocked(fs.readFileSync).mockImplementation((filePath: string, encoding: any) => {
-      if (filePath.includes('settings.json')) {
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) {
         return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
       }
-      if (filePath.includes('package.json')) {
+      if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
       }
-      if (filePath.includes('commands')) {
+      if (pathStr.includes('commands')) {
         return '---\nallowed-tools: []\n---\nTest command content';
       }
       return '';
