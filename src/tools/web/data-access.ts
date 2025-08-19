@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readJournal, JournalEvent } from "../status.js";
-import { StatusPhase } from "../../types.js";
+import { ALL_STATUS_PHASES, StatusPhase } from '../../types.js';
+
 
 export interface TaskStatus {
   taskId: string;
@@ -81,30 +82,30 @@ export function getAllTaskStatuses(stateDir: string): TaskStatus[] {
 }
 
 export function getAllSequenceStatuses(stateDir: string): SequenceStatus[] {
-    if (!fs.existsSync(stateDir)) return [];
-    const files = fs.readdirSync(stateDir).filter(f => f.startsWith('sequence-') && f.endsWith('.state.json'));
-    const sequences: SequenceStatus[] = [];
-    for (const file of files) {
-        try {
-            const content = fs.readFileSync(path.join(stateDir, file), "utf8");
-            const state = JSON.parse(content);
-            const fileStat = fs.statSync(path.join(stateDir, file));
-            const folderName = state.sequenceId?.replace('sequence-', '');
-            sequences.push({
-                sequenceId: state.sequenceId || file.replace('.state.json', ''),
-                phase: state.phase || "unknown",
-                lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-                stats: state.stats,
-                branch: state.branch,
-                folderPath: folderName,
-                currentTaskPath: state.currentTaskPath
-            });
-        } catch (error) {
-            console.error(`Error reading sequence state file ${file}:`, error);
-            sequences.push({ sequenceId: `ERROR: ${file}`, phase: "failed", lastUpdate: new Date().toISOString() });
-        }
+  if (!fs.existsSync(stateDir)) return [];
+  const files = fs.readdirSync(stateDir).filter(f => f.startsWith('sequence-') && f.endsWith('.state.json'));
+  const sequences: SequenceStatus[] = [];
+  for (const file of files) {
+    try {
+      const content = fs.readFileSync(path.join(stateDir, file), "utf8");
+      const state = JSON.parse(content);
+      const fileStat = fs.statSync(path.join(stateDir, file));
+      const folderName = state.sequenceId?.replace('sequence-', '');
+      sequences.push({
+        sequenceId: state.sequenceId || file.replace('.state.json', ''),
+        phase: state.phase || "unknown",
+        lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
+        stats: state.stats,
+        branch: state.branch,
+        folderPath: folderName,
+        currentTaskPath: state.currentTaskPath
+      });
+    } catch (error) {
+      console.error(`Error reading sequence state file ${file}:`, error);
+      sequences.push({ sequenceId: `ERROR: ${file}`, phase: "failed", lastUpdate: new Date().toISOString() });
     }
-    return sequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
+  }
+  return sequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }
 
 export function getTaskDetails(stateDir: string, logsDir: string, taskId: string): TaskDetails | null {
@@ -152,126 +153,123 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
 }
 
 export function readLogFile(logsDir: string, taskId: string, logFile: string): string | null {
-    const sanitizedTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, "");
-    const sanitizedLogFile = logFile.replace(/[^a-zA-Z0-9._-]/g, "");
-    if (!sanitizedLogFile.match(/\.(log|reasoning\.log|raw\.json\.log)$/)) return null;
-    const logPath = path.join(logsDir, sanitizedTaskId, sanitizedLogFile);
-    const expectedDir = path.join(logsDir, sanitizedTaskId);
-    if (!path.resolve(logPath).startsWith(path.resolve(expectedDir))) return null;
-    try {
-        if (!fs.existsSync(logPath)) return null;
-        return fs.readFileSync(logPath, "utf8");
-    } catch (error) {
-        console.error(`Error reading log file ${logPath}:`, error);
-        return null;
-    }
+  const sanitizedTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, "");
+  const sanitizedLogFile = logFile.replace(/[^a-zA-Z0-9._-]/g, "");
+  if (!sanitizedLogFile.match(/\.(log|reasoning\.log|raw\.json\.log)$/)) return null;
+  const logPath = path.join(logsDir, sanitizedTaskId, sanitizedLogFile);
+  const expectedDir = path.join(logsDir, sanitizedTaskId);
+  if (!path.resolve(logPath).startsWith(path.resolve(expectedDir))) return null;
+  try {
+    if (!fs.existsSync(logPath)) return null;
+    return fs.readFileSync(logPath, "utf8");
+  } catch (error) {
+    console.error(`Error reading log file ${logPath}:`, error);
+    return null;
+  }
 }
 
 export function findParentSequence(stateDir: string, taskId: string): SequenceInfo | null {
-    const taskStateFile = path.join(stateDir, `${taskId}.state.json`);
-    if (!fs.existsSync(taskStateFile)) return null;
-    try {
-        const content = fs.readFileSync(taskStateFile, 'utf-8');
-        const taskState = JSON.parse(content);
-        if (!taskState.parentSequenceId) return null;
-        const sequenceStateFile = path.join(stateDir, `${taskState.parentSequenceId}.state.json`);
-        if (!fs.existsSync(sequenceStateFile)) return null;
-        const sequenceContent = fs.readFileSync(sequenceStateFile, 'utf-8');
-        const sequenceState = JSON.parse(sequenceContent);
-        const folderName = sequenceState.sequenceId?.replace('sequence-', '');
-        return {
-            sequenceId: sequenceState.sequenceId,
-            phase: sequenceState.phase,
-            folderPath: folderName,
-            branch: sequenceState.branch
-        };
-    } catch (error) {
-        console.error('Error finding parent sequence:', error);
-        return null;
-    }
+  const taskStateFile = path.join(stateDir, `${taskId}.state.json`);
+  if (!fs.existsSync(taskStateFile)) return null;
+  try {
+    const content = fs.readFileSync(taskStateFile, 'utf-8');
+    const taskState = JSON.parse(content);
+    if (!taskState.parentSequenceId) return null;
+    const sequenceStateFile = path.join(stateDir, `${taskState.parentSequenceId}.state.json`);
+    if (!fs.existsSync(sequenceStateFile)) return null;
+    const sequenceContent = fs.readFileSync(sequenceStateFile, 'utf-8');
+    const sequenceState = JSON.parse(sequenceContent);
+    const folderName = sequenceState.sequenceId?.replace('sequence-', '');
+    return {
+      sequenceId: sequenceState.sequenceId,
+      phase: sequenceState.phase,
+      folderPath: folderName,
+      branch: sequenceState.branch
+    };
+  } catch (error) {
+    console.error('Error finding parent sequence:', error);
+    return null;
+  }
 }
 
 export function getSequenceDetails(stateDir: string, config: any, sequenceId: string): SequenceDetails | null {
-    const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
-    if (!fs.existsSync(stateFile)) return null;
-    try {
-        const content = fs.readFileSync(stateFile, "utf8");
-        const state = JSON.parse(content);
-        const fileStat = fs.statSync(stateFile);
-        const folderName = state.sequenceId?.replace('sequence-', '');
-        if (!folderName) return null;
-        const sequenceDetails: SequenceDetails = {
-            sequenceId: state.sequenceId || sequenceId,
-            phase: state.phase || "unknown",
-            lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-            stats: state.stats,
-            branch: state.branch,
-            folderPath: folderName,
-            tasks: []
-        };
-        const allStateFiles = fs.readdirSync(stateDir).filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
-        for (const stateFileName of allStateFiles) {
-            try {
-                const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
-                const taskState = JSON.parse(taskStateContent);
-                if (taskState.parentSequenceId === sequenceId) {
-                    const taskPhase: StatusPhase = taskState.phase || 'pending';
-                    let taskStatus: StatusPhase;
+  const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
+  if (!fs.existsSync(stateFile)) return null;
+  try {
+    const content = fs.readFileSync(stateFile, "utf8");
+    const state = JSON.parse(content);
+    const fileStat = fs.statSync(stateFile);
+    const folderName = state.sequenceId?.replace('sequence-', '');
+    if (!folderName) return null;
+    const sequenceDetails: SequenceDetails = {
+      sequenceId: state.sequenceId || sequenceId,
+      phase: state.phase || "unknown",
+      lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
+      stats: state.stats,
+      branch: state.branch,
+      folderPath: folderName,
+      tasks: []
+    };
+    const allStateFiles = fs.readdirSync(stateDir).filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
+    for (const stateFileName of allStateFiles) {
+      try {
+        const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
+        const taskState = JSON.parse(taskStateContent);
+        if (taskState.parentSequenceId === sequenceId) {
+          const taskPhase: StatusPhase = taskState.phase || 'pending';
+          let taskStatus: StatusPhase;
 
-                    switch (taskPhase) {
-                        case 'running':
-                        case 'failed':
-                        case 'done':
-                        case 'interrupted':
-                        case 'paused':
-                            taskStatus = taskPhase; // Directly use the valid phase
-                            break;
-                        case 'pending':
-                            taskStatus = 'pending';
-                            break;
-                        default:
-                            // This handles any other phase (like 'started') or acts as a safe fallback
-                            taskStatus = 'started';
-                            break;
-                    }
-                    const taskPath = taskState.taskPath || 'unknown';
-                    sequenceDetails.tasks.push({
-                        taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
-                        taskPath: taskPath,
-                        filename: path.basename(taskPath),
-                        status: taskStatus,
-                        phase: taskState.phase,
-                        lastUpdate: taskState.lastUpdate
-                    });
-                }
-            } catch (e) { console.error(`Error reading task state ${stateFileName}:`, e); }
+          // We check if the phase from the file is a valid, known status.
+          if (taskPhase && ALL_STATUS_PHASES.includes(taskPhase as any)) {
+            // If it's valid, we can safely cast it and use it.
+            taskStatus = taskPhase as StatusPhase;
+          } else {
+            // If it's missing, null, or an unknown value, we default to 'failed'
+            // to make the problem visible in the UI and log a warning.
+            if (taskPhase) { // Only log if there was an invalid value
+              console.warn(`Unknown task phase encountered: '${taskPhase}'. Defaulting to 'failed'.`);
+            }
+            taskStatus = 'failed';
+          }
+
+          const taskPath = taskState.taskPath || 'unknown';
+          sequenceDetails.tasks.push({
+            taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
+            taskPath: taskPath,
+            filename: path.basename(taskPath),
+            status: taskStatus,
+            phase: taskState.phase,
+            lastUpdate: taskState.lastUpdate
+          });
         }
-        sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
-        return sequenceDetails;
-    } catch (error) {
-        console.error(`Error reading sequence details for ${sequenceId}:`, error);
-        return null;
+      } catch (e) { console.error(`Error reading task state ${stateFileName}:`, e); }
     }
+    sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
+    return sequenceDetails;
+  } catch (error) {
+    console.error(`Error reading sequence details for ${sequenceId}:`, error);
+    return null;
+  }
 }
 
 export function findLastStepName(taskDetails: TaskDetails): string | null {
   if (!taskDetails.steps) return null;
-  
+
   let lastStep: { name: string; status: string } | null = null;
   let lastDoneStep: { name: string; status: string } | null = null;
-  
+
   // The order of steps in the state file isn't guaranteed, so we can't just take the last one.
   // We must find the one with the most important status.
   for (const [name, status] of Object.entries(taskDetails.steps)) {
-      if (status.status === 'running' || status.status === 'interrupted' || status.status === 'failed') {
-          // These are terminal or active states, this is definitely the one we want.
-          return name;
-      }
-      if (status.status === 'done') {
-          lastDoneStep = { name, status: status.status };
-      }
+    if (status.status === 'running' || status.status === 'interrupted' || status.status === 'failed') {
+      // These are terminal or active states, this is definitely the one we want.
+      return name;
+    }
+    if (status.status === 'done') {
+      lastDoneStep = { name, status: status.status };
+    }
   }
-  
+
   // If we finished the loop without finding a more important status, return the last 'done' step.
   return lastDoneStep?.name || null;
 }
@@ -326,7 +324,7 @@ export function findLastFinishedTaskFromJournal(journal: JournalEvent[]): Journa
  */
 export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: string): TaskStatus[] {
   const taskMap = new Map<string, TaskStatus>();
-  
+
   // Process journal events chronologically to build task states
   for (const event of journal) {
     if (event.eventType === 'task_started') {
@@ -345,7 +343,7 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
       }
     }
   }
-  
+
   // Enrich with details from state files
   const enrichedTasks: TaskStatus[] = [];
   for (const [taskId, taskStatus] of taskMap.entries()) {
@@ -372,7 +370,7 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
       enrichedTasks.push(taskStatus);
     }
   }
-  
+
   // Sort by lastUpdate descending (most recent first)
   return enrichedTasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }
@@ -383,7 +381,7 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
  */
 export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDir: string): SequenceStatus[] {
   const sequenceMap = new Map<string, SequenceStatus>();
-  
+
   // Process journal events chronologically to build sequence states
   for (const event of journal) {
     if (event.eventType === 'sequence_started') {
@@ -400,7 +398,7 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
       }
     }
   }
-  
+
   // Enrich with details from state files
   const enrichedSequences: SequenceStatus[] = [];
   for (const [sequenceId, sequenceStatus] of sequenceMap.entries()) {
@@ -426,7 +424,7 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
       enrichedSequences.push(sequenceStatus);
     }
   }
-  
+
   // Sort by lastUpdate descending (most recent first)
   return enrichedSequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }
