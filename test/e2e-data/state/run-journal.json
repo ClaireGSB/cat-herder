@@ -1,0 +1,37 @@
+[
+  {
+    "timestamp": "2025-08-19T03:27:44.653Z",
+    "eventType": "sequence_started",
+    "id": "sequence-test"
+  },
+  {
+    "timestamp": "2025-08-19T03:27:44.659Z",
+    "eventType": "task_started",
+    "id": "task-cat-herder-tasks-test-01-test",
+    "parentId": "sequence-test"
+  },
+  {
+    "timestamp": "2025-08-19T03:29:21.116Z",
+    "eventType": "sequence_started",
+    "id": "sequence-test"
+  },
+  {
+    "timestamp": "2025-08-19T03:29:21.122Z",
+    "eventType": "task_started",
+    "id": "task-cat-herder-tasks-test-01-test",
+    "parentId": "sequence-test"
+  },
+  {
+    "timestamp": "2025-08-19T03:29:29.191Z",
+    "eventType": "task_finished",
+    "id": "task-cat-herder-tasks-test-01-test",
+    "parentId": "sequence-test",
+    "status": "interrupted"
+  },
+  {
+    "timestamp": "2025-08-19T03:29:29.197Z",
+    "eventType": "sequence_finished",
+    "id": "sequence-test",
+    "status": "interrupted"
+  }
+]

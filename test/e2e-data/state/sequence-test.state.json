@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "sequenceId": "sequence-test",
+  "startTime": "2025-08-18T02:24:07.922Z",
+  "branch": "refactorr",
+  "phase": "interrupted",
+  "currentTaskPath": "/Users/clairebesset/blogAnalysis/cat-herder-tasks/test/01-test.md",
+  "completedTasks": [
+    "/Users/clairebesset/blogAnalysis/claude-Tasks/test/01-test.md",
+    "/Users/clairebesset/blogAnalysis/claude-Tasks/test/02-test.md"
+  ],
+  "lastUpdate": "2025-08-19T03:29:29.186Z",
+  "stats": {
+    "totalDuration": 78620.938,
+    "totalDurationExcludingPauses": 78620.938,
+    "totalPauseTime": 0,
+    "totalTokenUsage": {
+      "claude-3-5-haiku-20241022": {
+        "inputTokens": 609,
+        "outputTokens": 5696,
+        "cacheCreationInputTokens": 432791,
+        "cacheReadInputTokens": 1582922
+      }
+    }
+  }
+}
