@@ -19,8 +19,8 @@ This refactor will extract common and complex UI sections into their own dedicat
 -   [x] Refactor `task-detail.ejs` to use the new partials.
 -   [x] Refactor `sequence-detail.ejs` to use the new partials.
 -   [x] Refactor `live-activity.ejs` to use the new partials.
--   [ ] Manually test the web dashboard to ensure no visual or functional regressions.
--   [ ] Update `ARCHITECTURE.MD` to reflect the improved frontend structure.
+-   [x] Manually test the web dashboard to ensure no visual or functional regressions.
+-   [x] Update `ARCHITECTURE.MD` to reflect the improved frontend structure.
 
 ## Detailed Implementation Steps
 

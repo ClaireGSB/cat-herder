@@ -18,7 +18,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 1.  **Interface Layer (CLI & Web):** The user's entry point. This layer is responsible for parsing user input and presenting status information.
     *   **CLI (`src/index.ts`, `src/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
-    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer. It runs as a separate process and reads from the State Layer to provide a real-time view of the workflow.
+    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
     *   It reads the user's pipeline configuration (`cat-herder.config.js`).
