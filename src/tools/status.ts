@@ -200,3 +200,29 @@ export async function logJournalEvent(event: Omit<JournalEvent, 'timestamp'>): P
         console.error(pc.red(`Fatal: Could not write to run-journal.json. Error: ${error.message}`));
     }
 }
+
+// =================================================================
+// FILE-BASED IPC FUNCTIONS FOR UI-BASED INTERACTIVE HALTING
+// =================================================================
+
+// Helper to get the consistent path for an answer file
+function getAnswerFilePath(stateDir: string, taskId: string): string {
+  return path.join(stateDir, `${taskId}.answer`);
+}
+
+// Function for the web server to write the answer
+export async function writeAnswerToFile(stateDir: string, taskId: string, answer: string): Promise<void> {
+  const filePath = getAnswerFilePath(stateDir, taskId);
+  fs.writeFileSync(filePath, answer, 'utf-8');
+}
+
+// Function for the CLI orchestrator to read (and delete) the answer
+export async function readAndDeleteAnswerFile(stateDir: string, taskId: string): Promise<string | null> {
+  const filePath = getAnswerFilePath(stateDir, taskId);
+  if (fs.existsSync(filePath)) {
+    const answer = fs.readFileSync(filePath, 'utf-8');
+    fs.unlinkSync(filePath); // CRITICAL: Delete the file after reading
+    return answer;
+  }
+  return null;
+}

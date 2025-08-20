@@ -21,7 +21,7 @@ Before starting, please make sure you fully understand the V1 implementation of 
 
 ### **Summary Checklist**
 
--   [ ] **1. Backend API Endpoint:** Create a `POST` endpoint in the web server to receive answers from the browser.
+-   [x] **1. Backend API Endpoint:** Create a `POST` endpoint in the web server to receive answers from the browser.
 -   [ ] **2. Frontend UI Form:** Add an HTML form to the web pages that allows users to submit an answer.
 -   [ ] **3. IPC Bridge (File-Based):** Implement the logic for the web server to write an answer to a file and for the CLI to read it.
 -   [ ] **4. Update Orchestrator Logic:** Modify the `step-runner` to listen for both CLI input *and* the new file-based answer signal.

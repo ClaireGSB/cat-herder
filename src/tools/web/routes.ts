@@ -1,6 +1,6 @@
 import express, { Request, Response, Router } from "express";
 import path from "node:path";
-import { readJournal } from "../status.js";
+import { readJournal, writeAnswerToFile } from "../status.js";
 import { 
   buildTaskHistoryFromJournal, 
   buildSequenceHistoryFromJournal,
@@ -16,6 +16,9 @@ import { templateHelpers } from "./template-helpers.js";
 
 export function createRouter(stateDir: string, logsDir: string, config: any): Router {
   const router = Router();
+  
+  // Add JSON middleware for parsing request bodies
+  router.use(express.json());
 
   router.get("/", (_req: Request, res: Response) => res.redirect("/live"));
 
@@ -103,6 +106,29 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
     if (logContent === null) return res.status(404).send("Log file not found or access denied");
     res.setHeader("Content-Type", "text/plain");
     res.send(logContent);
+  });
+
+  // POST endpoint for submitting answers to waiting tasks
+  router.post("/task/:taskId/respond", async (req: Request, res: Response) => {
+    const { taskId } = req.params;
+    const { answer } = req.body;
+
+    if (!taskId || typeof taskId !== 'string' || !answer || typeof answer !== 'string') {
+      return res.status(400).json({ error: "Invalid request: taskId and answer are required." });
+    }
+
+    const taskDetails = getTaskDetails(stateDir, logsDir, taskId);
+    if (!taskDetails || taskDetails.phase !== 'waiting_for_input') {
+      return res.status(409).json({ error: "Task is not currently waiting for input." });
+    }
+
+    try {
+      await writeAnswerToFile(stateDir, taskId, answer);
+      res.status(200).json({ message: "Answer submitted successfully. The task will now resume." });
+    } catch (error) {
+      console.error("Failed to write answer file:", error);
+      res.status(500).json({ error: "Failed to process the answer." });
+    }
   });
 
   return router;
