@@ -27,6 +27,7 @@ export interface CatHerderConfig {
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
+  interactionThreshold?: number;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
   // Backward compatibility - will be removed in future versions
@@ -41,6 +42,7 @@ const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pi
   manageGitBranch: true,
   autoCommit: false,
   waitForRateLimitReset: false,
+  interactionThreshold: 0,
 };
 
 let loadedConfig: CatHerderConfig | null = null;

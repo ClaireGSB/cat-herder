@@ -3,7 +3,7 @@ import path from "node:path";
 import pc from "picocolors";
 import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 
-export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
+export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
 
 export type TokenUsage = {
   inputTokens: number;
@@ -44,6 +44,15 @@ export type TaskStatus = {
   lastUpdate: string;
   prUrl?: string;
   lastCommit?: string;
+  pendingQuestion?: {
+    question: string;
+    timestamp: string;
+  };
+  interactionHistory: {
+    question: string;
+    answer: string;
+    timestamp: string;
+  }[];
 };
 
 export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
@@ -92,7 +101,8 @@ const defaultStatus: TaskStatus = {
     steps: {},
     tokenUsage: {},
     stats: null,
-    lastUpdate: new Date().toISOString()
+    lastUpdate: new Date().toISOString(),
+    interactionHistory: []
 };
 
 export function readStatus(file: string): TaskStatus {

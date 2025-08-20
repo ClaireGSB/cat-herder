@@ -16,7 +16,7 @@ Make sure you read the PRD attached at the end of this document for a complete o
 
 ### Summary Checklist
 
--   [ ] **1. Configuration & State:** Add `interactionThreshold` to config files and update the task state structure to support pausing.
+-   [x] **1. Configuration & State:** Add `interactionThreshold` to config files and update the task state structure to support pausing.
 -   [ ] **2. Prompt Engineering:** Modify the prompt assembly logic to make the AI aware of the threshold and the new `askHuman` tool.
 -   [ ] **3. Orchestration Logic:** Implement the core pause, prompt, and resume workflow in the step runner.
 -   [ ] **4. CLI & Web UI:** Display the paused state, the AI's question, and the interaction history.

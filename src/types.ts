@@ -8,6 +8,8 @@ export const ALL_STATUS_PHASES = [
   'done',
   'failed',
   'interrupted',
+  'waiting_for_reset',
+  'waiting_for_input',
   'paused',
   'started',
 ] as const;

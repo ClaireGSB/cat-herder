@@ -29,6 +29,18 @@ module.exports = {
   waitForRateLimitReset: false,
 
   /**
+   * Controls how often the AI agent should pause to ask for human clarification.
+   * Scale: 0-5 where:
+   * - 0 (default): Fully autonomous, never asks questions
+   * - 1-2: Low interruption, only asks when fundamentally blocked
+   * - 3: Balanced, asks for clarification on ambiguous requirements
+   * - 4-5: High interaction, very cautious, asks before most decisions
+   * 
+   * Can be overridden per-task in YAML frontmatter with 'interactionThreshold: X'
+   */
+  interactionThreshold: 0,
+
+  /**
    * Default pipeline to use when none is specified.
    */
   defaultPipeline: 'default',
