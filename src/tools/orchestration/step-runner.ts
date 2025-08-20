@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
+import readline from "node:readline";
 import { runStreaming, killActiveProcess } from "../proc.js";
 import { updateStatus, readStatus, updateSequenceStatus } from "../status.js"; 
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
-import { InterruptedError } from "./errors.js";
+import { InterruptedError, HumanInterventionRequiredError } from "./errors.js";
 import { execSync } from "node:child_process";
 
 
@@ -22,6 +23,33 @@ process.on('SIGINT', () => {
   isInterrupted = true;
   killActiveProcess(); // This will unblock the `await runStreaming` call
 });
+
+// Utility function to prompt user for input via CLI
+async function promptUser(question: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    console.log(pc.cyan("\n[Orchestrator] Task has been paused. The AI needs your input.\n"));
+    console.log(pc.yellow("🤖 QUESTION:"));
+    console.log(question);
+    console.log();
+
+    rl.question(pc.blue("Your answer: "), (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+
+    // Handle Ctrl+C during input
+    rl.on('SIGINT', () => {
+      console.log(pc.yellow("\n[Orchestrator] Input interrupted. Task will remain in waiting_for_input state."));
+      rl.close();
+      reject(new InterruptedError("User interrupted input"));
+    });
+  });
+}
 
 export async function executeStep(
   stepConfig: PipelineStep,
@@ -61,9 +89,66 @@ export async function executeStep(
     const taskId = path.basename(statusFile, '.state.json');
     const sequenceId = sequenceStatusFile ? path.basename(sequenceStatusFile, '.state.json') : undefined;
 
-    const result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, currentPrompt, rawJsonLogFile, model, { pipelineName, settings: config });
-    const partialTokenUsage = result.tokenUsage;
-    const modelName = result.modelUsed || model || 'default';
+    // Interactive loop to handle human intervention
+    let needsResume = true;
+    let feedbackForResume: string | null = null;
+    let result: any;
+    let partialTokenUsage: any;
+    let modelName: string;
+
+    while (needsResume) {
+      try {
+        // Modify the prompt to include feedback if resuming from a question
+        let promptToUse = currentPrompt;
+        if (feedbackForResume) {
+          promptToUse = `${currentPrompt}\n\n--- HUMAN FEEDBACK ---\n${feedbackForResume}\n--- END HUMAN FEEDBACK ---\n\nPlease continue your work with this feedback in mind.`;
+        }
+
+        result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config });
+        partialTokenUsage = result.tokenUsage;
+        modelName = result.modelUsed || model || 'default';
+        needsResume = false; // If it finishes without error, exit loop
+      } catch (error) {
+        if (error instanceof HumanInterventionRequiredError) {
+          // 1. PAUSE: Update status to 'waiting_for_input' with the question
+          updateStatus(statusFile, s => {
+            s.phase = 'waiting_for_input';
+            s.pendingQuestion = { 
+              question: error.question, 
+              timestamp: new Date().toISOString() 
+            };
+          });
+
+          try {
+            // 2. PROMPT: Ask the user the question in the CLI
+            const answer = await promptUser(error.question);
+
+            // 3. RESUME: Update status again, moving question to history
+            updateStatus(statusFile, s => {
+              s.interactionHistory.push({ 
+                question: error.question, 
+                answer, 
+                timestamp: new Date().toISOString() 
+              });
+              s.pendingQuestion = undefined;
+              s.phase = 'running';
+            });
+
+            // 4. Prepare feedback for the next loop iteration
+            feedbackForResume = `You previously asked: "${error.question}". The user responded: "${answer}". Continue your work based on this answer.`;
+          } catch (inputError) {
+            if (inputError instanceof InterruptedError) {
+              // User hit Ctrl+C during input - maintain waiting_for_input state
+              throw inputError;
+            }
+            throw inputError;
+          }
+        } else {
+          // It's a real error, re-throw it
+          throw error;
+        }
+      }
+    }
 
     // ALWAYS perform a state update after a run, even if it was interrupted.
     updateStatus(statusFile, s => {
