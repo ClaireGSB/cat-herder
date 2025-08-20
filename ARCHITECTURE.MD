@@ -26,16 +26,19 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
+    *   **Interactive Halting Management:** When the AI uses the `askHuman` tool, the orchestrator enters a pause/prompt/resume cycle. It transitions the task state to `waiting_for_input`, prompts the user via CLI, captures the response, and resumes execution with the user's guidance incorporated into the ongoing conversation.
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
     *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results.
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
+    *   **Interactive Tool Detection:** Monitors the AI's tool usage, specifically detecting when the `askHuman` tool is invoked, triggering the interactive halting workflow by throwing a `HumanInterventionRequiredError`.
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
+    *   **Interactive Halting Support:** The state layer tracks the new `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution.
 
 ### B. Data Flow Diagram
 
@@ -76,6 +79,13 @@ graph TD
     ClaudeCLI -- Modifies --> UserFiles[User's Source Code]
     Orchestrator -- Uses --> CheckRunner
     CheckRunner -- Executes --> Shell[Shell Commands (npm test)]
+    
+    %% Interactive Halting Flow
+    ClaudeCLI -- askHuman tool --> Proc
+    Proc -- HumanInterventionRequiredError --> Orchestrator
+    Orchestrator -- Prompts for input --> CLI
+    CLI -- User response --> Orchestrator
+    Orchestrator -- Updates interaction history --> State
 
     Web -- Reads --> State
     User -- Views --> Web

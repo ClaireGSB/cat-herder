@@ -228,6 +228,91 @@ npm run test:manual:web
 
 This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes without needing to run a live AI task or having existing data in your `~/.cat-herder` directory.
 
+## Interactive Halting (Interaction Threshold)
+
+The `cat-herder` tool includes a powerful feature called **Interactive Halting** that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Interaction Threshold**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
+
+### The Interaction Threshold Scale
+
+The interaction threshold is configured as an integer from `0` to `5`:
+
+- **`0` - Zero Fucks Given (Fully Autonomous)**: The AI must never ask questions. It makes its best assumptions and proceeds without interruption. This is the default to maintain existing behavior.
+- **`1-2` - Low Interruption (High Confidence)**: The AI only asks questions when fundamentally blocked or facing highly critical, ambiguous choices (e.g., "The PRD is contradictory, which path should I take?").
+- **`3` - Medium Interruption (Balanced)**: The AI asks when it encounters ambiguity in requirements or must make significant, non-obvious implementation choices.
+- **`4-5` - High Interruption (Low Confidence)**: The AI is very cautious, asking to confirm assumptions, clarify minor ambiguities, and present options before proceeding with any significant work.
+
+### Configuration
+
+#### Global Configuration
+
+Set a default threshold in your `cat-herder.config.js`:
+
+```javascript
+// cat-herder.config.js
+module.exports = {
+  taskFolder: "cat-herder-tasks",
+  statePath: "~/.cat-herder/state",
+  logsPath: "~/.cat-herder/logs",
+  
+  // Set the default interaction threshold (0-5)
+  interactionThreshold: 0, // Default is 0 for backward compatibility
+  
+  // ... other configuration
+};
+```
+
+#### Task-Level Override
+
+Override the threshold for specific tasks using YAML frontmatter:
+
+```markdown
+---
+pipeline: default
+interactionThreshold: 4
+---
+# Complex Refactoring Task
+
+This task involves major architectural changes. Be cautious and ask questions when uncertain.
+```
+
+### How Interactive Halting Works
+
+1. **AI Detection**: When the AI encounters uncertainty at or above the configured threshold, it uses the `askHuman` tool with a specific question.
+
+2. **Workflow Pause**: The orchestrator immediately pauses execution and updates the task status to `waiting_for_input`.
+
+3. **User Prompt**: The CLI displays the AI's question and waits for your response:
+   ```bash
+   [Orchestrator] Task has been paused. The AI needs your input.
+
+   🤖 QUESTION:
+   The user story mentions a "simplified user profile page," but the technical brief 
+   details both an "admin view" and a "public view." Should I implement both views, 
+   or just the public-facing one for now?
+
+   Your answer: _
+   ```
+
+4. **Resume Execution**: After you provide an answer, the AI receives your response and continues with the clarified guidance.
+
+5. **Interaction History**: All questions and answers are logged in the task's state file and visible in the web dashboard for future reference.
+
+### Use Cases
+
+- **Risky Refactors**: Set threshold to `4-5` for major code changes where wrong assumptions could be costly
+- **Routine Tasks**: Set threshold to `0` for documentation updates or simple bug fixes
+- **Complex Features**: Set threshold to `3` for new feature development with unclear requirements
+- **Team Projects**: Set a baseline threshold in config while allowing task-specific overrides
+
+### Web Dashboard Integration
+
+The web dashboard displays the interactive halting state with:
+- Clear indicators when tasks are `waiting_for_input`
+- The AI's pending question prominently displayed
+- Complete interaction history showing all Q&A exchanges during the task
+
+*Note: In the current version, questions can only be answered via the CLI. The web dashboard provides read-only monitoring of the interactive state.*
+
 ## How It Works
 
 ### Configurable Pipelines (`cat-herder.config.js`)

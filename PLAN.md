@@ -21,7 +21,7 @@ Make sure you read the PRD attached at the end of this document for a complete o
 -   [x] **3. Orchestration Logic:** Implement the core pause, prompt, and resume workflow in the step runner.
 -   [x] **4. CLI & Web UI:** Display the paused state, the AI's question, and the interaction history.
 -   [x] **5. Testing:** Add unit and integration tests for the new interactive workflow.
--   [ ] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` to reflect the new feature.
+-   [x] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` to reflect the new feature.
 
 ---
 
