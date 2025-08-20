@@ -94,13 +94,58 @@
                         Asked at: <%= new Date(taskToShow.pendingQuestion.timestamp).toLocaleString() %>
                     </div>
                     <div class="mt-3">
-                        <div class="alert alert-info d-flex align-items-center" role="alert">
+                        <form id="answer-form" data-task-id="<%= taskToShow.taskId %>">
+                            <div class="mb-2">
+                                <label for="human-answer" class="form-label"><strong>Your Answer:</strong></label>
+                                <textarea class="form-control" id="human-answer" name="answer" rows="3" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send me-1"></i> Submit Answer and Resume
+                            </button>
+                            <div id="form-status" class="mt-2"></div>
+                        </form>
+                        
+                        <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
                             <i class="bi bi-terminal me-2"></i>
                             <div>
-                                <strong>Answer via CLI:</strong> Switch to your command-line interface to provide an answer and resume the task.
+                                <strong>Alternative:</strong> You can also answer via your command-line interface.
                             </div>
                         </div>
                     </div>
+
+                    <script>
+                        document.getElementById('answer-form').addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const form = e.target;
+                            const taskId = form.dataset.taskId;
+                            const answer = form.elements.answer.value;
+                            const statusDiv = document.getElementById('form-status');
+                            const submitButton = form.querySelector('button[type="submit"]');
+
+                            submitButton.disabled = true;
+                            statusDiv.innerHTML = '<span class="text-info"><i class="bi bi-hourglass-split me-1"></i>Submitting...</span>';
+
+                            try {
+                                const response = await fetch(`/task/${taskId}/respond`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ answer })
+                                });
+
+                                if (response.ok) {
+                                    form.elements.answer.disabled = true;
+                                    statusDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Answer submitted successfully. Task is resuming in the CLI.</span>';
+                                } else {
+                                    const result = await response.json();
+                                    statusDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${result.error}</span>`;
+                                    submitButton.disabled = false;
+                                }
+                            } catch (error) {
+                                statusDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Network error: ${error.message}</span>`;
+                                submitButton.disabled = false;
+                            }
+                        });
+                    </script>
                 </div>
             </div>
         <% } %>
