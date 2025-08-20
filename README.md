@@ -281,7 +281,9 @@ This task involves major architectural changes. Be cautious and ask questions wh
 
 2. **Workflow Pause**: The orchestrator immediately pauses execution and updates the task status to `waiting_for_input`.
 
-3. **User Prompt**: The CLI displays the AI's question and waits for your response:
+3. **User Prompt**: You can answer the AI's question in two ways:
+   
+   **Via CLI**: The command line displays the question and waits for your response:
    ```bash
    [Orchestrator] Task has been paused. The AI needs your input.
 
@@ -290,8 +292,12 @@ This task involves major architectural changes. Be cautious and ask questions wh
    details both an "admin view" and a "public view." Should I implement both views, 
    or just the public-facing one for now?
 
+   (You can answer here in the CLI or in the web dashboard.)
+
    Your answer: _
    ```
+   
+   **Via Web Dashboard**: If you have the web dashboard open, you'll see an interactive question card with a text area where you can type your answer and click "Submit Answer and Resume."
 
 4. **Resume Execution**: After you provide an answer, the AI receives your response and continues with the clarified guidance.
 
@@ -306,12 +312,14 @@ This task involves major architectural changes. Be cautious and ask questions wh
 
 ### Web Dashboard Integration
 
-The web dashboard displays the interactive halting state with:
+The web dashboard provides full interactive halting support with:
 - Clear indicators when tasks are `waiting_for_input`
-- The AI's pending question prominently displayed
+- The AI's pending question prominently displayed in a dedicated question card
+- An interactive form where you can type your answer and submit it directly from the browser
 - Complete interaction history showing all Q&A exchanges during the task
+- Real-time updates when answers are submitted through either CLI or web interface
 
-*Note: In the current version, questions can only be answered via the CLI. The web dashboard provides read-only monitoring of the interactive state.*
+Questions can be answered from either the CLI or the web dashboard - whichever is more convenient for your workflow.
 
 ## How It Works
 
@@ -882,7 +890,7 @@ The validator ensures both your security settings and project configuration stay
 
 ## Interactive Web Dashboard
 
-`cat-herder` includes a powerful web-based dashboard for visual monitoring and real-time task and sequence tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, and watch Claude's reasoning process in real-time with full lifecycle awareness for both individual tasks and multi-task sequences.
+`cat-herder` includes a powerful web-based dashboard for visual monitoring, real-time task and sequence tracking, and interactive collaboration with AI workflows. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, watch Claude's reasoning process in real-time, and answer AI questions directly from the browser when using Interactive Halting with full lifecycle awareness for both individual tasks and multi-task sequences.
 
 ### Getting Started
 

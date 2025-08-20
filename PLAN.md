@@ -25,8 +25,8 @@ Before starting, please make sure you fully understand the V1 implementation of 
 -   [x] **2. Frontend UI Form:** Add an HTML form to the web pages that allows users to submit an answer.
 -   [x] **3. IPC Bridge (File-Based):** Implement the logic for the web server to write an answer to a file and for the CLI to read it.
 -   [x] **4. Update Orchestrator Logic:** Modify the `step-runner` to listen for both CLI input *and* the new file-based answer signal.
--   [ ] **5. Testing:** Add tests for the new API endpoint and the updated orchestrator logic.
--   [ ] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` with details and screenshots of the new UI feature.
+-   [x] **5. Testing:** Add tests for the new API endpoint and the updated orchestrator logic.
+-   [x] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` with details and screenshots of the new UI feature.
 
 ---
 
