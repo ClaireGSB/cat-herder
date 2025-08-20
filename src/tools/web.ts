@@ -27,10 +27,21 @@ export async function startWebServer(options: WebServerOptions = {}) {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
 
-  // Our build script now copies `templates` and `public` into the *same directory*
-  // as this running file (__dirname). So, the path is simple and direct.
-  const viewsPath = path.join(__dirname, 'templates', 'web');
-  const publicPath = path.join(__dirname, 'public');
+  // Handle both development (tsx) and production (compiled) environments
+  // In development, we need to go up to src/ and then to templates/
+  // In production, templates are copied to dist/tools/templates/
+  let viewsPath: string;
+  let publicPath: string;
+  
+  if (__dirname.includes('/dist/')) {
+    // Production: templates are in dist/tools/templates/
+    viewsPath = path.join(__dirname, 'templates', 'web');
+    publicPath = path.join(__dirname, 'public');
+  } else {
+    // Development: templates are in src/templates/
+    viewsPath = path.join(__dirname, '..', 'templates', 'web');
+    publicPath = path.join(__dirname, '..', 'public');
+  }
 
   app.set("view engine", "ejs");
   app.set("views", viewsPath);

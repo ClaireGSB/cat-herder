@@ -104,8 +104,13 @@ class CatHerderDashboard {
                 this.watchLogFile(task.taskId, newLogFile);
             }
 
+            // Update status indicators for waiting_for_input phase
+            if (task.phase === 'waiting_for_input') {
+                this.updateWaitingForInputUI(task);
+            }
+
             // Existing logic to reload when the task is finished
-            if (window.liveActivityData.isLive && task.phase !== 'running') {
+            if (window.liveActivityData.isLive && task.phase !== 'running' && task.phase !== 'waiting_for_input') {
                 console.log(`Task phase changed from 'running' to '${task.phase}'. Reloading to show final state.`);
                 setTimeout(() => window.location.reload(), 1200);
             }
@@ -129,6 +134,38 @@ class CatHerderDashboard {
             }
         };
         sendRequest();
+    }
+
+    // Handle UI updates for waiting_for_input phase
+    updateWaitingForInputUI(task) {
+        // Update the running step indicator
+        const runningStepElement = document.getElementById('running-step-name');
+        if (runningStepElement) {
+            runningStepElement.textContent = task.currentStep || 'unknown';
+        }
+
+        // Show/update the pending question card
+        const pendingQuestionCard = document.getElementById('pending-question-card');
+        if (task.pendingQuestion && !pendingQuestionCard) {
+            // Reload to show the question card if it's not already visible
+            console.log('Task is waiting for input but question card not visible. Reloading page.');
+            window.location.reload();
+        } else if (!task.pendingQuestion && pendingQuestionCard) {
+            // Hide the question card if the question has been answered
+            pendingQuestionCard.style.display = 'none';
+        }
+
+        // Update the status header to reflect waiting state
+        const statusHeader = document.querySelector('.card-text');
+        if (statusHeader && statusHeader.textContent.includes('RUNNING STEP:')) {
+            statusHeader.innerHTML = `
+                <strong>
+                    <i class="bi bi-pause-circle-fill me-1"></i>
+                    WAITING FOR INPUT: <span id="running-step-name">${task.currentStep || 'unknown'}</span>
+                </strong>
+            `;
+            statusHeader.className = 'card-text text-warning mb-0';
+        }
     }
 
     // ... (updateSequenceUI, handleLogUpdate, and updateStatusBadge remain the same)
@@ -204,11 +241,33 @@ class CatHerderDashboard {
         element.className = element.className.replace(/\bstatus-\S+/g, '');
         element.classList.add(`status-${phase}`);
 
-        const temp = document.createElement('span');
-        temp.innerHTML = element.innerHTML;
-        const icon = temp.querySelector('i');
+        // Determine the appropriate icon for the phase
+        let iconHtml = '';
+        switch (phase) {
+            case 'running':
+                iconHtml = '<i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>';
+                break;
+            case 'waiting_for_input':
+                iconHtml = '<i class="bi bi-question-circle-fill me-1"></i>';
+                break;
+            case 'done':
+                iconHtml = '<i class="bi bi-check-circle-fill me-1"></i>';
+                break;
+            case 'failed':
+                iconHtml = '<i class="bi bi-exclamation-triangle-fill me-1"></i>';
+                break;
+            case 'interrupted':
+                iconHtml = '<i class="bi bi-pause-circle-fill me-1"></i>';
+                break;
+            default:
+                // Try to preserve existing icon if phase is unknown
+                const temp = document.createElement('span');
+                temp.innerHTML = element.innerHTML;
+                const existingIcon = temp.querySelector('i');
+                iconHtml = existingIcon ? existingIcon.outerHTML : '';
+        }
 
-        element.innerHTML = `${icon ? icon.outerHTML : ''} ${phase}`;
+        element.innerHTML = `${iconHtml} ${phase}`;
     }
 }
 

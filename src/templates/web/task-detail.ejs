@@ -34,6 +34,8 @@
                     <span class="badge status-<%= task.phase %> fs-6 task-status">
                         <% if (task.phase === 'running') { %>
                             <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                        <% } else if (task.phase === 'waiting_for_input') { %>
+                            <i class="bi bi-question-circle-fill me-1"></i>
                         <% } else if (task.phase === 'done') { %>
                             <i class="bi bi-check-circle-fill me-1"></i>
                         <% } else if (task.phase === 'failed') { %>
@@ -109,6 +111,94 @@
     </div>
 </div>
 
+<!-- Human Interactions Section -->
+<% if (task.interactionHistory && task.interactionHistory.length > 0) { %>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-transparent">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-chat-dots me-2"></i>
+                        Human Interactions
+                        <small class="text-muted ms-2">(<%= task.interactionHistory.length %> interaction<%= task.interactionHistory.length !== 1 ? 's' : '' %>)</small>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <% task.interactionHistory.forEach((interaction, index) => { %>
+                        <div class="interaction-item <% if (index > 0) { %>border-top pt-3<% } %> <% if (index < task.interactionHistory.length - 1) { %>mb-3<% } %>">
+                            <!-- Question -->
+                            <div class="mb-2">
+                                <div class="d-flex align-items-start">
+                                    <i class="bi bi-robot me-2 mt-1 text-primary" style="font-size: 1.1rem;"></i>
+                                    <div class="flex-grow-1">
+                                        <strong class="text-primary">AI Question:</strong>
+                                        <div class="bg-light p-2 rounded mt-1">
+                                            <%= interaction.question %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Answer -->
+                            <div class="mb-2">
+                                <div class="d-flex align-items-start">
+                                    <i class="bi bi-person-fill me-2 mt-1 text-success" style="font-size: 1.1rem;"></i>
+                                    <div class="flex-grow-1">
+                                        <strong class="text-success">Your Answer:</strong>
+                                        <div class="bg-success bg-opacity-10 border border-success border-opacity-25 p-2 rounded mt-1">
+                                            <%= interaction.answer %>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Timestamp -->
+                            <div class="text-muted small">
+                                <i class="bi bi-clock me-1"></i>
+                                <%= new Date(interaction.timestamp).toLocaleString() %>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
+
+<!-- Current Pending Question -->
+<% if (task.phase === 'waiting_for_input' && task.pendingQuestion) { %>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-question-circle-fill me-2"></i>
+                        AI is currently waiting for your input
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning d-flex align-items-start mb-3" role="alert">
+                        <i class="bi bi-robot me-2 mt-1" style="font-size: 1.25rem;"></i>
+                        <div>
+                            <strong class="d-block mb-1">QUESTION:</strong>
+                            <p class="mb-0"><%= task.pendingQuestion.question %></p>
+                        </div>
+                    </div>
+                    <div class="text-muted small mb-3">
+                        <i class="bi bi-clock me-1"></i>
+                        Asked at: <%= new Date(task.pendingQuestion.timestamp).toLocaleString() %>
+                    </div>
+                    <div class="alert alert-info d-flex align-items-center" role="alert">
+                        <i class="bi bi-terminal me-2"></i>
+                        <div>
+                            <strong>Answer via CLI:</strong> Switch to your command-line interface to provide an answer and resume the task.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+<% } %>
 
 <%- include('partials/_log-viewer') %>
 

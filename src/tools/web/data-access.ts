@@ -20,6 +20,8 @@ export interface TaskStatus {
 export interface TaskDetails extends TaskStatus {
   steps?: Array<{ name: string; status: StatusPhase; duration?: number; }>;
   logs?: { [stepName: string]: { log?: string; reasoning?: string; raw?: string; }; };
+  pendingQuestion?: { question: string; timestamp: string; };
+  interactionHistory: Array<{ question: string; answer: string; timestamp: string; }>;
 }
 
 export interface SequenceInfo {
@@ -126,7 +128,9 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
       branch: state.branch,
       pipeline: state.pipeline,
       parentSequenceId: state.parentSequenceId,
-      steps: state.steps
+      steps: state.steps,
+      pendingQuestion: state.pendingQuestion,
+      interactionHistory: state.interactionHistory || []
     };
     const taskLogDir = path.join(logsDir, taskId);
     if (fs.existsSync(taskLogDir)) {
