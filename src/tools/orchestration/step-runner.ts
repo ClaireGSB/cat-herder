@@ -3,7 +3,7 @@ import path from "node:path";
 import pc from "picocolors";
 import readline from "node:readline";
 import { runStreaming, killActiveProcess } from "../proc.js";
-import { updateStatus, readStatus, updateSequenceStatus } from "../status.js"; 
+import { updateStatus, readStatus, updateSequenceStatus, readAndDeleteAnswerFile } from "../status.js"; 
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
 import { InterruptedError, HumanInterventionRequiredError } from "./errors.js";
@@ -24,31 +24,49 @@ process.on('SIGINT', () => {
   killActiveProcess(); // This will unblock the `await runStreaming` call
 });
 
-// Utility function to prompt user for input via CLI
-async function promptUser(question: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
+// Utility function to wait for human input from either CLI or web UI
+async function waitForHumanInput(question: string, stateDir: string, taskId: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let pollingInterval: NodeJS.Timeout | null = null;
 
+  // Promise 1: CLI Input
+  const cliPromise = new Promise<string>((resolve, reject) => {
     console.log(pc.cyan("\n[Orchestrator] Task has been paused. The AI needs your input.\n"));
     console.log(pc.yellow("🤖 QUESTION:"));
     console.log(question);
-    console.log();
+    console.log("\n(You can answer here in the CLI or in the web dashboard.)\n");
 
     rl.question(pc.blue("Your answer: "), (answer) => {
-      rl.close();
       resolve(answer.trim());
     });
 
     // Handle Ctrl+C during input
     rl.on('SIGINT', () => {
       console.log(pc.yellow("\n[Orchestrator] Input interrupted. Task will remain in waiting_for_input state."));
-      rl.close();
       reject(new InterruptedError("User interrupted input"));
     });
   });
+
+  // Promise 2: File-based Input
+  const ipcPromise = new Promise<string>((resolve) => {
+    pollingInterval = setInterval(async () => {
+      const answer = await readAndDeleteAnswerFile(stateDir, taskId);
+      if (answer !== null) {
+        console.log(pc.cyan("\n[Orchestrator] Answer received from web UI. Resuming..."));
+        resolve(answer);
+      }
+    }, 1000); // Check every second
+  });
+
+  try {
+    // Race the two promises
+    const answer = await Promise.race([cliPromise, ipcPromise]);
+    return answer;
+  } finally {
+    // CRITICAL CLEANUP
+    if (pollingInterval) clearInterval(pollingInterval);
+    rl.close();
+  }
 }
 
 export async function executeStep(
@@ -120,8 +138,9 @@ export async function executeStep(
           });
 
           try {
-            // 2. PROMPT: Ask the user the question in the CLI
-            const answer = await promptUser(error.question);
+            // 2. PROMPT: Ask the user the question in CLI or web UI
+            const stateDir = path.dirname(statusFile);
+            const answer = await waitForHumanInput(error.question, stateDir, taskId);
 
             // 3. RESUME: Update status again, moving question to history
             updateStatus(statusFile, s => {
