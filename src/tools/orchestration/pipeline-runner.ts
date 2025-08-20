@@ -28,7 +28,7 @@ export async function executePipelineForTask(
 
   // Parse the task file to extract frontmatter
   const rawTaskContent = readFileSync(taskPath, 'utf-8');
-  const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
+  const { pipeline: taskPipelineName, interactionThreshold: taskInteractionThreshold, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
 
   // Determine task ID and status file path
   const taskId = taskPathToTaskId(taskPath, projectRoot);
@@ -59,6 +59,9 @@ export async function executePipelineForTask(
       console.log(pc.yellow(`[Orchestrator] Warning: pipeline option ignored. Configuration uses legacy single pipeline format.`));
     }
   }
+
+  // Resolve interaction threshold (priority: task frontmatter > config > default 0)
+  const resolvedInteractionThreshold = taskInteractionThreshold ?? config.interactionThreshold ?? 0;
 
   // Extract sequence ID if this task is part of a sequence
   const sequenceId = options.sequenceStatusFile
@@ -113,7 +116,7 @@ export async function executePipelineForTask(
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
     // Assemble the full prompt using the assemblePrompt function
-    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions);
+    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions, resolvedInteractionThreshold);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
