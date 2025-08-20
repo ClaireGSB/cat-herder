@@ -1,350 +1,254 @@
 
 
-# PLAN: Implement Interactive Halting ("Fucks Given" Threshold)
+# PLAN V2: Implement UI-Based Interactive Halting
 
-## Implementation Plan
+### **Goal**
 
-### Goal
+To enable users to answer the AI's clarifying questions directly from the web dashboard, creating a single, seamless interface for monitoring and interacting with running tasks.
 
-To introduce a configurable "Interaction Threshold" that allows the AI agent to pause its workflow and ask the user for clarification, turning the autonomous process into a collaborative dialogue.
+### **Description**
 
-### Description
+In V1, we built the core "Interactive Halting" feature, but it requires users to be at their command line to provide an answer. This plan extends that feature to the web UI. When a task is paused and waiting for input, the web dashboard will now display an input form. Submitting an answer through this form will unblock the paused CLI process and allow the task to resume, making the entire system more flexible and user-friendly.
 
-Currently, `cat-herder` runs from start to finish without human input. This change addresses the need for human oversight in complex or ambiguous tasks. The new behavior will allow the AI to use a special `askHuman` tool when its confidence is below a configured threshold. This will pause the task, prompt the user for an answer in the CLI, and then resume with the user's guidance. This feature makes the tool safer for high-stakes operations and more robust when dealing with unclear requirements.
+The main technical challenge is creating a communication channel between the web server process and the separate, paused `cat-herder run` CLI process. We will solve this using a simple and robust file-based messaging system.
 
-Make sure you read the PRD attached at the end of this document for a complete overview of the feature.
+### **Prerequisites**
 
-### Summary Checklist
+Before starting, please make sure you fully understand the V1 implementation of Interactive Halting, specifically:
+*   How `step-runner.ts` uses a `while` loop and the `HumanInterventionRequiredError` to manage the pause/resume cycle.
+*   How the task `phase` changes to `waiting_for_input` in the `.state.json` file.
+*   How `proc.ts` detects the `askHuman` tool.
 
--   [x] **1. Configuration & State:** Add `interactionThreshold` to config files and update the task state structure to support pausing.
--   [x] **2. Prompt Engineering:** Modify the prompt assembly logic to make the AI aware of the threshold and the new `askHuman` tool.
--   [x] **3. Orchestration Logic:** Implement the core pause, prompt, and resume workflow in the step runner.
--   [x] **4. CLI & Web UI:** Display the paused state, the AI's question, and the interaction history.
--   [x] **5. Testing:** Add unit and integration tests for the new interactive workflow.
--   [x] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` to reflect the new feature.
+### **Summary Checklist**
+
+-   [ ] **1. Backend API Endpoint:** Create a `POST` endpoint in the web server to receive answers from the browser.
+-   [ ] **2. Frontend UI Form:** Add an HTML form to the web pages that allows users to submit an answer.
+-   [ ] **3. IPC Bridge (File-Based):** Implement the logic for the web server to write an answer to a file and for the CLI to read it.
+-   [ ] **4. Update Orchestrator Logic:** Modify the `step-runner` to listen for both CLI input *and* the new file-based answer signal.
+-   [ ] **5. Testing:** Add tests for the new API endpoint and the updated orchestrator logic.
+-   [ ] **6. Documentation:** Update `README.md` and `ARCHITECTURE.MD` with details and screenshots of the new UI feature.
 
 ---
 
-### Detailed Implementation Steps
+### **Detailed Implementation Steps**
 
-#### 1. Configuration & State
+#### 1. Backend API Endpoint
 
-*   **Objective:** Update the project's configuration and state management files to recognize and store all the data related to the new feature.
+*   **Objective:** Create a secure API endpoint that the frontend can call to submit a user's answer.
+*   **File:** `src/tools/web/routes.ts`
 *   **Tasks:**
-    1.  **Update `CatHerderConfig` Interface:**
-        *   **File:** `src/config.ts`
-        *   **Action:** Add the optional `interactionThreshold: number` property.
-        *   **Snippet:**
-            ```typescript
-            export interface CatHerderConfig {
-              // ... existing properties
-              interactionThreshold?: number;
-              waitForRateLimitReset?: boolean;
-              // ...
+    1.  **Add `express.json()` middleware:** The web server needs to be able to parse JSON request bodies. Add `router.use(express.json());` near the top of the `createRouter` function.
+    2.  **Create the `POST` Route:** Add a new route to handle the submission.
+        *   **Path:** `POST /task/:taskId/respond`
+        *   **Logic:**
+            a.  Get the `taskId` from the URL parameters and the `answer` from the request body.
+            b.  **Validate:** Check that `taskId` and `answer` exist.
+            c.  **Check State:** Read the task's state file. If its `phase` is NOT `waiting_for_input`, return a `409 Conflict` error, as we can't answer a question that hasn't been asked.
+            d.  **Send Answer:** Call a new function (which we'll create in Step 3) to write the answer to a file that the CLI process can find.
+            e.  **Respond:** Send a `200 OK` JSON response to the browser to confirm success.
+*   **Code Snippet (`src/tools/web/routes.ts`):**
+    ```typescript
+    // At the top of createRouter function
+    router.use(express.json()); // Add this middleware
+
+    // Add this new route handler
+    router.post("/task/:taskId/respond", async (req: Request, res: Response) => {
+      const { taskId } = req.params;
+      const { answer } = req.body;
+
+      if (!taskId || typeof taskId !== 'string' || !answer || typeof answer !== 'string') {
+        return res.status(400).json({ error: "Invalid request: taskId and answer are required." });
+      }
+
+      const taskDetails = getTaskDetails(stateDir, logsDir, taskId);
+      if (!taskDetails || taskDetails.phase !== 'waiting_for_input') {
+        return res.status(409).json({ error: "Task is not currently waiting for input." });
+      }
+
+      try {
+        // This function will be created in the next step
+        await writeAnswerToFile(stateDir, taskId, answer);
+        res.status(200).json({ message: "Answer submitted successfully. The task will now resume." });
+      } catch (error) {
+        console.error("Failed to write answer file:", error);
+        res.status(500).json({ error: "Failed to process the answer." });
+      }
+    });
+    ```
+
+#### 2. Frontend UI Form
+
+*   **Objective:** Add a user-friendly form to the web UI for submitting an answer.
+*   **Files:** `src/templates/web/live-activity.ejs`, `src/templates/web/task-detail.ejs`
+*   **Tasks:**
+    1.  **Add the HTML Form:** In both `.ejs` files, inside the block that displays the `pendingQuestion`, add an HTML form with a `<textarea>` and a `<button type="submit">`.
+    2.  **Add Frontend JavaScript:** Add a `<script>` tag to handle the form submission without reloading the page.
+        *   Listen for the form's `submit` event.
+        *   Use `event.preventDefault()`.
+        *   Use the `fetch` API to `POST` the answer as JSON to the `/task/:taskId/respond` endpoint.
+        *   On success, disable the form and show a "Resuming..." message to the user.
+        *   If the API returns an error, show an alert to the user.
+*   **Code Snippet (to add inside `live-activity.ejs` and `task-detail.ejs`):**
+    ```html
+    <!-- Inside the card that displays the pendingQuestion -->
+    <div class="mt-3">
+        <form id="answer-form" data-task-id="<%= taskToShow.taskId %>">
+            <div class="mb-2">
+                <label for="human-answer" class="form-label"><strong>Your Answer:</strong></label>
+                <textarea class="form-control" id="human-answer" name="answer" rows="3" required></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">
+                <i class="bi bi-send me-1"></i> Submit Answer and Resume
+            </button>
+            <div id="form-status" class="mt-2"></div>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('answer-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const taskId = form.dataset.taskId;
+            const answer = form.elements.answer.value;
+            const statusDiv = document.getElementById('form-status');
+            const submitButton = form.querySelector('button[type="submit"]');
+
+            submitButton.disabled = true;
+            statusDiv.innerHTML = '<span class="text-info">Submitting...</span>';
+
+            const response = await fetch(`/task/${taskId}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ answer })
+            });
+
+            if (response.ok) {
+                form.elements.answer.disabled = true;
+                statusDiv.innerHTML = '<span class="text-success">✔ Answer accepted. Task is resuming in the CLI.</span>';
+            } else {
+                const result = await response.json();
+                statusDiv.innerHTML = `<span class="text-danger">✖ Error: ${result.error}</span>`;
+                submitButton.disabled = false;
             }
+        });
+    </script>
+    ```
 
-            const defaultConfig: Omit<CatHerderConfig, ...> = {
-              // ... existing properties
-              interactionThreshold: 0, // Default to fully autonomous
-              autoCommit: false,
-              // ...
-            };
-            ```    2.  **Update Template Config File:**
-        *   **File:** `src/templates/cat-herder.config.js`
-        *   **Action:** Add the new property with detailed comments explaining the `0-5` scale.
-    3.  **Update `TaskStatus` Type:**
-        *   **File:** `src/tools/status.ts`
-        *   **Action:** Add a new phase `waiting_for_input` and fields for storing the question and interaction history.
-        *   **Snippet:**
-            ```typescript
-            export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
+#### 3. IPC Bridge (File-Based)
 
-            export type TaskStatus = {
-              // ... existing properties
-              pendingQuestion?: {
-                question: string;
-                timestamp: string;
-              };
-              interactionHistory: {
-                question: string;
-                answer: string;
-                timestamp: string;
-              }[];
-              // ...
-            };
-
-            const defaultStatus: TaskStatus = {
-              // ...
-              phase: "pending",
-              steps: {},
-              interactionHistory: [], // Initialize as an empty array
-              // ...
-            };
-            ```
-    4.  **Update `types.ts`:**
-        *   **File:** `src/types.ts`
-        *   **Action:** Add `'waiting_for_input'` to the `ALL_STATUS_PHASES` array.
-
-#### 2. Prompt Engineering
-
-*   **Objective:** Teach the AI about the new threshold system and how to use the `askHuman` tool.
+*   **Objective:** Create the file-based communication channel.
+*   **File:** `src/tools/status.ts` (This is a good central place for state-related file helpers).
 *   **Tasks:**
-    1.  **Update `parseTaskFrontmatter`:**
-        *   **File:** `src/tools/orchestration/prompt-builder.ts`
-        *   **Action:** Modify the function to read `interactionThreshold` from the task's YAML frontmatter.
-    2.  **Update `assemblePrompt`:**
-        *   **File:** `src/tools/orchestration/prompt-builder.ts`
-        *   **Action:** The function must now accept the `interactionThreshold` and inject new instructions into the prompt.
-        *   **Snippet:**
-            ```typescript
-            // In assemblePrompt function
-            const threshold = 3; // This value should be passed in.
-            const interactionIntro = `You are operating at an interaction threshold of ${threshold}/5. A threshold of 0 means you must never ask for clarification. A threshold of 5 means you must use the \`askHuman(question: string)\` tool whenever you face a choice or ambiguity. Scale your use of this tool accordingly. When you use \`askHuman\`, your work will pause until a human provides an answer.`;
+    1.  **Create `getAnswerFilePath` helper:** This function will create a consistent file path for the answer file.
+    2.  **Create `writeAnswerToFile` function:** This will be called by the API endpoint. It uses the helper to get the path and then writes the answer.
+    3.  **Create `readAndDeleteAnswerFile` function:** This will be used by the orchestrator. It checks for the file, reads its content, **and most importantly, deletes it** to prevent it from being read again.
+*   **Code Snippet (`src/tools/status.ts`):**
+    ```typescript
+    // Helper to get the consistent path for an answer file
+    function getAnswerFilePath(stateDir: string, taskId: string): string {
+      return path.join(stateDir, `${taskId}.answer`);
+    }
 
-            // ... later in the function ...
-            return [
-              interactionIntro, // Add the new instructions
-              intro,
-              // ... rest of the prompt assembly
-            ].join('\n\n');
-            ```
-    3.  **Thread `interactionThreshold` Down:**
-        *   **Files:** `src/tools/orchestrator.ts`, `src/tools/orchestration/pipeline-runner.ts`, `src/tools/orchestration/step-runner.ts`
-        *   **Action:** Pass the resolved `interactionThreshold` (from config or frontmatter) down through the function calls until it reaches `assemblePrompt`.
+    // Function for the web server to write the answer
+    export async function writeAnswerToFile(stateDir: string, taskId: string, answer: string): Promise<void> {
+      const filePath = getAnswerFilePath(stateDir, taskId);
+      fs.writeFileSync(filePath, answer, 'utf-8');
+    }
 
-#### 3. Orchestration Logic
+    // Function for the CLI orchestrator to read (and delete) the answer
+    export async function readAndDeleteAnswerFile(stateDir: string, taskId: string): Promise<string | null> {
+      const filePath = getAnswerFilePath(stateDir, taskId);
+      if (fs.existsSync(filePath)) {
+        const answer = fs.readFileSync(filePath, 'utf-8');
+        fs.unlinkSync(filePath); // CRITICAL: Delete the file after reading
+        return answer;
+      }
+      return null;
+    }
+    ```
 
-*   **Objective:** Implement the core pause-and-resume workflow when the AI calls `askHuman`.
+#### 4. Update Orchestrator Logic
+
+*   **Objective:** Modify the `step-runner` to wait for input from either the CLI or the new answer file.
+*   **File:** `src/tools/orchestration/step-runner.ts`
+*   **Concept:** We will use `Promise.race()`. This allows us to start multiple asynchronous operations at once and proceed as soon as the *first one* finishes. We will race the CLI prompt against a file-watcher.
 *   **Tasks:**
-    1.  **Define a Custom Error for Halting:**
-        *   **File:** `src/tools/orchestration/errors.ts`
-        *   **Action:** Create a new error class to signal an intentional pause.
-        *   **Snippet:**
-            ```typescript
-            export class HumanInterventionRequiredError extends Error {
-              public readonly question: string;
-              constructor(question: string) {
-                super("Human intervention is required.");
-                this.name = "HumanInterventionRequiredError";
-                this.question = question;
-              }
-            }
-            ```
-    2.  **Detect `askHuman` Tool Use:**
-        *   **File:** `src/tools/proc.ts`
-        *   **Action:** In the `runStreaming` function, while parsing the JSON stream, if you detect a `tool_use` event for `askHuman`, capture the question and throw the new `HumanInterventionRequiredError`. This will stop the `claude` process and signal the orchestrator.
-    3.  **Implement the Pause-Prompt-Resume Loop:**
-        *   **File:** `src/tools/orchestration/step-runner.ts`
-        *   **Action:** Wrap the `runStreaming` call inside a `do...while` loop or a recursive function. This will handle the entire interactive flow.
-        *   **Pseudo-code for the loop in `executeStep`:**
-            ```typescript
-            let needsResume = true;
-            let feedbackForResume = null;
+    1.  **Import new helpers:** Import `readAndDeleteAnswerFile` from `status.ts`.
+    2.  **Create a file-watching promise:** Create a new async function, `waitForAnswerFile(stateDir, taskId)`, that polls for the `.answer` file every second. When it finds the file, it will call `readAndDeleteAnswerFile` and resolve with the answer.
+    3.  **Refactor `promptUser`:** Rename/refactor it to `waitForHumanInput`. This function will now set up and run the `Promise.race`.
+    4.  **Handle Cleanup:** When one promise wins the race, the other operation (CLI prompt or file polling) is still running in the background. You must clean it up to prevent memory leaks. Close the `readline` interface and stop the polling interval. A `finally` block is perfect for this.
 
-            while (needsResume) {
-              try {
-                // Modify assemblePrompt to include feedbackForResume if it exists
-                const prompt = assemblePrompt(...);
-                await runStreaming(prompt, ...);
-                needsResume = false; // If it finishes without error, exit loop
-              } catch (error) {
-                if (error instanceof HumanInterventionRequiredError) {
-                  // 1. PAUSE: Update status to 'waiting_for_input' with the question.
-                  updateStatus(statusFile, s => {
-                    s.phase = 'waiting_for_input';
-                    s.pendingQuestion = { question: error.question, timestamp: new Date().toISOString() };
-                  });
+*   **Code Snippet (`src/tools/orchestration/step-runner.ts`):**
+    ```typescript
+    // In step-runner.ts, replace the simple `promptUser` with this more advanced version
 
-                  // 2. PROMPT: Use Node's `readline` to ask the user the question in the CLI.
-                  const answer = await promptUser(error.question);
+    async function waitForHumanInput(question: string, stateDir: string, taskId: string): Promise<string> {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      let pollingInterval: NodeJS.Timeout | null = null;
 
-                  // 3. RESUME: Update status again, moving question to history.
-                  updateStatus(statusFile, s => {
-                    s.interactionHistory.push({ question: error.question, answer, ... });
-                    s.pendingQuestion = undefined;
-                    s.phase = 'running';
-                  });
+      // Promise 1: CLI Input
+      const cliPromise = new Promise<string>((resolve) => {
+        console.log(pc.cyan("\n[Orchestrator] Task has been paused. The AI needs your input.\n"));
+        console.log(pc.yellow("🤖 QUESTION:"));
+        console.log(question);
+        console.log("\n(You can answer here in the CLI or in the web dashboard.)\n");
 
-                  // 4. Prepare feedback for the next loop iteration.
-                  feedbackForResume = `You previously asked: "${error.question}". The user responded: "${answer}". Continue your work.`;
-                } else {
-                  // It's a real error, re-throw it.
-                  throw error;
-                }
-              }
-            }
-            ```
+        rl.question(pc.blue("Your answer: "), (answer) => {
+          resolve(answer.trim());
+        });
+      });
 
-#### 4. CLI & Web UI
+      // Promise 2: File-based Input
+      const ipcPromise = new Promise<string>((resolve) => {
+        pollingInterval = setInterval(async () => {
+          const answer = await readAndDeleteAnswerFile(stateDir, taskId);
+          if (answer !== null) {
+            console.log(pc.cyan("\n[Orchestrator] Answer received from web UI. Resuming..."));
+            resolve(answer);
+          }
+        }, 1000); // Check every second
+      });
 
-*   **Objective:** Make the new state visible and understandable to the user on all interfaces.
-*   **Tasks:**
-    1.  **Update Data Access Layer:**
-        *   **File:** `src/tools/web/data-access.ts`
-        *   **Action:** Update the `TaskDetails` interface to include `pendingQuestion` and `interactionHistory`.
-    2.  **Update Live Activity Page:**
-        *   **File:** `src/templates/web/live-activity.ejs`
-        *   **Action:** Add EJS logic to check if `taskToShow.phase === 'waiting_for_input'`. If so, display a prominent card with the content of `taskToShow.pendingQuestion.question`.
-    3.  **Update Task Detail Page:**
-        *   **File:** `src/templates/web/task-detail.ejs`
-        *   **Action:** Add a new section that iterates over `task.interactionHistory`. Display a list of Q&A pairs.
-    4.  **Update WebSocket Handler:**
-        *   **File:** `src/public/js/dashboard.js`
-        *   **Action:** Ensure the `handleRealtimeUpdate` function correctly handles the `'waiting_for_input'` phase to update the UI badge and show/hide the question card.
+      try {
+        // Race the two promises
+        const answer = await Promise.race([cliPromise, ipcPromise]);
+        return answer;
+      } finally {
+        // CRITICAL CLEANUP
+        if (pollingInterval) clearInterval(pollingInterval);
+        rl.close();
+      }
+    }
+
+    // Then, in your executeStep loop, call this new function:
+    // const answer = await waitForHumanInput(error.question, resolvedStatePath, taskId);
+    ```
 
 #### 5. Testing
 
-*   **Objective:** Verify that the new, complex workflow is reliable.
+*   **Objective:** Ensure the new end-to-end flow is reliable and doesn't have race conditions.
 *   **Tasks:**
-    1.  **Unit Test for Prompt Assembly:**
-        *   **File:** `test/prompt-builder.test.ts` (create if needed)
-        *   **Action:** Add a test to confirm that `assemblePrompt` correctly includes the interaction threshold instructions when a non-zero threshold is provided.
-    2.  **Integration Test for Step Runner:**
-        *   **File:** `test/orchestrator-interaction.test.ts` (create a new test file)
-        *   **Action:** Write a test for `executeStep` that uses mocks (`vitest.mock`).
-            *   Mock `proc.ts` so `runStreaming` throws a `HumanInterventionRequiredError`.
-            *   Mock Node's `readline` to provide a canned answer.
-            *   Assert that `updateStatus` is called with the correct state transitions (`running` -> `waiting_for_input` -> `running`).
-            *   Assert that `runStreaming` is called a second time with a prompt that includes the user's answer.
+    1.  **API Test (`test/api.test.ts`):**
+        *   Create a new test file for the web routes.
+        *   Write a test for the `POST /task/:taskId/respond` endpoint.
+        *   Use `fs.writeFileSync` to create a mock `.state.json` file with `phase: 'waiting_for_input'`.
+        *   Send a mock request to the endpoint.
+        *   Assert that the endpoint creates the `.answer` file with the correct content.
+        *   Assert that the endpoint returns a `200 OK` status.
+    2.  **Orchestrator Test (`test/orchestrator-interaction.test.ts`):**
+        *   Update the existing interaction test.
+        *   Instead of mocking `readline`, mock the `fs` module.
+        *   In the test, simulate the file appearing by having your mock `fs.existsSync` return `true` after a short delay.
+        *   Assert that the `waitForHumanInput` function resolves with the content you mocked for the file.
 
 #### 6. Documentation
 
-*   **Objective:** Ensure the project's documentation is updated to reflect the new feature.
+*   **Objective:** Update all user-facing documentation to reflect this powerful new capability.
 *   **Tasks:**
     1.  **Update `README.md`:**
-        *   Add a new section explaining the `interactionThreshold` feature.
-        *   Show examples of how to configure it in `cat-herder.config.js` and in task frontmatter.
-        *   Explain the `0-5` scale.
+        *   In the "Interactive Halting" and "Web Dashboard" sections, add text explaining that questions can be answered from the UI.
+        *   Add a screenshot of the new question card and input form from the web UI. A picture is worth a thousand words. A good tool for this is `shot-scraper` or Playwright's screenshot capabilities.
     2.  **Update `ARCHITECTURE.MD`:**
-        *   In the "State Layer" section, document the new `waiting_for_input` phase and the `interactionHistory` field.
-        *   In the "Orchestration Layer" diagram and description, add a step showing how the `step-runner` can enter a "paused" state and prompt the user before resuming communication with the AI Interaction Layer.
-        *   Mention the new `askHuman` tool as part of the AI's capabilities.
-
----
-
-### Error Handling & Warnings
-
-*   **Invalid Threshold Value:** If `interactionThreshold` is not a number between 0 and 5, the `cat-herder validate` command should produce an error.
-*   **User Interruption (Ctrl+C) during Prompt:** If the user hits Ctrl+C while being prompted for an answer, the task should gracefully exit and its state should remain `waiting_for_input`. This allows the user to resume the task later and answer the same question.
-*   **Log Clarity:** The logs must clearly indicate when a pause occurs, what the question was, and what the user's answer was before resuming the normal log stream.
-
----
-
-## Appendix: Product Requirements Document (PRD)
-
-
-### 1. Overview
-
-The `cat-herder` tool currently operates as a fully autonomous agent. Once a task is started, it runs to completion or failure without human intervention. This is highly efficient for well-defined, predictable tasks.
-
-However, for complex, ambiguous, or high-stakes tasks (e.g., major code refactoring, initial architecture design), the AI may encounter situations where it must make a critical assumption. An incorrect assumption can lead to a suboptimal result or a complete failure, wasting time and resources.
-
-This document proposes a new **Interaction Threshold**—affectionately nicknamed the "fucks given" level. This feature will transform the AI from a simple executor into a collaborative partner by giving it a mechanism to pause the workflow and ask for human clarification when its confidence is low. This turns the AI's monologue into a dialogue, increasing the success rate of complex tasks and building user trust.
-
-### 2. Goals & Objectives
-
-*   **Primary Goal:** To introduce a configurable level of AI autonomy, allowing users to balance speed with safety.
-*   **Objectives:**
-    *   Create a system where the AI can pause its work to ask a clarifying question.
-    *   Allow users to configure this "interruption sensitivity" globally and per-task.
-    *   Provide a clear, simple CLI for users to receive questions and provide answers.
-    *   Persist the history of these interactions for transparency and debugging.
-    *   Visually represent the paused state and interaction history in the Web UI.
-
-### 3. User Stories
-
-1.  **As a Developer doing a risky refactor**, I want to set a high Interaction Threshold (e.g., 5) so the agent asks me "Should I rename this public-facing API?" before making a potentially breaking change.
-2.  **As a Developer running a routine chore like updating documentation**, I want to set the threshold to 0, because I trust the AI to handle it and don't want to be interrupted.
-3.  **As a Team Lead**, I want to set a default threshold of 2 in our project's `cat-herder.config.js` to encourage a baseline level of caution, while still allowing developers to override it for specific tasks.
-4.  **As a Developer who just started a task**, I want to be able to walk away, and if the AI has a question, the CLI process will wait for me to return and provide an answer to unblock it.
-5.  **As a Developer reviewing a completed task in the UI**, I want to see the questions the AI asked and the answers I provided to understand the context of the final output.
-
-### 4. Feature Requirements
-
-#### 4.1. Configuration: The `interactionThreshold`
-
-*   A new configuration property will be introduced: `interactionThreshold`.
-*   **Scale:** An integer from `0` to `5`.
-    *   `0`: **Zero Fucks Given (Fully Autonomous)**. The AI must never ask a question. It must make its best assumption and proceed. This is the default to maintain existing behavior.
-    *   `1-2`: **Low Interruption (High Confidence)**. The AI should only ask a question if it is fundamentally blocked or faces a highly critical, ambiguous choice (e.g., "The PRD is contradictory, which path should I take?").
-    *   `3`: **Medium Interruption (Balanced)**. The AI should ask when it encounters ambiguity in requirements or has to make a significant, non-obvious implementation choice.
-    *   `4-5`: **High Interruption (Low Confidence)**. The AI should be very cautious. It should ask to confirm assumptions, clarify minor ambiguities, and present options before proceeding with any significant work.
-*   **Global Setting:**
-    *   In `cat-herder.config.js`, a new top-level property can be set:
-        ```javascript
-        module.exports = {
-          // ...
-          interactionThreshold: 0, // Default is 0 for backward compatibility
-        };
-        ```
-*   **Task-Level Override:**
-    *   The threshold can be overridden in a task's YAML frontmatter. This takes precedence.
-        ```markdown
-        ---
-        pipeline: default
-        interactionThreshold: 4
-        ---
-        # This is a complex task. Be cautious and ask questions.
-        ```
-
-#### 4.2. AI & Tooling: The `askHuman` Tool
-
-*   A new tool must be made available to the AI: `askHuman`.
-*   **Tool Signature:** The tool will take a single string argument: `question`.
-*   **Prompt Engineering:** The core system prompt will be modified to include instructions about the threshold and the new tool.
-    > "You are operating at an interaction threshold of **[X]/5**. A threshold of 0 means you must never ask for clarification. A threshold of 5 means you must use the `askHuman(question: string)` tool whenever you face a choice or ambiguity. Scale your use of this tool accordingly. When you use `askHuman`, your work will pause until a human provides an answer."
-
-#### 4.3. The Workflow: Pause, Prompt, and Resume
-
-1.  **Pause:**
-    *   When the AI uses the `askHuman` tool, the orchestrator detects this tool call.
-    *   The orchestrator immediately pauses the execution of the current step.
-    *   The task's state file is updated. The `phase` changes from `running` to a new state: `waiting_for_input`.
-    *   A new object, `pendingQuestion`, is added to the state, containing the question text and a timestamp.
-
-2.  **Prompt:**
-    *   The CLI will display a clear message and the AI's question.
-        ```bash
-        [Orchestrator] Task has been paused. The AI needs your input.
-
-        🤖 QUESTION:
-        The user story mentions a "simplified user profile page," but the technical brief details both an "admin view" and a "public view."
-        Should I implement both views, or just the public-facing one for now?
-
-        Your answer: _
-        ```
-    *   The CLI process will wait indefinitely for the user to type an answer and press Enter.
-
-3.  **Resume:**
-    *   Once the user provides an answer, the orchestrator captures the text.
-    *   The answer is fed back to the Claude CLI as the `tool_result` for the `askHuman` call.
-    *   The `pendingQuestion` in the state file is cleared and moved to an `interactionHistory` array, along with the user's answer.
-    *   The task `phase` is set back to `running`.
-    *   The AI receives the answer and continues its work.
-
-#### 4.4. State & Log Management
-
-*   **Task State File (`<task-id>.state.json`):**
-    *   A new `phase` will be added: `waiting_for_input`.
-    *   A new top-level field `interactionHistory: []` will be added to store an array of `{question, answer, timestamp}` objects.
-*   **Log Files:**
-    *   The question from the AI and the answer from the human will be clearly logged in both the main (`.log`) and reasoning (`.reasoning.log`) files to provide a complete audit trail.
-
-#### 4.5. Web Dashboard UI
-
-*   **Live Activity Page:**
-    *   When a task phase is `waiting_for_input`, the UI should clearly show this status with a distinct icon (e.g., a pause or question-mark icon).
-    *   A new card/component should appear prominently displaying the AI's pending question.
-    *   *(Non-Goal for V1: Answering via the UI. It will be read-only).*
-*   **Task Detail Page:**
-    *   A new section titled "Human Interactions" or "Q&A Log" will be added.
-    *   This section will display the `interactionHistory`, showing each question asked by the AI and the corresponding answer provided by the human, creating a clear narrative of the decision-making process.
-
-### 5. Non-Goals (For This Version)
-
-*   **Answering questions from the Web UI.** Interaction is CLI-only in V1 to keep complexity low.
-*   **Interaction Timeouts.** The workflow will wait indefinitely.
-*   **Complex answer types.** The feature will only support simple text-in, text-out. No multiple-choice, file uploads, etc.
-*   **Allowing the user to edit files or run commands while paused.** The workflow is strictly paused until an answer is given.
-
----
+        *   Update the Mermaid diagram to show the new flow: `Web UI -> (POST Request) -> Web Server -> (.answer file) -> Orchestrator`.
+        *   Update the description for the "Interface Layer" to mention the interactive form.
+        *   Update the "Orchestration Layer" to describe its new ability to listen for file-based signals.
