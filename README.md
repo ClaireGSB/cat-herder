@@ -241,6 +241,10 @@ The interaction threshold is configured as an integer from `0` to `5`:
 - **`3` - Medium Interruption (Balanced)**: The AI asks when it encounters ambiguity in requirements or must make significant, non-obvious implementation choices.
 - **`4-5` - High Interruption (Low Confidence)**: The AI is very cautious, asking to confirm assumptions, clarify minor ambiguities, and present options before proceeding with any significant work.
 
+**Important:** When you set `interactionThreshold` to a value greater than 0, you **must** also grant the `askHuman` permission to the tools used in your pipeline. Add `'askHuman'` to the `allowed-tools` list in the frontmatter of your command `.md` files.
+
+The `cat-herder validate` command will detect if you forget this and provide a helpful error message.
+
 ### Configuration
 
 #### Global Configuration

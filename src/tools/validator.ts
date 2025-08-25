@@ -240,6 +240,7 @@ function validateStep(
   step: any, 
   stepIndex: number, 
   pipelineName: string, 
+  config: CatHerderConfig,
   userScripts: Record<string, string>, 
   allowedPermissions: string[], 
   projectRoot: string,
@@ -286,6 +287,24 @@ function validateStep(
   // FileAccess Validation
   validateFileAccess(step.fileAccess, stepId, errors);
 
+  // Interactive Halting Validation
+  const threshold = config.interactionThreshold ?? 0;
+  if (threshold > 0) {
+    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+    if (fs.existsSync(commandFilePath)) {
+      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
+      const frontmatter = parseFrontmatter(commandContent);
+      const toolsValue = frontmatter?.['allowed-tools'] || '';
+      const requiredTools: string[] = Array.isArray(toolsValue) ? toolsValue : toolsValue.split(',').map((t: string) => t.trim());
+
+      if (!requiredTools.includes('askHuman')) {
+        errors.push(
+          `${stepId}: The project is configured with a non-zero interactionThreshold, but this step's command file ('${step.command}.md') is missing the 'askHuman' permission in its 'allowed-tools' list.`
+        );
+      }
+    }
+  }
+
   // Model Validation
   if (step.model !== undefined) {
     if (typeof step.model !== 'string') {
@@ -327,7 +346,7 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
     }
 
     for (const [index, step] of pipeline.entries()) {
-      validateStep(step, index, pipelineName, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
+      validateStep(step, index, pipelineName, config, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
     }
   }
 
