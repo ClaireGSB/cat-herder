@@ -62,12 +62,6 @@ export async function executePipelineForTask(
 
   // Resolve interaction threshold (priority: task frontmatter > config > default 0)
   const resolvedInteractionThreshold = taskInteractionThreshold ?? config.interactionThreshold ?? 0;
-  
-  // Prepare additional tools if interaction threshold is greater than 0
-  const additionalTools: string[] = [];
-  if (resolvedInteractionThreshold > 0) {
-    additionalTools.push('askHuman');
-  }
 
   // Extract sequence ID if this task is part of a sequence
   const sequenceId = options.sequenceStatusFile
@@ -128,7 +122,7 @@ export async function executePipelineForTask(
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
     const rawJsonLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.raw.json.log`);
 
-    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile, pipelineName, options.sequenceStatusFile, additionalTools);
+    await executeStep(stepConfig, fullPrompt, statusFile, logFile, reasoningLogFile, rawJsonLogFile, pipelineName, options.sequenceStatusFile);
   }
 
   updateStatus(statusFile, s => { s.phase = 'done'; });

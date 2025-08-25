@@ -77,8 +77,7 @@ export async function executeStep(
   reasoningLogFile: string,
   rawJsonLogFile: string,
   pipelineName: string,
-  sequenceStatusFile?: string,
-  additionalTools?: string[]
+  sequenceStatusFile?: string
 ) {
   const { name, command, check, retry, model } = stepConfig;
   const projectRoot = getProjectRoot();
@@ -123,7 +122,7 @@ export async function executeStep(
           promptToUse = `${currentPrompt}\n\n--- HUMAN FEEDBACK ---\n${feedbackForResume}\n--- END HUMAN FEEDBACK ---\n\nPlease continue your work with this feedback in mind.`;
         }
 
-        result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, additionalTools);
+        result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config });
         partialTokenUsage = result.tokenUsage;
         modelName = result.modelUsed || model || 'default';
         needsResume = false; // If it finishes without error, exit loop
