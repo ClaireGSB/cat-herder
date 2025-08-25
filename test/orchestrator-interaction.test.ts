@@ -13,7 +13,7 @@ vi.mock('../src/tools/check-runner.js');
 
 // Import the functions after mocking
 const { runStreaming } = await import('../src/tools/proc.js');
-const { updateStatus, readStatus } = await import('../src/tools/status.js');
+const { updateStatus, readStatus, readAndDeleteAnswerFile } = await import('../src/tools/status.js');
 const { getProjectRoot, getConfig } = await import('../src/config.js');
 const { runCheck } = await import('../src/tools/check-runner.js');
 const { executeStep } = await import('../src/tools/orchestration/step-runner.js');
@@ -361,6 +361,341 @@ describe('Interactive Step Runner', () => {
       const thirdCallPrompt = vi.mocked(runStreaming).mock.calls[2][5];
       expect(thirdCallPrompt).toContain('Your previous attempt to complete'); // Retry feedback
       expect(thirdCallPrompt).toContain('Tests still failing'); // Check failure output
+    });
+  });
+
+  describe('File-Based IPC Workflow', () => {
+    it('should handle answer from web UI file system instead of CLI', async () => {
+      const mockQuestion = 'Should I implement the REST API or GraphQL?';
+      const mockAnswer = 'Please implement a REST API for better compatibility.';
+
+      // Mock runStreaming to throw HumanInterventionRequiredError, then succeed
+      vi.mocked(runStreaming)
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(mockQuestion))
+        .mockResolvedValueOnce({ 
+          code: 0, 
+          output: 'Implementation completed',
+          modelUsed: 'claude-3-5-sonnet-20241022',
+          tokenUsage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+        });
+
+      // Mock file-based input: first call returns null (no file), second call returns answer
+      vi.mocked(readAndDeleteAnswerFile)
+        .mockResolvedValueOnce(null) // First poll - no file yet
+        .mockResolvedValueOnce(mockAnswer); // Second poll - file appears
+
+      // Mock readline - both promises start simultaneously, so question will be called
+      // but file will resolve first
+      let questionCallback: ((answer: string) => void) | null = null;
+      const mockRl = {
+        question: vi.fn((prompt, callback) => {
+          questionCallback = callback; // Store but don't call immediately
+        }),
+        close: vi.fn(),
+        on: vi.fn()
+      };
+      vi.mocked(readline.createInterface).mockReturnValue(mockRl as any);
+
+      const statusUpdates: any[] = [];
+      let currentStatus = { ...mockStatus, interactionHistory: [] };
+      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
+        updateFn(currentStatus);
+        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus)));
+      });
+
+      await executeStep(
+        mockStepConfig,
+        mockPrompt,
+        mockStatusFile,
+        mockLogFile,
+        mockReasoningLogFile,
+        mockRawJsonLogFile,
+        mockPipelineName
+      );
+
+      // Verify the complete workflow
+      expect(runStreaming).toHaveBeenCalledTimes(2);
+      
+      // Verify readline was used (both promises start)
+      expect(readline.createInterface).toHaveBeenCalled();
+      expect(mockRl.question).toHaveBeenCalled();
+      expect(mockRl.close).toHaveBeenCalled(); // Should be cleaned up
+
+      // Verify file polling was attempted
+      expect(readAndDeleteAnswerFile).toHaveBeenCalledWith(
+        '/test/project/.cat-herder/state', // stateDir extracted from statusFile path
+        'task-test'
+      );
+
+      // Verify interaction was recorded in history
+      const finalState = statusUpdates[statusUpdates.length - 1];
+      expect(finalState.interactionHistory).toHaveLength(1);
+      expect(finalState.interactionHistory[0].question).toBe(mockQuestion);
+      expect(finalState.interactionHistory[0].answer).toBe(mockAnswer);
+    });
+
+    it('should handle CLI input when file-based input is not available', async () => {
+      const mockQuestion = 'Which database should I use?';
+      const mockAnswer = 'Use PostgreSQL for this project.';
+
+      // Mock runStreaming to throw HumanInterventionRequiredError, then succeed
+      vi.mocked(runStreaming)
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(mockQuestion))
+        .mockResolvedValueOnce({ 
+          code: 0, 
+          output: 'Implementation completed',
+          modelUsed: 'claude-3-5-sonnet-20241022',
+          tokenUsage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+        });
+
+      // Mock file-based input: always returns null (no file available) - but simulate polling calls
+      let fileCallCount = 0;
+      vi.mocked(readAndDeleteAnswerFile).mockImplementation(async () => {
+        fileCallCount++;
+        return null; // Always return null (no file)
+      });
+
+      // Mock readline to provide answer via CLI after some delay
+      const mockRl = {
+        question: vi.fn((prompt, callback) => {
+          // CLI wins after sufficient delay to allow file polling to happen at least once
+          setTimeout(() => callback(mockAnswer), 1100);
+        }),
+        close: vi.fn(),
+        on: vi.fn()
+      };
+      vi.mocked(readline.createInterface).mockReturnValue(mockRl as any);
+
+      const statusUpdates: any[] = [];
+      let currentStatus = { ...mockStatus, interactionHistory: [] };
+      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
+        updateFn(currentStatus);
+        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus)));
+      });
+
+      await executeStep(
+        mockStepConfig,
+        mockPrompt,
+        mockStatusFile,
+        mockLogFile,
+        mockReasoningLogFile,
+        mockRawJsonLogFile,
+        mockPipelineName
+      );
+
+      // Verify CLI was used since file was not available
+      expect(mockRl.question).toHaveBeenCalledWith(
+        expect.stringContaining('Your answer: '),
+        expect.any(Function)
+      );
+
+      // Verify file polling was attempted - at least once due to the 1s interval
+      expect(readAndDeleteAnswerFile).toHaveBeenCalled();
+
+      // Verify interaction was recorded
+      const finalState = statusUpdates[statusUpdates.length - 1];
+      expect(finalState.interactionHistory).toHaveLength(1);
+      expect(finalState.interactionHistory[0].answer).toBe(mockAnswer);
+    });
+
+    it('should properly clean up resources when file input wins the race', async () => {
+      const mockQuestion = 'How should I handle errors?';
+      const mockAnswer = 'Use try-catch blocks with proper error logging.';
+
+      vi.mocked(runStreaming)
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(mockQuestion))
+        .mockResolvedValueOnce({ 
+          code: 0, 
+          output: 'Implementation completed',
+          modelUsed: 'claude-3-5-sonnet-20241022',
+          tokenUsage: { input_tokens: 100, output_tokens: 50, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+        });
+
+      // Mock immediate file availability
+      vi.mocked(readAndDeleteAnswerFile)
+        .mockResolvedValueOnce(mockAnswer); // Immediate answer
+
+      // Both promises start, but store the callback without calling it
+      let questionCallback: ((answer: string) => void) | null = null;
+      const mockRl = {
+        question: vi.fn((prompt, callback) => {
+          questionCallback = callback; // Store but don't call since file wins
+        }),
+        close: vi.fn(),
+        on: vi.fn()
+      };
+      vi.mocked(readline.createInterface).mockReturnValue(mockRl as any);
+
+      const statusUpdates: any[] = [];
+      let currentStatus = { ...mockStatus, interactionHistory: [] };
+      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
+        updateFn(currentStatus);
+        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus)));
+      });
+
+      await executeStep(
+        mockStepConfig,
+        mockPrompt,
+        mockStatusFile,
+        mockLogFile,
+        mockReasoningLogFile,
+        mockRawJsonLogFile,
+        mockPipelineName
+      );
+
+      // Verify resources were cleaned up
+      expect(mockRl.close).toHaveBeenCalled();
+      
+      // CLI question is called but file wins the race
+      expect(mockRl.question).toHaveBeenCalled();
+
+      // Verify the answer was processed correctly
+      const finalState = statusUpdates[statusUpdates.length - 1];
+      expect(finalState.interactionHistory[0].answer).toBe(mockAnswer);
+    });
+
+    it('should handle multiple consecutive file-based answers', async () => {
+      const questions = [
+        'What authentication method should I use?',
+        'Should I add input validation?'
+      ];
+      const answers = [
+        'Use JWT authentication with refresh tokens',
+        'Yes, add comprehensive input validation'
+      ];
+
+      // Mock runStreaming to throw two questions, then succeed
+      vi.mocked(runStreaming)
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(questions[0]))
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(questions[1]))
+        .mockResolvedValueOnce({ 
+          code: 0, 
+          output: 'Implementation completed',
+          modelUsed: 'claude-3-5-sonnet-20241022',
+          tokenUsage: { input_tokens: 200, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+        });
+
+      // Mock file responses for each question
+      vi.mocked(readAndDeleteAnswerFile)
+        .mockResolvedValueOnce(answers[0]) // First question answer
+        .mockResolvedValueOnce(answers[1]); // Second question answer
+
+      // Both promises start for each question, so question is called twice
+      const questionCallbacks: ((answer: string) => void)[] = [];
+      const mockRl = {
+        question: vi.fn((prompt, callback) => {
+          questionCallbacks.push(callback); // Store but don't call since file wins
+        }),
+        close: vi.fn(),
+        on: vi.fn()
+      };
+      vi.mocked(readline.createInterface).mockReturnValue(mockRl as any);
+
+      const statusUpdates: any[] = [];
+      let currentStatus = { ...mockStatus, interactionHistory: [] };
+      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
+        updateFn(currentStatus);
+        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus)));
+      });
+
+      await executeStep(
+        mockStepConfig,
+        mockPrompt,
+        mockStatusFile,
+        mockLogFile,
+        mockReasoningLogFile,
+        mockRawJsonLogFile,
+        mockPipelineName
+      );
+
+      // Should have been called 3 times total
+      expect(runStreaming).toHaveBeenCalledTimes(3);
+
+      // Should have polled for files twice
+      expect(readAndDeleteAnswerFile).toHaveBeenCalledTimes(2);
+
+      // Should have cleaned up readline interfaces (called twice - once per question)
+      expect(mockRl.close).toHaveBeenCalledTimes(2);
+
+      // CLI question is called twice (once per question) but file wins
+      expect(mockRl.question).toHaveBeenCalledTimes(2);
+
+      // Verify both interactions were recorded
+      const finalState = statusUpdates[statusUpdates.length - 1];
+      expect(finalState.interactionHistory.length).toBeGreaterThanOrEqual(2);
+      expect(finalState.interactionHistory[0].question).toBe(questions[0]);
+      expect(finalState.interactionHistory[0].answer).toBe(answers[0]);
+      expect(finalState.interactionHistory[1].question).toBe(questions[1]);
+      expect(finalState.interactionHistory[1].answer).toBe(answers[1]);
+    });
+
+    it('should handle mixed CLI and file-based answers in sequence', async () => {
+      const questions = [
+        'Which framework should I use?',
+        'Should I add unit tests?'
+      ];
+      const answers = [
+        'Use Express.js for the API framework', // From file
+        'Yes, add comprehensive unit tests' // From CLI
+      ];
+
+      vi.mocked(runStreaming)
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(questions[0]))
+        .mockRejectedValueOnce(new HumanInterventionRequiredError(questions[1]))
+        .mockResolvedValueOnce({ 
+          code: 0, 
+          output: 'Implementation completed',
+          modelUsed: 'claude-3-5-sonnet-20241022',
+          tokenUsage: { input_tokens: 200, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
+        });
+
+      // First answer from file, second from CLI (return null for file)
+      vi.mocked(readAndDeleteAnswerFile)
+        .mockResolvedValueOnce(answers[0]) // File provides first answer
+        .mockResolvedValue(null); // No file for second answer
+
+      const questionCallbacks: ((answer: string) => void)[] = [];
+      const mockRl = {
+        question: vi.fn((prompt, callback) => {
+          questionCallbacks.push(callback);
+          // For the second question, CLI will win
+          if (questionCallbacks.length === 2) {
+            setTimeout(() => callback(answers[1]), 10);
+          }
+        }),
+        close: vi.fn(),
+        on: vi.fn()
+      };
+      vi.mocked(readline.createInterface).mockReturnValue(mockRl as any);
+
+      const statusUpdates: any[] = [];
+      let currentStatus = { ...mockStatus, interactionHistory: [] };
+      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
+        updateFn(currentStatus);
+        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus)));
+      });
+
+      await executeStep(
+        mockStepConfig,
+        mockPrompt,
+        mockStatusFile,
+        mockLogFile,
+        mockReasoningLogFile,
+        mockRawJsonLogFile,
+        mockPipelineName
+      );
+
+      // Should have called readline.question twice (both questions start promises)
+      expect(mockRl.question).toHaveBeenCalledTimes(2);
+
+      // Should have cleaned up twice (once per question)
+      expect(mockRl.close).toHaveBeenCalledTimes(2);
+
+      // Verify both interactions recorded with different sources
+      const finalState = statusUpdates[statusUpdates.length - 1];
+      expect(finalState.interactionHistory.length).toBeGreaterThanOrEqual(2);
+      expect(finalState.interactionHistory[0].answer).toBe(answers[0]); // From file
+      expect(finalState.interactionHistory[1].answer).toBe(answers[1]); // From CLI
     });
   });
 });

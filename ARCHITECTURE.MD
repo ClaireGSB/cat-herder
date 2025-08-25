@@ -18,7 +18,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 1.  **Interface Layer (CLI & Web):** The user's entry point. This layer is responsible for parsing user input and presenting status information.
     *   **CLI (`src/index.ts`, `src/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
-    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
+    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring and interaction layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. It enables interactive collaboration through form-based question answering during Interactive Halting workflows, using a file-based IPC system to communicate answers back to the CLI orchestrator. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
     *   It reads the user's pipeline configuration (`cat-herder.config.js`).
@@ -26,7 +26,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
-    *   **Interactive Halting Management:** When the AI uses the `askHuman` tool, the orchestrator enters a pause/prompt/resume cycle. It transitions the task state to `waiting_for_input`, prompts the user via CLI, captures the response, and resumes execution with the user's guidance incorporated into the ongoing conversation.
+    *   **Interactive Halting Management:** When the AI uses the `askHuman` tool, the orchestrator enters a pause/prompt/resume cycle. It transitions the task state to `waiting_for_input`, then waits for input from either the CLI prompt or a file-based signal from the web dashboard. Using `Promise.race()`, it monitors both input sources simultaneously and processes whichever responds first, then resumes execution with the user's guidance incorporated into the ongoing conversation.
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
@@ -86,6 +86,12 @@ graph TD
     Orchestrator -- Prompts for input --> CLI
     CLI -- User response --> Orchestrator
     Orchestrator -- Updates interaction history --> State
+    
+    %% Web UI Interactive Flow
+    User -- Submits answer --> Web
+    Web -- POST /task/:taskId/respond --> AnswerFile[Answer File (.answer)]
+    AnswerFile -- File polling --> Orchestrator
+    Orchestrator -- Deletes file after reading --> AnswerFile
 
     Web -- Reads --> State
     User -- Views --> Web
