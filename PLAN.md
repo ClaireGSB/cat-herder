@@ -1,88 +1,104 @@
-### **PLAN: Automatic Injection of `askHuman` Tool Permission**
+
+
+### **PLAN: Validator-Enforced `askHuman` Permission**
 
 #### **Goal**
 
-To make the Interactive Halting feature more robust and less error-prone by automatically injecting the `askHuman` tool permission whenever the `interactionThreshold` for a task is greater than zero.
+To make the Interactive Halting feature robust by enhancing the `cat-herder validate` command to detect and report when a task requires the `askHuman` tool but is missing the necessary permission in its command file.
 
 #### **Description**
 
-The current implementation requires developers to manually add `askHuman` to the `allowed-tools` list in their command prompt files. Forgetting this step silently disables the interactive halting feature, as the AI has no permission to ask questions. This refactor will make the system responsible for granting this permission, ensuring that if a developer requests interactivity, the system will always honor it.
+Our previous attempt to automatically inject the `askHuman` permission failed because the underlying CLI does not support it. This refactor corrects that approach. We will revert the non-functional changes and instead improve our static validation. The `validate` command will now cross-reference the `interactionThreshold` with the `allowed-tools` list. If a discrepancy is found, it will produce a clear error, guiding the user to fix their configuration and preventing runtime failures.
 
 #### **Summary Checklist**
 
--   [ ] **1. Orchestration Logic:** Modify the `pipeline-runner` to detect the interaction threshold and prepare the necessary tool permission.
--   [ ] **2. Process Spawning Logic:** Modify `proc.ts` to accept and apply additional tool permissions when spawning the `claude` CLI process.
--   [ ] **3. Testing:** Update existing tests to assert that the new flag is passed to the CLI.
--   [ ] **4. Documentation:** Briefly update the `README.md` to inform users that this permission is now handled automatically.
+-   [x] **1. Revert Previous Changes:** Remove the incorrect `--allow-tool` logic from the orchestrator and process spawner.
+-   [ ] **2. Enhance the Validator:** Add new logic to `validator.ts` to check for the `askHuman` permission when `interactionThreshold > 0`.
+-   [ ] **3. Update Documentation:** Update the `README.md` to clarify the user's responsibility and highlight the validator's role.
 
 ---
 
 ### **Detailed Refactoring Steps**
 
-#### 1. Update Orchestration Logic to Prepare the Permission
+#### 1. Revert Previous Changes
 
-*   **Objective:** In the orchestrator, identify when `askHuman` is needed and prepare to pass that information down to the process runner.
-*   **File:** `src/tools/orchestration/pipeline-runner.ts`
-*   **Task:**
-    1.  In the `executePipelineForTask` function, you already have the `resolvedInteractionThreshold`.
-    2.  After calculating this value, create a new variable, `additionalTools`, which is an array of strings.
-    3.  If `resolvedInteractionThreshold > 0`, push `'askHuman'` into the `additionalTools` array.
-    4.  Pass this `additionalTools` array as a new option to the `executeStep` function call.
-*   **Code Snippet (`pipeline-runner.ts`):**
-    ```typescript
-    // ... inside executePipelineForTask ...
-    const resolvedInteractionThreshold = taskInteractionThreshold ?? config.interactionThreshold ?? 0;
-    const additionalTools: string[] = [];
-
-    if (resolvedInteractionThreshold > 0) {
-      additionalTools.push('askHuman');
-    }
-
-    // ... later, in the loop ...
-    await executeStep(
-      stepConfig, 
-      fullPrompt, 
-      statusFile, 
-      // ... other args ...
-      additionalTools // Pass the new array
-    );
-    ```
-
-#### 2. Update Process Spawner to Apply the Permission
-
-*   **Objective:** Modify the `runStreaming` function to accept the list of additional tools and add the correct command-line flags when spawning `claude`.
-*   **Files:** `src/tools/orchestration/step-runner.ts`, `src/tools/proc.ts`
+*   **Objective:** Remove the code that attempts to pass the `--allow-tool` flag, as it is non-functional.
 *   **Tasks:**
-    1.  **Thread the parameter:** Update the function signature for `executeStep` in `step-runner.ts` to accept the `additionalTools: string[]` array and pass it along to its `runStreaming` call.
-    2.  **Update `runStreaming`:**
-        *   Modify the function signature in `proc.ts` to accept `additionalTools?: string[]` as an argument.
-        *   Inside the function, before spawning the process, check if the `additionalTools` array is present and not empty.
-        *   If it is, loop through it and add the appropriate flag to the `finalArgs` array. The `claude` CLI uses the `--allow-tool` flag for this.
-*   **Code Snippet (`proc.ts`):**
+    1.  **File `src/tools/proc.ts`:**
+        *   Remove the `additionalTools?: string[]` parameter from the `runStreaming` function signature.
+        *   Delete the block of code that loops through `additionalTools` and pushes `--allow-tool` to the `finalArgs` array.
+    2.  **File `src/tools/orchestration/step-runner.ts`:**
+        *   Remove the `additionalTools` parameter from the `executeStep` function signature.
+        *   Remove the `additionalTools` argument from the `runStreaming` function call inside `executeStep`.
+    3.  **File `src/tools/orchestration/pipeline-runner.ts`:**
+        *   Delete the `additionalTools` array and the logic that populates it.
+        *   Remove the `additionalTools` argument from the `executeStep` function call.
+
+#### 2. Enhance the Validator
+
+*   **Objective:** Make the `validate` command aware of the link between `interactionThreshold` and the `askHuman` tool.
+*   **File:** `src/tools/validator.ts`
+*   **Tasks:**
+    1.  **Access Config in `validateStep`:** The `validateStep` function doesn't currently have access to the top-level `config` object. You will need to pass the `config` object down into it.
+    2.  **Add New Validation Logic:** Inside `validateStep`, right after validating the basic structure, add a new check.
+        *   Get the `interactionThreshold` for the current task (from `config.interactionThreshold`).
+        *   Read the command file (`.claude/commands/....md`).
+        *   Parse its frontmatter to get the `allowed-tools` list (you already have a helper for this).
+        *   **If `interactionThreshold > 0` AND the `allowed-tools` list does NOT include `'askHuman'`, add a new, specific error to the `errors` array.**
+
+*   **Code Snippet (`src/tools/validator.ts`):**
+
     ```typescript
-    // In runStreaming function signature
-    export function runStreaming(
-      // ... other args ...
-      model?: string,
-      options?: RunStreamingOptions,
-      additionalTools?: string[] // Add this new parameter
-    ): Promise<StreamResult> {
-      // ...
-      const finalArgs = [...args, "--output-format", "stream-json", "--verbose"];
+    // First, update the function signature to accept the config
+    function validateStep(
+      step: any, 
+      index: number, 
+      pipelineName: string,
+      config: CatHerderConfig, // Add this
+      // ... other params
+    ) {
+      // ... existing validation logic ...
 
-      if (model) { /* ... */ }
+      // --- NEW VALIDATION LOGIC ---
+      const threshold = config.interactionThreshold ?? 0;
+      if (threshold > 0) {
+        const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+        if (fs.existsSync(commandFilePath)) {
+          const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
+          const frontmatter = parseFrontmatter(commandContent);
+          const toolsValue = frontmatter?.['allowed-tools'] || '';
+          const requiredTools: string[] = Array.isArray(toolsValue) ? toolsValue : toolsValue.split(',').map(t => t.trim());
 
-      // --- THIS IS THE NEW LOGIC ---
-      if (additionalTools && additionalTools.length > 0) {
-        for (const tool of additionalTools) {
-          finalArgs.push("--allow-tool", tool);
+          if (!requiredTools.includes('askHuman')) {
+            errors.push(
+              `${stepId}: The project is configured with a non-zero interactionThreshold, but this step's command file ('${step.command}.md') is missing the 'askHuman' permission in its 'allowed-tools' list.`
+            );
+          }
         }
       }
-      // --- END OF NEW LOGIC ---
+      // --- END NEW LOGIC ---
 
-      console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
-      // ... rest of the function
+      // ... rest of the function ...
+    }
+
+    // Then update the call site in validatePipeline
+    export function validatePipeline(config: CatHerderConfig, projectRoot: string): ValidationResult {
+        // ...
+        for (const [index, step] of pipeline.entries()) {
+            validateStep(step, index, pipelineName, config, /*... other args*/); // Pass config in
+        }
+        // ...
     }
     ```
 
-By implementing this refactor, you make the system more intelligent and remove a potential point of human error, making the entire interactive halting feature significantly more reliable.
+#### 3. Update Documentation
+
+*   **Objective:** Clearly explain the requirement to the user in the `README.md`.
+*   **File:** `README.md`
+*   **Task:** Add a "Note" or "Important" block in the "Interactive Halting" section.
+*   **Content Example:**
+    > **Important:** When you set `interactionThreshold` to a value greater than 0, you **must** also grant the `askHuman` permission to the tools used in your pipeline. Add `'askHuman'` to the `allowed-tools` list in the frontmatter of your command `.md` files.
+    >
+    > The `cat-herder validate` command will detect if you forget this and provide a helpful error message.
+
+This revised plan corrects the technical mistake and results in a much safer, more robust feature that aligns with the project's philosophy. It empowers the user by preventing errors before they happen.
