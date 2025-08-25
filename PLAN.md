@@ -14,7 +14,7 @@ Our previous attempt to automatically inject the `askHuman` permission failed be
 
 -   [x] **1. Revert Previous Changes:** Remove the incorrect `--allow-tool` logic from the orchestrator and process spawner.
 -   [x] **2. Enhance the Validator:** Add new logic to `validator.ts` to check for the `askHuman` permission when `interactionThreshold > 0`.
--   [ ] **3. Update Documentation:** Update the `README.md` to clarify the user's responsibility and highlight the validator's role.
+-   [x] **3. Update Documentation:** Update the `README.md` to clarify the user's responsibility and highlight the validator's role.
 
 ---
 
