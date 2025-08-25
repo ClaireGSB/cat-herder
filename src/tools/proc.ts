@@ -48,7 +48,8 @@ export function runStreaming(
   stdinData?: string,
   rawJsonLogPath?: string,
   model?: string,
-  options?: RunStreamingOptions
+  options?: RunStreamingOptions,
+  additionalTools?: string[]
 ): Promise<StreamResult> {
   wasKilled = false;
   // Build final args with JSON streaming flags and enhanced debugging
@@ -58,6 +59,13 @@ export function runStreaming(
   // Conditionally add the model flag
   if (model) {
     finalArgs.push("--model", model);
+  }
+
+  // Add additional tool permissions if provided
+  if (additionalTools && additionalTools.length > 0) {
+    for (const tool of additionalTools) {
+      finalArgs.push("--allow-tool", tool);
+    }
   }
 
   console.log(`[Proc] Spawning: ${cmd} ${finalArgs.join(" ")}`);
