@@ -281,8 +281,6 @@ This task involves major architectural changes. Be cautious and ask questions wh
 
 2. **Workflow Pause**: The orchestrator immediately pauses execution and updates the task status to `waiting_for_input`.
 
-**Note:** The `askHuman` tool permission is automatically granted when `interactionThreshold` is greater than 0. You don't need to manually add `askHuman` to the `allowed-tools` list in your command prompt files.
-
 3. **User Prompt**: You can answer the AI's question in two ways:
    
    **Via CLI**: The command line displays the question and waits for your response:

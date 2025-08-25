@@ -11,9 +11,9 @@ The current implementation requires developers to manually add `askHuman` to the
 #### **Summary Checklist**
 
 -   [x] **1. Orchestration Logic:** Modify the `pipeline-runner` to detect the interaction threshold and prepare the necessary tool permission.
--   [x] **2. Process Spawning Logic:** Modify `proc.ts` to accept and apply additional tool permissions when spawning the `claude` CLI process.
--   [x] **3. Testing:** Update existing tests to assert that the new flag is passed to the CLI.
--   [x] **4. Documentation:** Briefly update the `README.md` to inform users that this permission is now handled automatically.
+-   [ ] **2. Process Spawning Logic:** Modify `proc.ts` to accept and apply additional tool permissions when spawning the `claude` CLI process.
+-   [ ] **3. Testing:** Update existing tests to assert that the new flag is passed to the CLI.
+-   [ ] **4. Documentation:** Briefly update the `README.md` to inform users that this permission is now handled automatically.
 
 ---
 

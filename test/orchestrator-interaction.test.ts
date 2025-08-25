@@ -113,17 +113,15 @@ describe('Interactive Step Runner', () => {
       // Verify the complete workflow
       expect(runStreaming).toHaveBeenCalledTimes(2);
       
-      // First call should be with original prompt and no additional tools
+      // First call should be with original prompt
       expect(vi.mocked(runStreaming).mock.calls[0][5]).toBe(mockPrompt);
-      expect(vi.mocked(runStreaming).mock.calls[0][9]).toBeUndefined(); // additionalTools parameter
       
-      // Second call should include user feedback and no additional tools
+      // Second call should include user feedback
       const secondCallPrompt = vi.mocked(runStreaming).mock.calls[1][5];
       expect(secondCallPrompt).toContain('--- HUMAN FEEDBACK ---');
       expect(secondCallPrompt).toContain(mockQuestion);
       expect(secondCallPrompt).toContain(mockAnswer);
       expect(secondCallPrompt).toContain('Continue your work based on this answer');
-      expect(vi.mocked(runStreaming).mock.calls[1][9]).toBeUndefined(); // additionalTools parameter
 
       // Verify status transitions - actual sequence is:
       // 1. Set step to running, 2. Set to waiting_for_input, 3. Set back to running, 4. Token update
@@ -698,81 +696,6 @@ describe('Interactive Step Runner', () => {
       expect(finalState.interactionHistory.length).toBeGreaterThanOrEqual(2);
       expect(finalState.interactionHistory[0].answer).toBe(answers[0]); // From file
       expect(finalState.interactionHistory[1].answer).toBe(answers[1]); // From CLI
-    });
-  });
-
-  describe('Automatic askHuman Tool Injection', () => {
-    it('should pass additionalTools with askHuman when called with additionalTools parameter', async () => {
-      const mockAdditionalTools = ['askHuman'];
-
-      // Mock successful execution without any questions
-      vi.mocked(runStreaming).mockResolvedValue({ 
-        code: 0, 
-        output: 'Implementation completed successfully',
-        modelUsed: 'claude-3-5-sonnet-20241022',
-        tokenUsage: { input_tokens: 150, output_tokens: 75, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
-      });
-
-      const statusUpdates: any[] = [];
-      let currentStatus = { ...mockStatus, interactionHistory: [] };
-      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
-        updateFn(currentStatus);
-        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus))); // Deep copy to avoid mutations
-      });
-
-      await executeStep(
-        mockStepConfig,
-        mockPrompt,
-        mockStatusFile,
-        mockLogFile,
-        mockReasoningLogFile,
-        mockRawJsonLogFile,
-        mockPipelineName,
-        undefined, // sequenceStatusFile
-        mockAdditionalTools // additionalTools parameter
-      );
-
-      // Should call runStreaming with the additionalTools parameter
-      expect(runStreaming).toHaveBeenCalledTimes(1);
-      const runStreamingCall = vi.mocked(runStreaming).mock.calls[0];
-      
-      // Verify the additionalTools parameter (10th parameter, index 9)
-      expect(runStreamingCall[9]).toEqual(['askHuman']);
-    });
-
-    it('should pass undefined for additionalTools when not provided', async () => {
-      // Mock successful execution without any questions
-      vi.mocked(runStreaming).mockResolvedValue({ 
-        code: 0, 
-        output: 'Implementation completed successfully',
-        modelUsed: 'claude-3-5-sonnet-20241022',
-        tokenUsage: { input_tokens: 150, output_tokens: 75, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
-      });
-
-      const statusUpdates: any[] = [];
-      let currentStatus = { ...mockStatus, interactionHistory: [] };
-      vi.mocked(updateStatus).mockImplementation((file, updateFn) => {
-        updateFn(currentStatus);
-        statusUpdates.push(JSON.parse(JSON.stringify(currentStatus))); // Deep copy to avoid mutations
-      });
-
-      await executeStep(
-        mockStepConfig,
-        mockPrompt,
-        mockStatusFile,
-        mockLogFile,
-        mockReasoningLogFile,
-        mockRawJsonLogFile,
-        mockPipelineName
-        // No additionalTools parameter provided
-      );
-
-      // Should call runStreaming without additionalTools
-      expect(runStreaming).toHaveBeenCalledTimes(1);
-      const runStreamingCall = vi.mocked(runStreaming).mock.calls[0];
-      
-      // Verify the additionalTools parameter is undefined (10th parameter, index 9)
-      expect(runStreamingCall[9]).toBeUndefined();
     });
   });
 });
