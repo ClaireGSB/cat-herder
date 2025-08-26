@@ -26,7 +26,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
-    *   **State-Based Signal Detection:** While the `claude` CLI is running, the parent Orchestration Layer simultaneously polls the task's state file. If the AI uses the `Bash` tool to run `cat-herder ask`, that command updates the state file's `phase` to `waiting_for_input`. The orchestrator detects this change, recognizes it as a pause signal, and gracefully terminates the `claude` CLI process before initiating the user prompt.
+    *   **State-Based Signal Detection:** While the `claude` CLI is running, the parent Orchestration Layer simultaneously polls the task's state file. If the AI uses the `Bash` tool to run `cat-herder ask`, that command updates the state file's `phase` to `waiting_for_input`. The orchestrator detects this change, recognizes it as a pause signal, and gracefully terminates the `claude` CLI process before initiating the user prompt. The orchestrator also updates the parent sequence's state file to reflect the paused status for consistent workflow monitoring.
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
@@ -38,7 +38,8 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
-    *   **Interactive Halting Support:** The state layer tracks the new `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution.
+    *   **Interactive Halting Support:** The state layer tracks the new `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution. Both task status objects and sequence status objects support the `waiting_for_input` phase for consistent status propagation throughout the workflow.
+    *   **Pause Time Tracking:** The state layer accurately tracks `totalPauseTime` statistics, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows.
 
 ### B. Data Flow Diagram
 

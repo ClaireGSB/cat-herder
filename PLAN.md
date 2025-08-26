@@ -24,8 +24,8 @@ This initiative will fix the UI bugs by ensuring the live view is always synchro
 -   [x] **Enhance Status Propagation**: Modify the orchestrator to update the parent sequence's status when a task pauses for input and resumes.
 -   [x] **Implement Accurate Pause Tracking**: Add logic to measure the time spent waiting for human input and add it to the `totalPauseTime` statistic for both tasks and sequences.
 -   [x] **Fix Web UI Bugs**: Implement a client-side fix on the "Live Activity" page to ensure the UI correctly refreshes during interactive halting events.
--   [ ] **Update Web Dashboard UI**: Ensure the UI templates can correctly render the new `waiting_for_input` status for sequences.
--   [ ] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the improved status handling and behavior.
+-   [x] **Update Web Dashboard UI**: Ensure the UI templates can correctly render the new `waiting_for_input` status for sequences.
+-   [x] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the improved status handling and behavior.
 
 ## Detailed Implementation Steps
 
