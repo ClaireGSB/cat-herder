@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentPhase = window.liveActivityData?.runningTask?.phase || null;
 
     const patchInterval = setInterval(() => {
-        const ws = window.dashboard?.websocket;
+        const ws = window.dashboard?.ws;
         if (ws && typeof ws.onmessage === 'function') {
             clearInterval(patchInterval);
             const originalOnMessage = ws.onmessage;

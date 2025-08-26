@@ -38,8 +38,8 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
-    *   **Interactive Halting Support:** The state layer tracks the new `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution. Both task status objects and sequence status objects support the `waiting_for_input` phase for consistent status propagation throughout the workflow.
-    *   **Pause Time Tracking:** The state layer accurately tracks `totalPauseTime` statistics, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows.
+    *   **Interactive Halting Support:** The state layer tracks the `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution. Both task status objects and sequence status objects support the `waiting_for_input` phase, and individual step statuses within the `steps` object also track this state for consistent status propagation throughout the workflow hierarchy (step → task → sequence).
+    *   **Pause Time Tracking:** The state layer accurately tracks `totalPauseTime` statistics, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows. Pause durations are calculated and added to both task and sequence statistics when resuming from a `waiting_for_input` state.
 
 ### B. Data Flow Diagram
 

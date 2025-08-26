@@ -290,7 +290,7 @@ This task involves major architectural changes. Be cautious and ask questions wh
     }
     ```
 
-3.  **Run the Task:** When the AI needs to ask a question, it will pause. If the task is part of a sequence, the entire sequence is also considered paused until the question is answered. You can answer in two ways:
+3.  **Run the Task:** When the AI needs to ask a question, it will pause. The specific pipeline step, the task, and if applicable, the parent sequence are all set to a `waiting_for_input` status in the UI, providing consistent status visibility across all workflow levels. You can answer in two ways:
     *   **Via CLI:** The command line will display the question and wait for your typed response.
     *   **Via Web Dashboard:** The dashboard will show an interactive card with the question and a form to submit your answer.
 
@@ -693,7 +693,7 @@ This file contains the status of a single task. It includes the `startTime` of t
 This file contains the status of a sequence of tasks. It now includes the `startTime` of the sequence, and a `stats` object with the following fields:
 - `totalDuration`: The total duration of the sequence in seconds, including pauses.
 - `totalDurationExcludingPauses`: The total duration of the sequence in seconds, excluding pauses.
-- `totalPauseTime`: The total pause time in seconds, including both API rate limit pauses and time spent waiting for human input during interactive halting.
+- `totalPauseTime`: The total pause time in seconds, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows.
 
 ### Cost and Usage Monitoring
 

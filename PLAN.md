@@ -20,10 +20,10 @@ This plan provides the exact steps to **correct the UI bug** and **fully impleme
 ## Summary Checklist
 
 -   [x] **Fix Backend Status Propagation**: Update the orchestrator to set the status of the **step**, **task**, and **sequence** to `waiting_for_input` and back to `running`.
--   [ ] **Implement Accurate Pause Tracking**: Correctly add the time spent waiting for human input to the `totalPauseTime` statistic for both tasks and sequences.
--   [ ] **Fix the Web UI Reload Bug**: Correct the JavaScript property name in `live-activity-page.js` to enable the page reload fix.
--   [ ] **Verify UI Templates and Types**: Confirm that all necessary types and UI templates for displaying the `waiting_for_input` status are in place.
--   [ ] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the correct, fully-implemented behavior.
+-   [x] **Implement Accurate Pause Tracking**: Correctly add the time spent waiting for human input to the `totalPauseTime` statistic for both tasks and sequences.
+-   [x] **Fix the Web UI Reload Bug**: Correct the JavaScript property name in `live-activity-page.js` to enable the page reload fix.
+-   [x] **Verify UI Templates and Types**: Confirm that all necessary types and UI templates for displaying the `waiting_for_input` status are in place.
+-   [x] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the correct, fully-implemented behavior.
 
 ## Detailed Implementation Steps
 
