@@ -230,100 +230,71 @@ This will start the web server on `http://localhost:5177` populated with consist
 
 ## Interactive Halting (Interaction Threshold)
 
-The `cat-herder` tool includes a powerful feature called **Interactive Halting** that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Interaction Threshold**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
+The `cat-herder` tool includes a powerful feature that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Interaction Threshold**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
 
 ### The Interaction Threshold Scale
 
-The interaction threshold is configured as an integer from `0` to `5`:
+The `interactionThreshold` is configured in your `cat-herder.config.js` or a task's frontmatter as an integer from `0` to `5`. This number determines how cautious the AI will be.
 
-- **`0` - Zero Fucks Given (Fully Autonomous)**: The AI must never ask questions. It makes its best assumptions and proceeds without interruption. This is the default to maintain existing behavior.
-- **`1-2` - Low Interruption (High Confidence)**: The AI only asks questions when fundamentally blocked or facing highly critical, ambiguous choices (e.g., "The PRD is contradictory, which path should I take?").
-- **`3` - Medium Interruption (Balanced)**: The AI asks when it encounters ambiguity in requirements or must make significant, non-obvious implementation choices.
-- **`4-5` - High Interruption (Low Confidence)**: The AI is very cautious, asking to confirm assumptions, clarify minor ambiguities, and present options before proceeding with any significant work.
-
-**Important:** When you set `interactionThreshold` to a value greater than 0, you **must** also grant the `askHuman` permission to the tools used in your pipeline. Add `'askHuman'` to the `allowed-tools` list in the frontmatter of your command `.md` files.
-
-The `cat-herder validate` command will detect if you forget this and provide a helpful error message.
+-   **`0` - Fully Autonomous (Default):** The AI will never ask questions. It makes its best assumptions and proceeds without interruption.
+-   **`1-2` - Low Interruption:** The AI will only pause if it is completely blocked by a contradiction in the requirements or is about to perform a potentially destructive action (like deleting a file).
+-   **`3-4` - Medium Interruption:** The AI will ask for clarification when faced with significant architectural or technical decisions that aren't clearly specified (e.g., "Should I add this to API v1 or create a new v2?").
+-   **`5` - High Interruption:** The AI will be very cautious. It will ask to clarify any ambiguity, no matter how small, and may present you with options before proceeding with a complex implementation.
 
 ### Configuration
 
-#### Global Configuration
+You can set the threshold globally or per-task.
 
-Set a default threshold in your `cat-herder.config.js`:
+#### Global Configuration (`cat-herder.config.js`)
+
+Set a default threshold for all tasks in your project.
 
 ```javascript
 // cat-herder.config.js
 module.exports = {
-  taskFolder: "cat-herder-tasks",
-  statePath: "~/.cat-herder/state",
-  logsPath: "~/.cat-herder/logs",
+  // ... other configuration
   
   // Set the default interaction threshold (0-5)
   interactionThreshold: 0, // Default is 0 for backward compatibility
-  
-  // ... other configuration
 };
 ```
 
-#### Task-Level Override
+#### Task-Level Override (Frontmatter)
 
-Override the threshold for specific tasks using YAML frontmatter:
+For specific tasks that require more or less caution, override the global setting in the task's `.md` file.
 
 ```markdown
 ---
 pipeline: default
-interactionThreshold: 4
+interactionThreshold: 5
 ---
 # Complex Refactoring Task
-
 This task involves major architectural changes. Be cautious and ask questions when uncertain.
 ```
 
-### How Interactive Halting Works
+### How to Enable and Use Interactive Halting
 
-1. **AI Detection**: When the AI encounters uncertainty at or above the configured threshold, it uses the `askHuman` tool with a specific question.
+1.  **Set the Threshold:** Choose a value greater than `0` in your config or task frontmatter.
 
-2. **Workflow Pause**: The orchestrator immediately pauses execution and updates the task status to `waiting_for_input`.
+2.  **Grant Permission:** For this feature to work, the AI needs permission to use the `cat-herder ask` command. You **must** add the `Bash(cat-herder ask:*)` permission to your `.claude/settings.json` file. The `cat-herder validate` command will detect if this is missing and offer to add it for you.
 
-3. **User Prompt**: You can answer the AI's question in two ways:
-   
-   **Via CLI**: The command line displays the question and waits for your response:
-   ```bash
-   [Orchestrator] Task has been paused. The AI needs your input.
+    ```json
+    // .claude/settings.json
+    {
+      "permissions": {
+        "allow": [
+          "Bash(npm test:*)",
+          "Bash(cat-herder ask:*)"
+        ]
+      }
+    }
+    ```
 
-   🤖 QUESTION:
-   The user story mentions a "simplified user profile page," but the technical brief 
-   details both an "admin view" and a "public view." Should I implement both views, 
-   or just the public-facing one for now?
+3.  **Run the Task:** When the AI needs to ask a question, it will pause. You can answer in two ways:
+    *   **Via CLI:** The command line will display the question and wait for your typed response.
+    *   **Via Web Dashboard:** The dashboard will show an interactive card with the question and a form to submit your answer.
 
-   (You can answer here in the CLI or in the web dashboard.)
-
-   Your answer: _
-   ```
-   
-   **Via Web Dashboard**: If you have the web dashboard open, you'll see an interactive question card with a text area where you can type your answer and click "Submit Answer and Resume."
-
-4. **Resume Execution**: After you provide an answer, the AI receives your response and continues with the clarified guidance.
-
-5. **Interaction History**: All questions and answers are logged in the task's state file and visible in the web dashboard for future reference.
-
-### Use Cases
-
-- **Risky Refactors**: Set threshold to `4-5` for major code changes where wrong assumptions could be costly
-- **Routine Tasks**: Set threshold to `0` for documentation updates or simple bug fixes
-- **Complex Features**: Set threshold to `3` for new feature development with unclear requirements
-- **Team Projects**: Set a baseline threshold in config while allowing task-specific overrides
-
-### Web Dashboard Integration
-
-The web dashboard provides full interactive halting support with:
-- Clear indicators when tasks are `waiting_for_input`
-- The AI's pending question prominently displayed in a dedicated question card
-- An interactive form where you can type your answer and submit it directly from the browser
-- Complete interaction history showing all Q&A exchanges during the task
-- Real-time updates when answers are submitted through either CLI or web interface
-
-Questions can be answered from either the CLI or the web dashboard - whichever is more convenient for your workflow.
+4.  **Resume:** Once an answer is provided from either source, the AI receives the guidance and continues the task. All interactions are saved and can be reviewed on the task detail page in the web dashboard.
 
 ## How It Works
 

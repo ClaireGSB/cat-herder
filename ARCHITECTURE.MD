@@ -26,7 +26,7 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
-    *   **Interactive Halting Management:** When the AI uses the `askHuman` tool, the orchestrator enters a pause/prompt/resume cycle. It transitions the task state to `waiting_for_input`, then waits for input from either the CLI prompt or a file-based signal from the web dashboard. Using `Promise.race()`, it monitors both input sources simultaneously and processes whichever responds first, then resumes execution with the user's guidance incorporated into the ongoing conversation.
+    *   **State-Based Signal Detection:** While the `claude` CLI is running, the parent Orchestration Layer simultaneously polls the task's state file. If the AI uses the `Bash` tool to run `cat-herder ask`, that command updates the state file's `phase` to `waiting_for_input`. The orchestrator detects this change, recognizes it as a pause signal, and gracefully terminates the `claude` CLI process before initiating the user prompt.
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
@@ -81,8 +81,10 @@ graph TD
     CheckRunner -- Executes --> Shell[Shell Commands (npm test)]
     
     %% Interactive Halting Flow
-    ClaudeCLI -- askHuman tool --> Proc
-    Proc -- HumanInterventionRequiredError --> Orchestrator
+    ClaudeCLI -- Bash tool --> CLI_Ask[cat-herder ask]
+    CLI_Ask -- Updates state file --> State
+    Orchestrator -- Polls and detects change --> State
+    Orchestrator -- Kills --> ClaudeCLI
     Orchestrator -- Prompts for input --> CLI
     CLI -- User response --> Orchestrator
     Orchestrator -- Updates interaction history --> State
