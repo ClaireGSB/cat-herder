@@ -20,7 +20,7 @@ This initiative will fix the UI bugs by ensuring the live view is always synchro
 
 ## Summary Checklist
 
--   [ ] **Update Core Types**: Add the `waiting_for_input` state to the `SequencePhase` type for consistency.
+-   [x] **Update Core Types**: Add the `waiting_for_input` state to the `SequencePhase` type for consistency.
 -   [ ] **Enhance Status Propagation**: Modify the orchestrator to update the parent sequence's status when a task pauses for input and resumes.
 -   [ ] **Implement Accurate Pause Tracking**: Add logic to measure the time spent waiting for human input and add it to the `totalPauseTime` statistic for both tasks and sequences.
 -   [ ] **Fix Web UI Bugs**: Implement a client-side fix on the "Live Activity" page to ensure the UI correctly refreshes during interactive halting events.

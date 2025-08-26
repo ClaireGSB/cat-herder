@@ -55,7 +55,7 @@ export type TaskStatus = {
   }[];
 };
 
-export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
+export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
 export interface SequenceStatus {
   version: number;
   sequenceId: string;
