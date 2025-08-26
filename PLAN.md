@@ -4,186 +4,147 @@
 
 ## Title & Goal
 
-**Title:** Enhance Interactive Halting UX and Status Consistency
+**Title:** Correct and Finalize Interactive Halting Enhancements
 
-**Goal:** To improve the user experience of the interactive halting feature by fixing UI bugs, ensuring consistent status propagation from tasks to sequences, and accurately tracking all pause times.
+**Goal:** To fully implement and fix the interactive halting workflow, ensuring UI stability, consistent status propagation across all system levels (step, task, and sequence), and accurate pause time accounting.
 
 ## Description
 
-This plan addresses three related issues in the interactive halting workflow:
+This plan addresses the incomplete execution of a previous initiative. The primary goals were to improve the Interactive Halting feature, but the implementation was flawed. The following issues persist:
 
-1.  **Web UI Bugs:** On the "Live Activity" page, when the AI asks a question, the live log stream disconnects and does not resume. Furthermore, if the AI asks a second question, the UI does not update, showing the first question and its answer instead of the new one.
-2.  **Status Inconsistency:** When a task enters the `waiting_for_input` state, its parent sequence incorrectly remains in a `running` state. This gives a misleading view of the overall workflow status.
-3.  **Inaccurate Pause Tracking:** The `totalPauseTime` metric for tasks and sequences currently only accounts for pauses due to API rate limits. It does not include the time the system spends waiting for human input, which is a critical part of the pause duration.
+1.  **Critical UI Bug:** A typo in the client-side JavaScript (`window.dashboard.websocket` instead of `window.dashboard.ws`) completely prevented the UI fix from working. As a result, the live log stream still breaks, and the question form becomes stale on subsequent questions.
+2.  **Incomplete Status Propagation:** When a task pauses to wait for input, its parent sequence and the specific pipeline step that paused do not reflect this status change in the UI. They incorrectly remain in a `running` state, creating an inconsistent and confusing user experience.
 
-This initiative will fix the UI bugs by ensuring the live view is always synchronized, align the sequence status with the active task's status, and implement correct pause time accounting for human interactions.
+This plan provides the exact steps to **correct the UI bug** and **fully implement the status propagation and pause time tracking** as originally intended. The outcome will be a stable, intuitive, and consistent interactive workflow.
 
 ## Summary Checklist
 
--   [x] **Update Core Types**: Add the `waiting_for_input` state to the `SequencePhase` type for consistency.
--   [x] **Enhance Status Propagation**: Modify the orchestrator to update the parent sequence's status when a task pauses for input and resumes.
--   [x] **Implement Accurate Pause Tracking**: Add logic to measure the time spent waiting for human input and add it to the `totalPauseTime` statistic for both tasks and sequences.
--   [x] **Fix Web UI Bugs**: Implement a client-side fix on the "Live Activity" page to ensure the UI correctly refreshes during interactive halting events.
--   [x] **Update Web Dashboard UI**: Ensure the UI templates can correctly render the new `waiting_for_input` status for sequences.
--   [x] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the improved status handling and behavior.
+-   [ ] **Fix Backend Status Propagation**: Update the orchestrator to set the status of the **step**, **task**, and **sequence** to `waiting_for_input` and back to `running`.
+-   [ ] **Implement Accurate Pause Tracking**: Correctly add the time spent waiting for human input to the `totalPauseTime` statistic for both tasks and sequences.
+-   [ ] **Fix the Web UI Reload Bug**: Correct the JavaScript property name in `live-activity-page.js` to enable the page reload fix.
+-   [ ] **Verify UI Templates and Types**: Confirm that all necessary types and UI templates for displaying the `waiting_for_input` status are in place.
+-   [ ] **Update Documentation**: Update `ARCHITECTURE.md` and `README.md` to reflect the correct, fully-implemented behavior.
 
 ## Detailed Implementation Steps
 
-### 1. Update Core Types
+### 1. Fix Backend Status Propagation
 
-*   **Objective:** To make the system aware that a sequence can be in a `waiting_for_input` state.
-*   **Task:** Modify the `SequencePhase` type definition in `src/tools/status.ts`.
-*   **Code Snippet (`src/tools/status.ts`):**
-
-    ```typescript
-    // BEFORE
-    export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
-
-    // AFTER
-    export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
-    ```
-
-### 2. Enhance Status Propagation
-
-*   **Objective:** To ensure a sequence's status accurately reflects that it is paused when its active task is waiting for input.
-*   **Task:** In `src/tools/orchestration/step-runner.ts`, update the parent sequence's status file before waiting for input and after receiving it.
+*   **Objective:** To ensure that when a task pauses, its current step and parent sequence also reflect the `waiting_for_input` status.
+*   **Task:** Modify the `HumanInterventionRequiredError` catch block in `src/tools/orchestration/step-runner.ts` to update all relevant status files.
 *   **Code Snippet (`src/tools/orchestration/step-runner.ts`):**
-    Within the `executeStep` function, inside the `catch (error)` block for `HumanInterventionRequiredError`:
 
     ```typescript
-    // ... inside catch (error)
+    // ... inside catch (error) block in executeStep function ...
     if (error instanceof HumanInterventionRequiredError) {
-      // 1. PAUSE: Update task AND sequence status
-      updateStatus(statusFile, s => { /* ... existing logic ... */ });
+      // 1. PAUSE: Update task, step, AND sequence status to 'waiting_for_input'
+      updateStatus(statusFile, s => {
+        s.phase = 'waiting_for_input';
+        s.steps[name] = 'waiting_for_input'; // <-- FIX: Set the current step's status
+        s.pendingQuestion = { 
+          question: error.question, 
+          timestamp: new Date().toISOString() 
+        };
+      });
+
       if (sequenceStatusFile) {
         updateSequenceStatus(sequenceStatusFile, s => { s.phase = 'waiting_for_input'; });
       }
 
       try {
-        // 2. PROMPT: Ask user the question (existing logic)
-        const answer = await waitForHumanInput(error.question, stateDir, taskId);
+        // ... (waitForHumanInput logic) ...
 
-        // 3. RESUME: Update task AND sequence status again
-        updateStatus(statusFile, s => { /* ... existing logic ... */ });
+        // 3. RESUME: Update task, step, AND sequence status
+        updateStatus(statusFile, s => {
+          // ... (interactionHistory and pendingQuestion logic) ...
+          s.phase = 'running';
+          s.steps[name] = 'running'; // <-- FIX: Set the step back to running
+          // ... (pause time logic) ...
+        });
+
         if (sequenceStatusFile) {
-          updateSequenceStatus(sequenceStatusFile, s => { s.phase = 'running'; });
+          updateSequenceStatus(sequenceStatusFile, s => {
+            s.phase = 'running';
+            // ... (pause time logic) ...
+          });
         }
-        
-        // ... existing logic ...
-      } 
-      // ... existing logic ...
-    }
+        // ...
     ```
 
-### 3. Implement Accurate Pause Tracking
+### 2. Implement Accurate Pause Tracking
 
-*   **Objective:** To correctly measure and record the time spent waiting for human input.
-*   **Task:** In `src/tools/orchestration/step-runner.ts`, start a timer before waiting for input and add the elapsed time to the `totalPauseTime` stat upon resume.
+*   **Objective:** To correctly calculate and store the duration of human input pauses.
+*   **Task:** In the same `try` block as the above fix in `src/tools/orchestration/step-runner.ts`, wrap the `waitForHumanInput` call with a timer and update the `totalPauseTime` stat.
 *   **Code Snippet (`src/tools/orchestration/step-runner.ts`):**
-    Within the `executeStep` function, inside the `try` block that follows the `HumanInterventionRequiredError` catch block:
 
     ```typescript
-    // ... inside the try block where waitForHumanInput is called
+    // ... inside the try block after the HumanInterventionRequiredError catch
     try {
       const stateDir = path.dirname(statusFile);
       const pauseStartTime = Date.now(); // <-- START TIMER
       const answer = await waitForHumanInput(error.question, stateDir, taskId);
       const pauseDurationSeconds = (Date.now() - pauseStartTime) / 1000; // <-- CALCULATE DURATION
 
-      // RESUME: Update status with history and pause time
+      // Update task status with pause time
       updateStatus(statusFile, s => {
-        s.interactionHistory.push({ /* ... */ });
-        s.pendingQuestion = undefined;
-        s.phase = 'running';
+        // ... (other updates) ...
         if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
         s.stats.totalPauseTime += pauseDurationSeconds; // <-- ADD TO TASK PAUSE TIME
       });
       
+      // Update sequence status with pause time
       if (sequenceStatusFile) {
         updateSequenceStatus(sequenceStatusFile, s => {
-            s.phase = 'running';
+            // ... (other updates) ...
             if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
             s.stats.totalPauseTime += pauseDurationSeconds; // <-- ADD TO SEQUENCE PAUSE TIME
         });
       }
-
-      feedbackForResume = `You previously asked: "${error.question}". The user responded: "${answer}". Continue your work based on this answer.`;
-    } 
-    // ...
+      // ...
     ```
 
-### 4. Fix Web UI Bugs
+### 3. Fix the Web UI Reload Bug
 
-*   **Objective:** To fix the disconnected log stream and stale question form on the Live Activity page.
-*   **Task:** Implement a client-side fix in `src/public/js/live-activity-page.js` to trigger a page reload on critical state transitions. Merge the logic from `live-activity.js` into it and then clear `live-activity.js`.
+*   **Objective:** To enable the client-side UI fix by correcting the JavaScript property name, ensuring the Live Activity page reloads correctly.
+*   **Task:** In `src/public/js/live-activity-page.js`, change `window.dashboard?.websocket` to `window.dashboard?.ws`.
 *   **Code Snippet (`src/public/js/live-activity-page.js`):**
 
     ```javascript
-    document.addEventListener('DOMContentLoaded', function() {
-        let currentPhase = window.liveActivityData?.runningTask?.phase || null;
-    
-        const patchInterval = setInterval(() => {
-            const ws = window.dashboard?.ws;
-            if (ws && typeof ws.onmessage === 'function') {
-                clearInterval(patchInterval);
-                const originalOnMessage = ws.onmessage;
-    
-                ws.onmessage = function(event) {
-                    let needsReload = false;
-                    try {
-                        const msg = JSON.parse(event.data);
-                        if (msg.type === 'task_update' && msg.data) {
-                            const newPhase = msg.data.phase;
-                            if (newPhase !== currentPhase) {
-                                if ((currentPhase === 'running' && newPhase === 'waiting_for_input') ||
-                                    (currentPhase === 'waiting_for_input' && newPhase === 'running')) {
-                                    needsReload = true;
-                                }
-                                currentPhase = newPhase;
-                            }
-                        }
-                    } catch (e) { /* Ignore non-JSON messages */ }
-    
-                    if (needsReload) {
-                        window.location.reload();
-                    } else {
-                        originalOnMessage.call(this, event);
-                    }
-                };
-            }
-        }, 50);
+    // ... inside DOMContentLoaded listener ...
+    const patchInterval = setInterval(() => {
+        // BEFORE (BUG): const ws = window.dashboard?.websocket;
+        // AFTER (FIX):
+        const ws = window.dashboard?.ws; 
 
-        setTimeout(() => clearInterval(patchInterval), 5000); // Failsafe
-    
-        window.dashboard.initWebSocket();
-        
-        // Logic from live-activity.js is now here
-        if (window.dashboard && typeof window.dashboard.initializeLiveView === 'function') {
-            const initialData = window.liveActivityData || {};
-            window.dashboard.initializeLiveView(initialData.runningTask);
+        if (ws && typeof ws.onmessage === 'function') {
+            clearInterval(patchInterval);
+            const originalOnMessage = ws.onmessage;
+            
+            // ... (rest of the patching logic) ...
         }
-    });
+    }, 50);
+    // ...
     ```
 
-### 5. Update Web Dashboard UI
+### 4. Verify UI Templates and Types
 
-*   **Objective:** To ensure sequence status badges display the `waiting_for_input` state correctly.
-*   **Task:** The existing partial `src/templates/web/partials/_status-badge.ejs` already supports the `waiting_for_input` status. The primary task is to confirm it is used correctly for sequences on the `live-activity.ejs` and `sequence-detail.ejs` pages. No code changes are expected here, but validation is required.
+*   **Objective:** To confirm that all supporting UI and type definitions are correct.
+*   **Task:** This step is for verification. No code changes are required.
+    *   **`src/tools/status.ts`**: The `SequencePhase` type correctly includes `waiting_for_input`.
+    *   **`src/templates/web/partials/header.ejs`**: The CSS class `.status-waiting_for_input` is correctly defined.
+    *   **`src/templates/web/partials/_status-badge.ejs`**: The template already has logic to render the `waiting_for_input` badge with the correct icon and style.
 
-### 6. Update Documentation
+### 5. Update Documentation
 
-*   **Objective:** To keep the project's documentation synchronized with the new behavior.
+*   **Objective:** To ensure the project's documentation accurately reflects the final, correct behavior.
 *   **Task:**
     1.  **Modify `ARCHITECTURE.md`:**
-        *   In the "State Layer" section, explicitly mention that the `SequenceStatus` object now includes a `waiting_for_input` phase.
-        *   Update the `Data Flow Diagram` to reflect that the Orchestrator updates the Sequence state file when a task pauses.
-        *   Clarify that `totalPauseTime` in the state includes time spent waiting for human input.
+        *   In the "State Layer" section, clarify that the `steps` object within `TaskStatus` and the `phase` property of `SequenceStatus` both support the `waiting_for_input` value.
+        *   In the "Pause Time Tracking" bullet point, explicitly state that pause time includes both API rate limits and time spent waiting for human input.
     2.  **Modify `README.md`:**
-        *   In the "Interactive Halting" section, add a sentence clarifying that when a task pauses to ask a question, the entire sequence is also considered paused.
-        *   In the "State Files" section under "Debugging and Logs", mention that `totalPauseTime` in the sequence state file includes human input wait time.
+        *   In the "Interactive Halting" section, update the description to mention that when a task pauses, the specific step *and* the parent sequence are also considered paused in the UI.
+        *   In the "State Files" section, update the description of `totalPauseTime` to note that it includes human interaction wait time.
 
 ## Error Handling & Warnings
 
-*   **Status File Writes:** If the `sequenceStatusFile` cannot be written to for any reason (e.g., permissions), the system should log a non-fatal warning to the console and proceed. The task's execution is paramount; sequence status is for monitoring.
-*   **UI Reload:** The UI fix relies on a page reload, which is robust. There are no user-facing errors to handle.
-*   **Configuration:** No changes are being made to `cat-herder.config.js`, so no new validation is required.
+*   **State File Access:** If an orchestrator process fails to write to a status file (e.g., due to a rare race condition or permissions issue), it should log a clear warning to the console but continue execution. Task integrity is the priority.
+*   **UI Reload:** The client-side reload mechanism is robust. In the unlikely event of a persistent error, the user can manually reload the page to synchronize the state.
