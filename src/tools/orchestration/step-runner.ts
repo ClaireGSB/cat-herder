@@ -153,9 +153,10 @@ export async function executeStep(
         needsResume = false; // If it finishes without error, exit loop
       } catch (error) {
         if (error instanceof HumanInterventionRequiredError) {
-          // 1. PAUSE: Update task AND sequence status to 'waiting_for_input'
+          // 1. PAUSE: Update task, step, AND sequence status to 'waiting_for_input'
           updateStatus(statusFile, s => {
             s.phase = 'waiting_for_input';
+            s.steps[name] = 'waiting_for_input'; // Set the current step's status
             s.pendingQuestion = { 
               question: error.question, 
               timestamp: new Date().toISOString() 
@@ -177,7 +178,7 @@ export async function executeStep(
             const answer = await waitForHumanInput(error.question, stateDir, taskId);
             const pauseDurationSeconds = (Date.now() - pauseStartTime) / 1000;
 
-            // 3. RESUME: Update task AND sequence status, moving question to history and tracking pause time
+            // 3. RESUME: Update task, step, AND sequence status, moving question to history and tracking pause time
             updateStatus(statusFile, s => {
               s.interactionHistory.push({ 
                 question: error.question, 
@@ -186,6 +187,7 @@ export async function executeStep(
               });
               s.pendingQuestion = undefined;
               s.phase = 'running';
+              s.steps[name] = 'running'; // Set the step back to running
               if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
               s.stats.totalPauseTime += pauseDurationSeconds;
             });
