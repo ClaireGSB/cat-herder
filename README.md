@@ -314,6 +314,8 @@ module.exports = {
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs"
 
+  interactionThreshold: 0, 
+
   /**
    * If true (default), the tool automatically creates a dedicated Git branch
    * for each task. Set to false to run the tool on your current branch.
