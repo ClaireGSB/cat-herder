@@ -1,5 +1,6 @@
 import yaml from 'js-yaml';
-import { PipelineStep } from "../../config.js";
+import fs from 'node:fs';
+import { PipelineStep, getPromptTemplatePath } from "../../config.js";
 
 /**
  * Parses YAML frontmatter from a task file to extract pipeline configuration.
@@ -25,6 +26,38 @@ export function parseTaskFrontmatter(content: string): { pipeline?: string; inte
 }
 
 /**
+ * Gets the appropriate interaction instructions based on the threshold level.
+ * @param threshold The interaction threshold (0-5)
+ * @returns The formatted interaction instructions or empty string if threshold is 0
+ */
+function getInteractionIntro(threshold: number): string {
+  if (threshold === 0) return '';
+
+  const templatePath = getPromptTemplatePath('interaction-intro.md');
+  const templateContent = fs.readFileSync(templatePath, 'utf-8');
+  
+  let instructions = '';
+  if (threshold <= 2) { // Low
+    const match = templateContent.match(/<!-- INTERACTION_LEVEL_LOW -->(.*?)<!--/s);
+    instructions = match ? match[1].trim() : '';
+  } else if (threshold <= 4) { // Medium
+    const match = templateContent.match(/<!-- INTERACTION_LEVEL_MEDIUM -->(.*?)<!--/s);
+    instructions = match ? match[1].trim() : '';
+  } else { // High
+    const match = templateContent.match(/<!-- INTERACTION_LEVEL_HIGH -->(.*?)<!--/s);
+    instructions = match ? match[1].trim() : '';
+  }
+  
+  const commonMatch = templateContent.match(/<!-- COMMON_INSTRUCTIONS -->(.*)/s);
+  const commonInstructions = commonMatch ? commonMatch[1].trim() : '';
+  
+  let intro = (instructions + '\n\n' + commonInstructions).trim();
+  intro = intro.replace(/%%INTERACTION_THRESHOLD%%/g, String(threshold));
+  
+  return intro;
+}
+
+/**
  * Assembles the complete prompt for Claude for a given pipeline step.
  * It provides context about the entire workflow and the current step.
  *
@@ -46,7 +79,7 @@ export function assemblePrompt(
   const intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
 
   // 2. Add interaction threshold instructions
-  const interactionIntro = `You are operating at an interaction threshold of ${interactionThreshold}/5. A threshold of 0 means you must never ask for clarification. A threshold of 5 means you must use the \`askHuman(question: string)\` tool whenever you face a choice or ambiguity. Scale your use of this tool accordingly. When you use \`askHuman\`, your work will pause until a human provides an answer.`;
+  const interactionIntro = getInteractionIntro(interactionThreshold);
 
   // 3. Provide the entire pipeline definition as a simple numbered list.
   const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');

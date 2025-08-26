@@ -48,7 +48,8 @@ export function runStreaming(
   stdinData?: string,
   rawJsonLogPath?: string,
   model?: string,
-  options?: RunStreamingOptions
+  options?: RunStreamingOptions,
+  taskId?: string
 ): Promise<StreamResult> {
   wasKilled = false;
   // Build final args with JSON streaming flags and enhanced debugging
@@ -129,6 +130,7 @@ export function runStreaming(
       env: {
         ...process.env,
         CAT_HERDER_ACTIVE: "true",
+        ...(taskId && { CLAUDE_TASK_ID: taskId }),
       },
     });
     activeProcess = p;

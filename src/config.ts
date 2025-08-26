@@ -156,3 +156,8 @@ function ensureCatHerderDirectory(fullPath: string): void {
 export function getCommandTemplatePath(commandName: string): string {
     return path.resolve(new URL(`./dot-claude/commands/${commandName}`, import.meta.url).pathname);
 }
+
+// Utility to get a path to a prompt template inside the global package
+export function getPromptTemplatePath(templateName: string): string {
+    return path.resolve(new URL(`./tools/prompts/${templateName}`, import.meta.url).pathname);
+}

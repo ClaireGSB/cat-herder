@@ -122,7 +122,32 @@ export async function executeStep(
           promptToUse = `${currentPrompt}\n\n--- HUMAN FEEDBACK ---\n${feedbackForResume}\n--- END HUMAN FEEDBACK ---\n\nPlease continue your work with this feedback in mind.`;
         }
 
-        result = await runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config });
+        // Use Promise.race to monitor both the AI process and state changes
+        const stateDir = path.dirname(statusFile);
+        const runningPromise = runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, taskId);
+        
+        let pollInterval: NodeJS.Timeout | null = null;
+        
+        // Promise that resolves when state becomes 'waiting_for_input'
+        const statePollingPromise = new Promise<never>((resolve, reject) => {
+          pollInterval = setInterval(() => {
+            const currentStatus = readStatus(statusFile);
+            if (currentStatus.phase === 'waiting_for_input' && currentStatus.pendingQuestion) {
+              clearInterval(pollInterval!);
+              killActiveProcess(); // Kill the Claude process
+              reject(new HumanInterventionRequiredError(currentStatus.pendingQuestion.question));
+            }
+          }, 500); // Poll every 500ms
+        });
+
+        try {
+          result = await Promise.race([runningPromise, statePollingPromise]);
+        } finally {
+          // Clean up polling interval
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
+        }
         partialTokenUsage = result.tokenUsage;
         modelName = result.modelUsed || model || 'default';
         needsResume = false; // If it finishes without error, exit loop

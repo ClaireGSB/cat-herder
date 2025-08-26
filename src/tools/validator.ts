@@ -287,23 +287,7 @@ function validateStep(
   // FileAccess Validation
   validateFileAccess(step.fileAccess, stepId, errors);
 
-  // Interactive Halting Validation
-  const threshold = config.interactionThreshold ?? 0;
-  if (threshold > 0) {
-    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-    if (fs.existsSync(commandFilePath)) {
-      const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
-      const frontmatter = parseFrontmatter(commandContent);
-      const toolsValue = frontmatter?.['allowed-tools'] || '';
-      const requiredTools: string[] = Array.isArray(toolsValue) ? toolsValue : toolsValue.split(',').map((t: string) => t.trim());
-
-      if (!requiredTools.includes('askHuman')) {
-        errors.push(
-          `${stepId}: The project is configured with a non-zero interactionThreshold, but this step's command file ('${step.command}.md') is missing the 'askHuman' permission in its 'allowed-tools' list.`
-        );
-      }
-    }
-  }
+  // (Removed old askHuman validation - now handled at pipeline level)
 
   // Model Validation
   if (step.model !== undefined) {
@@ -347,6 +331,18 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
 
     for (const [index, step] of pipeline.entries()) {
       validateStep(step, index, pipelineName, config, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
+    }
+  }
+
+  // Interactive Halting: Check for required Bash permission when interactionThreshold > 0
+  const threshold = config.interactionThreshold ?? 0;
+  if (threshold > 0) {
+    const requiredAskPermission = "Bash(cat-herder ask:*)";
+    if (!allowedPermissions.includes(requiredAskPermission)) {
+      errors.push(
+        `Interactive Halting is configured (interactionThreshold: ${threshold}) but the required permission '${requiredAskPermission}' is missing from .claude/settings.json.`
+      );
+      missingPermissions.push(requiredAskPermission);
     }
   }
 
