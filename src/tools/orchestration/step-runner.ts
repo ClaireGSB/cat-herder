@@ -153,7 +153,7 @@ export async function executeStep(
         needsResume = false; // If it finishes without error, exit loop
       } catch (error) {
         if (error instanceof HumanInterventionRequiredError) {
-          // 1. PAUSE: Update status to 'waiting_for_input' with the question
+          // 1. PAUSE: Update task AND sequence status to 'waiting_for_input'
           updateStatus(statusFile, s => {
             s.phase = 'waiting_for_input';
             s.pendingQuestion = { 
@@ -162,12 +162,22 @@ export async function executeStep(
             };
           });
 
+          if (sequenceStatusFile) {
+            try {
+              updateSequenceStatus(sequenceStatusFile, s => { s.phase = 'waiting_for_input'; });
+            } catch (seqError) {
+              console.log(pc.yellow(`[Orchestrator] Warning: Could not update sequence status to waiting_for_input: ${seqError}`));
+            }
+          }
+
           try {
             // 2. PROMPT: Ask the user the question in CLI or web UI
             const stateDir = path.dirname(statusFile);
+            const pauseStartTime = Date.now();
             const answer = await waitForHumanInput(error.question, stateDir, taskId);
+            const pauseDurationSeconds = (Date.now() - pauseStartTime) / 1000;
 
-            // 3. RESUME: Update status again, moving question to history
+            // 3. RESUME: Update task AND sequence status, moving question to history and tracking pause time
             updateStatus(statusFile, s => {
               s.interactionHistory.push({ 
                 question: error.question, 
@@ -176,7 +186,21 @@ export async function executeStep(
               });
               s.pendingQuestion = undefined;
               s.phase = 'running';
+              if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0 };
+              s.stats.totalPauseTime += pauseDurationSeconds;
             });
+
+            if (sequenceStatusFile) {
+              try {
+                updateSequenceStatus(sequenceStatusFile, s => {
+                  s.phase = 'running';
+                  if (!s.stats) s.stats = { totalDuration: 0, totalDurationExcludingPauses: 0, totalPauseTime: 0, totalTokenUsage: {} };
+                  s.stats.totalPauseTime += pauseDurationSeconds;
+                });
+              } catch (seqError) {
+                console.log(pc.yellow(`[Orchestrator] Warning: Could not update sequence status on resume: ${seqError}`));
+              }
+            }
 
             // 4. Prepare feedback for the next loop iteration
             feedbackForResume = `You previously asked: "${error.question}". The user responded: "${answer}". Continue your work based on this answer.`;
