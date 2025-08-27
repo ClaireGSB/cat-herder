@@ -23,7 +23,7 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
   router.get("/", (_req: Request, res: Response) => res.redirect("/live"));
 
   router.get("/history", async (_req: Request, res: Response) => {
-    const journal = await readJournal();
+    const journal = await readJournal(stateDir);
     const allTasks = buildTaskHistoryFromJournal(journal, stateDir);
     const standaloneTasks = allTasks.filter(t => !t.parentSequenceId);
     const sequences = buildSequenceHistoryFromJournal(journal, stateDir);
@@ -34,7 +34,7 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
   // --- JOURNAL-BASED /live ROUTE LOGIC ---
   // =================================================================
   router.get("/live", async (req: Request, res: Response) => {
-    const journal = await readJournal();
+    const journal = await readJournal(stateDir);
     
     let taskToShow: TaskDetails | null = null;
     let parentSequence = null;

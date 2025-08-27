@@ -163,7 +163,10 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
 // Journal utility functions for run-journal.json
 
 // Helper to get the journal file path
-async function getJournalPath(): Promise<string> {
+async function getJournalPath(overrideStateDir?: string): Promise<string> {
+    if (overrideStateDir) {
+        return path.join(overrideStateDir, 'run-journal.json');
+    }
     const projectRoot = getProjectRoot();
     const config = await getConfig();
     const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
@@ -171,8 +174,8 @@ async function getJournalPath(): Promise<string> {
 }
 
 // New function to read the journal
-export async function readJournal(): Promise<JournalEvent[]> {
-    const journalPath = await getJournalPath();
+export async function readJournal(stateDir?: string): Promise<JournalEvent[]> {
+    const journalPath = await getJournalPath(stateDir);
     if (!fs.existsSync(journalPath)) {
         return [];
     }
