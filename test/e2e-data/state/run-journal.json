@@ -33,5 +33,10 @@
     "eventType": "sequence_finished",
     "id": "sequence-test",
     "status": "interrupted"
+  },
+  {
+    "timestamp": "2025-08-20T00:30:00.000Z",
+    "eventType": "task_started",
+    "id": "task-interactive-test"
   }
 ]

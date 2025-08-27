@@ -44,7 +44,7 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
     const activeTaskEvent = findActiveTaskFromJournal(journal);
     
     if (activeTaskEvent) {
-        // STATE A: A task is actively running
+        // STATE A: A task is actively running or waiting for input
         isLive = true;
         taskToShow = getTaskDetails(stateDir, logsDir, activeTaskEvent.id);
     } else {
@@ -53,21 +53,25 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
         const lastFinishedEvent = findLastFinishedTaskFromJournal(journal);
         if (lastFinishedEvent) {
             taskToShow = getTaskDetails(stateDir, logsDir, lastFinishedEvent.id);
-  
-            // Pre-load the logs for the static view
-            if (taskToShow) {
-                const lastStepName = findLastStepName(taskToShow);
-                if (lastStepName && taskToShow.logs?.[lastStepName]?.reasoning) {
-                    const logFile = taskToShow.logs[lastStepName].reasoning as string;
-                    initialLogContent = readLogFile(logsDir, taskToShow.taskId, logFile);
-                }
-            }
         }
     }
-      
-    // In either state, if we have a task, try to find its parent sequence
-    if (taskToShow && taskToShow.parentSequenceId) {
-        parentSequence = getSequenceDetails(stateDir, config, taskToShow.parentSequenceId);
+
+    // --- UNIFIED LOG-LOADING LOGIC ---
+    // This block now runs AFTER taskToShow is determined, regardless of live status
+    if (taskToShow) {
+        // 1. Find the most relevant step (now correctly handles 'waiting_for_input')
+        const lastStepName = findLastStepName(taskToShow);
+        
+        // 2. Pre-load its reasoning log to provide immediate context in the UI
+        if (lastStepName && taskToShow.logs?.[lastStepName]?.reasoning) {
+            const logFile = taskToShow.logs[lastStepName].reasoning as string;
+            initialLogContent = readLogFile(logsDir, taskToShow.taskId, logFile);
+        }
+
+        // 3. Find its parent sequence (existing logic)
+        if (taskToShow.parentSequenceId) {
+            parentSequence = getSequenceDetails(stateDir, config, taskToShow.parentSequenceId);
+        }
     }
   
     res.render("live-activity", { 
