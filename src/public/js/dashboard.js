@@ -4,6 +4,7 @@ class CatHerderDashboard {
         this.reconnectInterval = 5000;
         // --- NEW: Keep track of the log file we are currently watching ---
         this.currentWatchedLogFile = null;
+        this.currentTaskPhase = null;
     }
 
     initWebSocket() {
@@ -37,24 +38,72 @@ class CatHerderDashboard {
     }
 
     handleRealtimeUpdate(data) {
-        // ... (The handleRealtimeUpdate switch statement remains the same)
         switch (data.type) {
             case 'task_update':
+                const oldTaskPhase = this.currentTaskPhase; // Get phase before update
+                this.currentTaskPhase = data.data.phase; // ALWAYS update the internal phase tracker
+                const newTaskPhase = this.currentTaskPhase;
+
+                // Only perform reloads if we are currently on the /live page
+                if (window.location.pathname.endsWith('/live')) {
+                    // Scenario 1: Critical phase transition (running <-> waiting_for_input)
+                    // This forces a full re-render for UI consistency
+                    if ((oldTaskPhase === 'running' && newTaskPhase === 'waiting_for_input') ||
+                        (oldTaskPhase === 'waiting_for_input' && newTaskPhase === 'running')) {
+                        console.log(`Phase changed from '${oldTaskPhase}' to '${newTaskPhase}'. Reloading Live Activity page.`);
+                        window.location.reload();
+                        return; // Stop further processing to allow reload
+                    }
+
+                    // Scenario 2: Current step has changed for an active task
+                    // This handles cases where AI moves to a new step, or the page wasn't refreshed initially.
+                    // We must ensure the currentTaskInView is defined and matches the updated task.
+                    const currentTaskInView = window.liveActivityData?.runningTask;
+                    if (currentTaskInView && currentTaskInView.taskId === data.data.taskId &&
+                        currentTaskInView.currentStep !== data.data.currentStep &&
+                        (newTaskPhase === 'running' || newTaskPhase === 'waiting_for_input')) {
+                        console.log(`Current step changed from '${currentTaskInView.currentStep}' to '${data.data.currentStep}'. Reloading Live Activity page.`);
+                        window.location.reload();
+                        return; // Stop further processing to allow reload
+                    }
+                    
+                    // Scenario 3: Task has finished, failed, or interrupted (and was live)
+                    // This ensures the page refreshes to show the final state or redirects.
+                    if (window.liveActivityData.isLive && newTaskPhase !== 'running' && newTaskPhase !== 'waiting_for_input') {
+                        console.log(`Task phase changed from 'running/waiting_for_input' to '${newTaskPhase}'. Reloading to show final state.`);
+                        setTimeout(() => window.location.reload(), 1200);
+                        return; // Stop further processing to allow reload
+                    }
+                }
+                
+                // If no reload was triggered, proceed with normal UI updates (e.g., status badge, minor info)
+                // This is important for updates on other pages (e.g., history) and minor updates on live page
                 this.updateTaskUI(data.data);
                 break;
             case 'sequence_update':
+                // Update sequence UI. If the sequence finishes, redirect from live page.
                 this.updateSequenceUI(data.data);
+                if (window.location.pathname.endsWith('/live')) {
+                    if (['done', 'failed', 'interrupted'].includes(data.data.phase)) {
+                        console.log(`Sequence finished. Redirecting to history.`);
+                        setTimeout(() => window.location.href = '/history', 1500);
+                        return;
+                    }
+                }
                 break;
             case 'journal_updated':
                 console.log('\'journal_updated\' event handled. Current path:', window.location.pathname);
-                if (window.location.pathname.endsWith('/live') || window.location.pathname === '/') {
-                    console.log('Path is /live or /, attempting page reload...');
+                // Only reload history or root page when journal updates, unless sequence finishes (handled above)
+                // This is for ensuring history is up-to-date, not for active live logs
+                if (window.location.pathname.endsWith('/history') || window.location.pathname === '/') {
+                    console.log('Path is /history or /, attempting page reload...');
                     window.location.reload();
                 }
                 break;
             case 'log_content':
             case 'log_update':
             case 'error':
+                // These are handled by handleLogUpdate directly, no need for reload here
                 this.handleLogUpdate(data);
                 break;
         }
@@ -66,6 +115,8 @@ class CatHerderDashboard {
             console.log("Live view initialized, no task is currently running.");
             return;
         }
+        // Initialize currentTaskPhase from the initial render's task data
+        this.currentTaskPhase = runningTask.phase;
         // Trigger the first UI update and log watch.
         this.updateTaskUI(runningTask);
     }
@@ -81,18 +132,6 @@ class CatHerderDashboard {
             const runningTask = window.liveActivityData?.runningTask;
             if (!runningTask) return;
             
-            // --- NEW RELOAD LOGIC ---
-            // If the incoming update is for the currently running task,
-            // check if the step has changed. If so, reload the page
-            // to update the entire sidebar and status headers.
-            if (runningTask.taskId === task.taskId && runningTask.currentStep !== task.currentStep) {
-                console.log(`Step changed from '${runningTask.currentStep}' to '${task.currentStep}'. Reloading.`);
-                window.location.reload();
-                return; // Stop further processing
-            }
-            // --- END NEW LOGIC ---
-
-
             // This part handles the log switching when a step changes,
             // which will now run after a page reload.
             const newStep = task.currentStep;

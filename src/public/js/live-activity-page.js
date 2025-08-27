@@ -1,42 +1,10 @@
 document.addEventListener('DOMContentLoaded', function() {
-    let currentPhase = window.liveActivityData?.runningTask?.phase || null;
-
-    const patchInterval = setInterval(() => {
-        const ws = window.dashboard?.ws;
-        if (ws && typeof ws.onmessage === 'function') {
-            clearInterval(patchInterval);
-            const originalOnMessage = ws.onmessage;
-
-            ws.onmessage = function(event) {
-                let needsReload = false;
-                try {
-                    const msg = JSON.parse(event.data);
-                    if (msg.type === 'task_update' && msg.data) {
-                        const newPhase = msg.data.phase;
-                        if (newPhase !== currentPhase) {
-                            if ((currentPhase === 'running' && newPhase === 'waiting_for_input') ||
-                                (currentPhase === 'waiting_for_input' && newPhase === 'running')) {
-                                needsReload = true;
-                            }
-                            currentPhase = newPhase;
-                        }
-                    }
-                } catch (e) { /* Ignore non-JSON messages */ }
-
-                if (needsReload) {
-                    window.location.reload();
-                } else {
-                    originalOnMessage.call(this, event);
-                }
-            };
-        }
-    }, 50);
-
-    setTimeout(() => clearInterval(patchInterval), 5000); // Failsafe
-
+    // Initialize the main WebSocket connection for the dashboard.
+    // This will be responsible for handling all real-time updates through dashboard.js.
     window.dashboard.initWebSocket();
     
-    // Logic from live-activity.js is now here
+    // After the WebSocket is initialized, tell the dashboard to set up
+    // the live view, passing the initial data rendered by the server.
     if (window.dashboard && typeof window.dashboard.initializeLiveView === 'function') {
         const initialData = window.liveActivityData || {};
         window.dashboard.initializeLiveView(initialData.runningTask);
