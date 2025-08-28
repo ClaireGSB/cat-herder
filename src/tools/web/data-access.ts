@@ -1,16 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-// Import all necessary types and functions from the core status file.
-import {
-  readJournal,
-  JournalEvent,
-  TaskStatus,       // Full TaskStatus from ../status.js
-  SequenceStatus,   // Full SequenceStatus from ../status.js
-  Phase,            // Canonical Phase type from ../status.js
-  ModelTokenUsage,  // ModelTokenUsage type from ../status.js
-  ALL_STATUS_PHASES // Canonical ALL_STATUS_PHASES from ../status.js
-} from "../status.js";
-// IMPORTANT: No more imports from '../../types.js' here.
+
+import { TaskStatus, SequenceStatus, Phase, JournalEvent, ALL_STATUS_PHASES } from "../../types.js";
 
 
 // TaskDetails extends the full TaskStatus and just adds the 'logs' property.

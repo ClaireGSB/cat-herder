@@ -5,7 +5,7 @@ import { minimatch } from "minimatch";
 import { cosmiconfig } from "cosmiconfig";
 import type { CatHerderConfig, PipelineStep } from "../config.js";
 import { resolveDataPath } from "../config.js";
-import type { TaskStatus } from "./status.js";
+import type { TaskStatus } from "../types.js";
 
 // Helper to block the tool with a clear error message
 function block(message: string) {
