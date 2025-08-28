@@ -3,9 +3,7 @@
 
 
 
-A command-line tool that orchestrates a structured, step-gated development workflow in your repository using AI.
-
-`cat-herder` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
+A command-line tool that helps guide LLM agents (currently only supporting Claude) thought a structured, step-gated development workflow in your repository.
 
 ## Table of Contents
 * [Overview](#overview)
@@ -78,7 +76,7 @@ A command-line tool that orchestrates a structured, step-gated development workf
 
 ## Overview
 
-`cat-herder` is a powerful CLI tool designed to bring structure and automation to your development process using AI. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
+`cat-herder` is a powerful CLI tool designed to bring structure and automation to your LLM development process. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
 
 Note: It is still under development. My vision is to mostly use the dynamic task sequencing feature to create a fully autonomous AI development agent that can take a high-level feature request and implement it end-to-end with minimal human intervention... I think the core features are there, there are still bug fixes and improvements to be made. Feel free to open issues or PRs if you want to contribute!
 
