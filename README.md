@@ -3,9 +3,7 @@
 
 
 
-A command-line tool that orchestrates a structured, step-gated development workflow in your repository using AI.
-
-`cat-herder` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
+A command-line tool that helps guide LLM agents (currently only supporting Claude) thought a structured, step-gated development workflow in your repository.
 
 ## Table of Contents
 * [Overview](#overview)
@@ -78,7 +76,10 @@ A command-line tool that orchestrates a structured, step-gated development workf
 
 ## Overview
 
-`cat-herder` is a powerful CLI tool designed to bring structure and automation to your development process using AI. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
+`cat-herder` is a powerful CLI tool designed to bring structure and automation to your LLM development process. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
+
+Note: It is still under development. My vision is to mostly use the dynamic task sequencing feature to create a fully autonomous AI development agent that can take a high-level feature request and implement it end-to-end with minimal human intervention... I think the core features are there, there are still bug fixes and improvements to be made. Feel free to open issues or PRs if you want to contribute!
+
 
 ### Core Concepts: Sequences, Tasks, and Steps
 
@@ -90,30 +91,54 @@ To effectively use `cat-herder`, it's important to understand its three core hie
 
 **Conceptual Flow:**
 
-```
-[ Your Project Goal (Sequence Folder) ]
-                |
-                V
-          [ Task 1.md ]
-                |
-                V
-[ Pipeline (cat-herder.config.js) ]
-                |
-                V
-[ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
-                |
-                V
-          [ Task 2.md ]
-                |
-                V
-[ Pipeline (cat-herder.config.js) ]
-                |
-                V
-[ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
-                |
-                V
-             (and so on...)
-```
+
+/your-project-root
+├── cat-herder.config.js             # Defines pipelines (ordered lists of steps)
+└── cat-herder-tasks/                # Main directory for all tasks and sequences
+    ├── update-readme.md             # Standalone Task (e.g., "Update Readme")
+    │   └── Uses Pipeline 'docs-only'
+    │       ├── Step 1: Docs Update
+    │       └── ...
+    │
+    ├── fix-bug-critical.md          # Standalone Task (e.g., "Fix Critical Bug")
+    │   └── Uses Pipeline 'default'
+    │       ├── Step 1: Plan
+    │       ├── Step 2: Implement
+    │       └── ... (any additional steps you have defined in this pipeline)
+    │
+    ├── my-feature-sequence/         # Sequence Folder (Tasks pre-created)
+    │   ├── _NOTES.md                # Context file (will not be interpreted as a task due to the underscore.)
+    │   │
+    │   ├── 01-initial-feature-plan.md     # Task 1
+    │   │   └── Uses Pipeline 'TDD'
+    │   │       ├── Step 1: Plan
+    │   │       ├── Step 2: Write Tests
+    │   │       └── ...
+    │   │
+    │   ├── 02-implement-api.md            # Task 2
+    │   │   └── Uses Pipeline 'default'
+    │   │       ├── Step 1: Plan
+    │   │       ├── Step 2: Implement
+    │   │       └── ...
+    │   │
+    │   └── 03-update-documentation.md     # Task 3
+    │       └── Uses Pipeline 'docs-only'
+    │           ├── Step 1: Docs Update
+    │           └── ...
+    │
+    └── new-feature-dynamic-build/   # Sequence Folder (Tasks created dynamically by AI)
+        ├── _INITIAL_REQUIREMENTS.md # Context file (will not be interpreted as a task due to the underscore.)
+        │
+        └── 01-break-down-feature.md # Initial Task for dynamic generation (the task is for the AI to read _INITIAL_REQUIREMENTS.md and create subsequent tasks)
+            └── Uses Pipeline 'create-tasks'
+
+                ├── Step 1: Analyze & Generate Tasks
+                └── (This step will dynamically create subsequent tasks like:)
+                    ├── 02-design-module.md
+                    │   └── Uses Pipeline 'default' (...)
+                    ├── 03-implement-service.md
+                    │   └── Uses Pipeline 'default' (...)
+                    └── (and so on...)
 
 ### Key Capabilities and Workflows
 
