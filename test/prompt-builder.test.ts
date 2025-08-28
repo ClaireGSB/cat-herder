@@ -38,10 +38,9 @@ describe('Prompt Builder', () => {
         3
       );
 
-      expect(result).toContain('You are operating at an interaction threshold of 3/5');
-      expect(result).toContain('A threshold of 0 means you must never ask for clarification');
-      expect(result).toContain('A threshold of 5 means you must use the `askHuman(question: string)` tool');
-      expect(result).toContain('When you use `askHuman`, your work will pause until a human provides an answer');
+      expect(result).toContain('Your "Interaction Threshold" is set to 3/5');
+      expect(result).toContain('This is a MEDIUM interaction level');
+      expect(result).toContain('When you need to ask a clarifying question, you MUST use the Bash tool');
     });
 
     it('should include interaction threshold instructions when threshold is 0', () => {
@@ -53,8 +52,9 @@ describe('Prompt Builder', () => {
         0
       );
 
-      expect(result).toContain('You are operating at an interaction threshold of 0/5');
-      expect(result).toContain('A threshold of 0 means you must never ask for clarification');
+      // For threshold 0, no interaction instructions should be included
+      expect(result).not.toContain('Interaction Threshold');
+      expect(result).not.toContain('ask a clarifying question');
     });
 
     it('should include interaction threshold instructions when threshold is maximum (5)', () => {
@@ -66,8 +66,9 @@ describe('Prompt Builder', () => {
         5
       );
 
-      expect(result).toContain('You are operating at an interaction threshold of 5/5');
-      expect(result).toContain('A threshold of 5 means you must use the `askHuman(question: string)` tool whenever you face a choice or ambiguity');
+      expect(result).toContain('Your "Interaction Threshold" is set to 5/5');
+      expect(result).toContain('This is a HIGH interaction level');
+      expect(result).toContain('Ask questions to clarify any ambiguity, no matter how small');
     });
 
     it('should default to threshold 0 when no threshold is provided', () => {
@@ -79,7 +80,8 @@ describe('Prompt Builder', () => {
         // No threshold parameter provided
       );
 
-      expect(result).toContain('You are operating at an interaction threshold of 0/5');
+      // For threshold 0, no interaction instructions should be included
+      expect(result).not.toContain('Interaction Threshold');
     });
 
     it('should include all required prompt sections', () => {
@@ -116,7 +118,7 @@ describe('Prompt Builder', () => {
       // The interaction intro should come after the main intro but before pipeline context
       const lines = result.split('\n\n');
       const introIndex = lines.findIndex(line => line.includes('Here is a task that has been broken down'));
-      const interactionIndex = lines.findIndex(line => line.includes('You are operating at an interaction threshold'));
+      const interactionIndex = lines.findIndex(line => line.includes('Your "Interaction Threshold" is set to'));
       const pipelineIndex = lines.findIndex(line => line.includes('This is the full pipeline'));
 
       expect(introIndex).toBeLessThan(interactionIndex);
@@ -135,7 +137,11 @@ describe('Prompt Builder', () => {
           threshold
         );
 
-        expect(result).toContain(`You are operating at an interaction threshold of ${threshold}/5`);
+        if (threshold === 0) {
+          expect(result).not.toContain('Interaction Threshold');
+        } else {
+          expect(result).toContain(`Your "Interaction Threshold" is set to ${threshold}/5`);
+        }
       });
     });
   });
