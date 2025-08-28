@@ -1,41 +1,37 @@
 import fs from "node:fs";
 import path from "node:path";
-// Import the comprehensive TaskStatus and SequenceStatus from the core status file.
-// We also need Phase and ModelTokenUsage types for consistency.
-import { 
-  readJournal, 
-  JournalEvent, 
-  TaskStatus,       // This is the full TaskStatus from ../status.js
-  SequenceStatus,   // This is the full SequenceStatus from ../status.js
-  Phase,            // This is the Phase type from ../status.js
-  ModelTokenUsage   // This is the ModelTokenUsage type from ../status.js
+// Import all necessary types and functions from the core status file.
+import {
+  readJournal,
+  JournalEvent,
+  TaskStatus,       // Full TaskStatus from ../status.js
+  SequenceStatus,   // Full SequenceStatus from ../status.js
+  Phase,            // Canonical Phase type from ../status.js
+  ModelTokenUsage,  // ModelTokenUsage type from ../status.js
+  ALL_STATUS_PHASES // Canonical ALL_STATUS_PHASES from ../status.js
 } from "../status.js";
-// Using StatusPhase from ../../types.js for now, assuming it's compatible with Phase from status.js
-import { ALL_STATUS_PHASES, StatusPhase } from '../../types.js'; 
+// IMPORTANT: No more imports from '../../types.js' here.
 
 
-// TaskDetails should extend the full TaskStatus and just add the 'logs' property.
-// pendingQuestion and interactionHistory are already part of the main TaskStatus.
+// TaskDetails extends the full TaskStatus and just adds the 'logs' property.
 export interface TaskDetails extends TaskStatus {
   logs?: { [stepName: string]: { log?: string; reasoning?: string; raw?: string; }; };
 }
 
 // SequenceInfo is a lightweight interface for parent sequence links in tasks.
-// Its phase should be compatible with the main SequenceStatus.
 export interface SequenceInfo {
   sequenceId: string;
-  phase: Phase; // Use the Phase type from ../status.js
+  phase: Phase;
   folderPath?: string;
   branch?: string;
 }
 
 // SequenceTaskInfo describes tasks within a sequence.
-// Its status should also be compatible with the main Phase type.
 export interface SequenceTaskInfo {
   taskId: string;
   taskPath: string;
   filename: string;
-  status: Phase; // Use the Phase type from ../status.js
+  status: Phase;
   phase?: Phase; // Optional, can be same as status but kept for consistency with original
   lastUpdate?: string;
 }
@@ -54,36 +50,37 @@ export function getAllTaskStatuses(stateDir: string): TaskStatus[] {
       const content = fs.readFileSync(path.join(stateDir, file), "utf8");
       const state = JSON.parse(content);
       const fileStat = fs.statSync(path.join(stateDir, file));
-      
-      // Ensure the object pushed matches the TaskStatus interface from ../status.js
-      // Provide defaults for properties that might be missing in older state files
+
+      // Construct TaskStatus object, ensuring all properties are explicitly set
+      // with fallbacks for older state file formats.
       tasks.push({
-        version: state.version || 1, // Ensure version is present
+        version: state.version || 2, // Default to version 2
         taskId: state.taskId || file.replace(".state.json", ""),
         taskPath: state.taskPath || "unknown",
         startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
         branch: state.branch || "",
-        pipeline: state.pipeline,
-        parentSequenceId: state.parentSequenceId,
+        pipeline: state.pipeline || undefined,
+        parentSequenceId: state.parentSequenceId || undefined,
         currentStep: state.currentStep || "",
-        phase: state.phase || "pending", // Default to 'pending' if missing
-        steps: state.steps || {}, // Ensure steps is an object
-        tokenUsage: state.tokenUsage || {}, // Ensure tokenUsage is an object
-        stats: state.stats || null, // Ensure stats is null or object
+        phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
+        steps: state.steps || {},
+        tokenUsage: state.tokenUsage || {},
+        stats: state.stats || null,
         lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-        prUrl: state.prUrl,
-        lastCommit: state.lastCommit,
-        pendingQuestion: state.pendingQuestion,
-        interactionHistory: state.interactionHistory || [] // Ensure interactionHistory is an array
+        prUrl: state.prUrl || undefined,
+        lastCommit: state.lastCommit || undefined,
+        pendingQuestion: state.pendingQuestion || undefined,
+        interactionHistory: state.interactionHistory || []
       });
     } catch (error) {
       console.error(`Error reading state file ${file}:`, error);
-      // For errors, create a minimal TaskStatus that clearly indicates failure
-      tasks.push({ 
-        version: 1, taskId: `ERROR: ${file}`, taskPath: "unknown", 
-        startTime: new Date().toISOString(), branch: "", currentStep: "", 
-        phase: "failed", steps: {}, tokenUsage: {}, stats: null, 
-        lastUpdate: new Date().toISOString(), interactionHistory: [] 
+      // For errors, create a minimal but valid TaskStatus object
+      tasks.push({
+        version: 2, taskId: `ERROR: ${file}`, taskPath: "unknown",
+        startTime: new Date().toISOString(), branch: "", currentStep: "",
+        phase: "failed", steps: {}, tokenUsage: {}, stats: null,
+        lastUpdate: new Date().toISOString(), interactionHistory: [],
+        pipeline: undefined, parentSequenceId: undefined, prUrl: undefined, lastCommit: undefined, pendingQuestion: undefined
       });
     }
   }
@@ -99,26 +96,26 @@ export function getAllSequenceStatuses(stateDir: string): SequenceStatus[] {
       const content = fs.readFileSync(path.join(stateDir, file), "utf8");
       const state = JSON.parse(content);
       const fileStat = fs.statSync(path.join(stateDir, file));
-      const folderName = state.sequenceId?.replace('sequence-', '');
 
-      // Ensure the object pushed matches the SequenceStatus interface from ../status.js
+      // Construct SequenceStatus object, ensuring all properties are explicitly set
+      // with fallbacks for older state file formats.
       sequences.push({
-        version: state.version || 1, // Ensure version is present
+        version: state.version || 1,
         sequenceId: state.sequenceId || file.replace('.state.json', ''),
         startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
         branch: state.branch || "",
-        phase: state.phase || "pending", // Default to 'pending' if missing
+        phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
         currentTaskPath: state.currentTaskPath || null,
         completedTasks: state.completedTasks || [],
         lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-        stats: state.stats || null, // Ensure stats is null or object
+        stats: state.stats || null,
       });
     } catch (error) {
       console.error(`Error reading sequence state file ${file}:`, error);
-      // For errors, create a minimal SequenceStatus that clearly indicates failure
-      sequences.push({ 
-        version: 1, sequenceId: `ERROR: ${file}`, startTime: new Date().toISOString(), 
-        branch: "", phase: "failed", currentTaskPath: null, completedTasks: [], 
+      // For errors, create a minimal but valid SequenceStatus object
+      sequences.push({
+        version: 1, sequenceId: `ERROR: ${file}`, startTime: new Date().toISOString(),
+        branch: "", phase: "failed", currentTaskPath: null, completedTasks: [],
         lastUpdate: new Date().toISOString(), stats: null
       });
     }
@@ -133,24 +130,32 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
     const content = fs.readFileSync(stateFile, "utf8");
     const state = JSON.parse(content);
     const fileStat = fs.statSync(stateFile);
-    
-    // Construct TaskDetails object, inheriting all properties from `state`
-    // and adding `logs`. This now aligns with the TaskDetails interface extending TaskStatus.
-    const taskDetails: TaskDetails = {
-      ...state, // Spread all properties from the parsed state
-      taskId: state.taskId || taskId, // Ensure taskId is set, fallback to param
-      taskPath: state.taskPath || "unknown", // Fallback for older states
-      startTime: state.startTime || new Date(fileStat.birthtime).toISOString(), // Fallback
+
+    // Create a base TaskStatus object with defaults to ensure all required fields are present
+    const baseTask: TaskStatus = {
+      version: state.version || 2,
+      taskId: state.taskId || taskId,
+      taskPath: state.taskPath || "unknown",
+      startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
       branch: state.branch || "",
+      pipeline: state.pipeline || undefined,
+      parentSequenceId: state.parentSequenceId || undefined,
       currentStep: state.currentStep || "",
-      phase: state.phase || "pending",
+      phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
       steps: state.steps || {},
       tokenUsage: state.tokenUsage || {},
       stats: state.stats || null,
       lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-      interactionHistory: state.interactionHistory || [],
-      // The 'logs' property is specific to TaskDetails, not in core TaskStatus
-      logs: {} // Initialize logs as an empty object
+      prUrl: state.prUrl || undefined,
+      lastCommit: state.lastCommit || undefined,
+      pendingQuestion: state.pendingQuestion || undefined,
+      interactionHistory: state.interactionHistory || []
+    };
+
+    // Construct TaskDetails object from baseTask and add the 'logs' property
+    const taskDetails: TaskDetails = {
+      ...baseTask,
+      logs: {} // Initialize logs as an empty object, specific to TaskDetails
     };
 
     const taskLogDir = path.join(logsDir, taskId);
@@ -179,10 +184,15 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
 export function readLogFile(logsDir: string, taskId: string, logFile: string): string | null {
   const sanitizedTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, "");
   const sanitizedLogFile = logFile.replace(/[^a-zA-Z0-9._-]/g, "");
-  if (!sanitizedLogFile.match(/\.(log|reasoning\.log|raw\.json\.log)$/)) return null;
+  // Basic sanity check to prevent directory traversal
+  if (!sanitizedLogFile.match(/^[a-zA-Z0-9._-]+$/)) return null;
+  if (sanitizedLogFile.includes('..') || sanitizedLogFile.includes('/') || sanitizedLogFile.includes('\\')) return null;
+
   const logPath = path.join(logsDir, sanitizedTaskId, sanitizedLogFile);
   const expectedDir = path.join(logsDir, sanitizedTaskId);
+  // Ensure the resolved path is within the expected log directory
   if (!path.resolve(logPath).startsWith(path.resolve(expectedDir))) return null;
+
   try {
     if (!fs.existsSync(logPath)) return null;
     return fs.readFileSync(logPath, "utf8");
@@ -206,7 +216,7 @@ export function findParentSequence(stateDir: string, taskId: string): SequenceIn
     const folderName = sequenceState.sequenceId?.replace('sequence-', '');
     return {
       sequenceId: sequenceState.sequenceId,
-      phase: sequenceState.phase, // This 'phase' is now directly compatible with the imported Phase
+      phase: (sequenceState.phase && ALL_STATUS_PHASES.includes(sequenceState.phase as Phase)) ? sequenceState.phase : "pending",
       folderPath: folderName,
       branch: sequenceState.branch
     };
@@ -223,22 +233,24 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
     const content = fs.readFileSync(stateFile, "utf8");
     const state = JSON.parse(content);
     const fileStat = fs.statSync(stateFile);
-    const folderName = state.sequenceId?.replace('sequence-', '');
-    if (!folderName) return null;
-    
-    // Construct SequenceDetails object, inheriting all properties from `state`
-    // and adding the `tasks` array. This now aligns with the SequenceDetails interface.
-    const sequenceDetails: SequenceDetails = {
-      ...state, // Spread all properties from the parsed state
+
+    // Create a base SequenceStatus object with defaults to ensure all required fields are present
+    const baseSequence: SequenceStatus = {
+      version: state.version || 1,
       sequenceId: state.sequenceId || sequenceId,
       startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
       branch: state.branch || "",
-      phase: state.phase || "pending",
+      phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
       currentTaskPath: state.currentTaskPath || null,
       completedTasks: state.completedTasks || [],
       lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
       stats: state.stats || null,
-      tasks: [] // Initialize tasks as an empty array
+    };
+
+    // Construct SequenceDetails object from baseSequence and add the 'tasks' array.
+    const sequenceDetails: SequenceDetails = {
+      ...baseSequence,
+      tasks: [] // Initialize tasks as an empty array, specific to SequenceDetails
     };
 
     const allStateFiles = fs.readdirSync(stateDir).filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
@@ -247,21 +259,8 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
         const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
         const taskState = JSON.parse(taskStateContent);
         if (taskState.parentSequenceId === sequenceId) {
-          const taskPhase: Phase = taskState.phase || 'pending'; // Use imported Phase type
-          let taskStatus: Phase;
-
-          // We check if the phase from the file is a valid, known status.
-          if (taskPhase && ALL_STATUS_PHASES.includes(taskPhase as any)) {
-            // If it's valid, we can safely cast it and use it.
-            taskStatus = taskPhase;
-          } else {
-            // If it's missing, null, or an unknown value, we default to 'failed'
-            // to make the problem visible in the UI and log a warning.
-            if (taskPhase) { // Only log if there was an invalid value
-              console.warn(`Unknown task phase encountered: '${taskPhase}'. Defaulting to 'failed'.`);
-            }
-            taskStatus = 'failed';
-          }
+          const taskPhase: Phase = (taskState.phase && ALL_STATUS_PHASES.includes(taskState.phase as Phase)) ? taskState.phase : 'pending';
+          let taskStatus: Phase = taskPhase; // Directly use the validated taskPhase
 
           const taskPath = taskState.taskPath || 'unknown';
           sequenceDetails.tasks.push({
@@ -269,7 +268,7 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
             taskPath: taskPath,
             filename: path.basename(taskPath),
             status: taskStatus,
-            phase: taskState.phase,
+            phase: taskState.phase, // Keep original phase for display if it was 'unknown' or broader
             lastUpdate: taskState.lastUpdate
           });
         }
@@ -292,10 +291,10 @@ export function findLastStepName(taskDetails: TaskDetails): string | null {
 
   // Iterate over the entries (key-value pairs) of the steps object
   for (const [stepName, stepStatus] of Object.entries(taskDetails.steps)) {
-    const primaryStates = ['running', 'interrupted', 'failed', 'waiting_for_input'];
+    const primaryStates = ['running', 'interrupted', 'failed', 'waiting_for_input'] as const; // Explicitly type this array
 
     // Check if the current stepStatus is one of the primary (active) states
-    if (primaryStates.includes(stepStatus)) {
+    if (primaryStates.includes(stepStatus as any)) {
       return stepName; // Return the name of the active step immediately
     }
 
@@ -310,46 +309,34 @@ export function findLastStepName(taskDetails: TaskDetails): string | null {
 
 // Helper function to find the currently active task from journal events
 export function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
-  // Use a Map to track tasks that have started but not yet finished.
-  // The key is the task ID, the value is the 'task_started' event object.
   const activeTasks = new Map<string, JournalEvent>();
 
   for (const event of journal) {
     if (event.eventType === 'task_started') {
-      // When a task starts, add it to our set of active tasks.
-      // If the same task ID was active before (from a failed run), this updates it
-      // to the latest "started" event, which is correct.
       activeTasks.set(event.id, event);
     } else if (event.eventType === 'task_finished') {
-      // When a task finishes, it's no longer active. Remove it from the map.
       activeTasks.delete(event.id);
     }
   }
 
-  // If there are any tasks left in the map after processing the whole journal,
-  // they are the ones that are currently running.
   if (activeTasks.size > 0) {
-    // The map preserves insertion order. The "last" value in the map is the
-    // most recently started, currently active task.
-    // We convert the map values to an array and return the last element.
     return Array.from(activeTasks.values()).pop() || null;
   }
 
-  return null; // No active tasks found.
+  return null;
 }
 
 /**
  * Finds the most recently finished task from the journal.
  */
 export function findLastFinishedTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
-  // Iterate backwards through the journal to find the newest event first.
   for (let i = journal.length - 1; i >= 0; i--) {
     const event = journal[i];
     if (event.eventType === 'task_finished') {
-      return event; // Found the most recent finished task.
+      return event;
     }
   }
-  return null; // No finished tasks in the journal.
+  return null;
 }
 
 /**
@@ -359,16 +346,15 @@ export function findLastFinishedTaskFromJournal(journal: JournalEvent[]): Journa
 export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: string): TaskStatus[] {
   const taskMap = new Map<string, TaskStatus>();
 
-  // Process journal events chronologically to build task states
   for (const event of journal) {
     if (event.eventType === 'task_started') {
       // Create a minimal TaskStatus object. The rest will be filled by state file.
       taskMap.set(event.id, {
-        version: 1, taskId: event.id, taskPath: "unknown", 
-        startTime: event.timestamp, branch: "", currentStep: "", 
-        phase: "running", steps: {}, tokenUsage: {}, stats: null, 
+        version: 2, taskId: event.id, taskPath: "unknown",
+        startTime: event.timestamp, branch: "", currentStep: "",
+        phase: "running", steps: {}, tokenUsage: {}, stats: null,
         lastUpdate: event.timestamp, interactionHistory: [],
-        parentSequenceId: event.parentId
+        pipeline: undefined, parentSequenceId: event.parentId, prUrl: undefined, lastCommit: undefined, pendingQuestion: undefined
       });
     } else if (event.eventType === 'task_finished') {
       const existingTask = taskMap.get(event.id);
@@ -379,7 +365,6 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
     }
   }
 
-  // Enrich with details from state files
   const enrichedTasks: TaskStatus[] = [];
   for (const [taskId, taskStatus] of taskMap.entries()) {
     const stateFile = path.join(stateDir, `${taskId}.state.json`);
@@ -387,12 +372,11 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
       try {
         const content = fs.readFileSync(stateFile, "utf8");
         const state = JSON.parse(content);
-        // Merge journal data (authoritative phase/timestamp) with state file data
         enrichedTasks.push({
           ...state, // All properties from the state file
           ...taskStatus, // Overwrite with authoritative journal data if present (phase, lastUpdate)
-          // Ensure mandatory properties are not undefined from older states
-          version: state.version || 1,
+          // Explicitly ensure optional properties are handled
+          version: state.version || 2,
           taskPath: state.taskPath || "unknown",
           startTime: state.startTime || taskStatus.startTime,
           branch: state.branch || "",
@@ -400,18 +384,22 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
           steps: state.steps || {},
           tokenUsage: state.tokenUsage || {},
           stats: state.stats || null,
-          interactionHistory: state.interactionHistory || []
+          interactionHistory: state.interactionHistory || [],
+          pipeline: state.pipeline || undefined,
+          parentSequenceId: state.parentSequenceId || undefined,
+          prUrl: state.prUrl || undefined,
+          lastCommit: state.lastCommit || undefined,
+          pendingQuestion: state.pendingQuestion || undefined,
         });
       } catch (error) {
         console.error(`Error reading state file for ${taskId}:`, error);
-        enrichedTasks.push(taskStatus); // Push minimal taskStatus from journal
+        enrichedTasks.push(taskStatus);
       }
     } else {
       enrichedTasks.push(taskStatus);
     }
   }
 
-  // Sort by lastUpdate descending (most recent first)
   return enrichedTasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }
 
@@ -422,12 +410,11 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
 export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDir: string): SequenceStatus[] {
   const sequenceMap = new Map<string, SequenceStatus>();
 
-  // Process journal events chronologically to build sequence states
   for (const event of journal) {
     if (event.eventType === 'sequence_started') {
       sequenceMap.set(event.id, {
         version: 1, sequenceId: event.id, startTime: event.timestamp,
-        branch: "", phase: "running", currentTaskPath: null, 
+        branch: "", phase: "running", currentTaskPath: null,
         completedTasks: [], lastUpdate: event.timestamp, stats: null
       });
     } else if (event.eventType === 'sequence_finished') {
@@ -439,7 +426,6 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
     }
   }
 
-  // Enrich with details from state files
   const enrichedSequences: SequenceStatus[] = [];
   for (const [sequenceId, sequenceStatus] of sequenceMap.entries()) {
     const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
@@ -458,17 +444,17 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
           currentTaskPath: state.currentTaskPath || null,
           completedTasks: state.completedTasks || [],
           stats: state.stats || null,
-          folderPath: folderName, // This is derived/added locally, not part of core status
+          // folderPath is not part of core SequenceStatus, so handle it separately
+          folderPath: folderName || undefined,
         });
       } catch (error) {
         console.error(`Error reading sequence state file for ${sequenceId}:`, error);
-        enrichedSequences.push(sequenceStatus); // Push minimal sequenceStatus from journal
+        enrichedSequences.push(sequenceStatus);
       }
     } else {
       enrichedSequences.push(sequenceStatus);
     }
   }
 
-  // Sort by lastUpdate descending (most recent first)
   return enrichedSequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }

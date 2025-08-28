@@ -3,7 +3,20 @@ import path from "node:path";
 import pc from "picocolors";
 import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 
-export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
+export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input" | "paused" | "started";
+
+// Define ALL_STATUS_PHASES here, co-located with the authoritative 'Phase' type
+export const ALL_STATUS_PHASES: readonly Phase[] = [
+  'pending',
+  'running',
+  'done',
+  'failed',
+  'interrupted',
+  'waiting_for_reset',
+  'waiting_for_input',
+  'paused',
+  'started',
+] as const;
 
 export type TokenUsage = {
   inputTokens: number;
@@ -55,13 +68,12 @@ export type TaskStatus = {
   }[];
 };
 
-export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset" | "waiting_for_input";
 export interface SequenceStatus {
   version: number;
   sequenceId: string;
   startTime: string;
   branch: string;
-  phase: SequencePhase;
+  phase: Phase;
   currentTaskPath: string | null;
   completedTasks: string[];
   lastUpdate: string;

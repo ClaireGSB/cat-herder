@@ -12,3 +12,4 @@ Generate a step-by-step, detailed implementation plan to complete the next incom
 As the last steps,
 - verify the work (e.g. run typecheck or tests) 
 - mark the step as "done" in PLAN.md
+DO NOT commit your work yet. The user will review and commit.

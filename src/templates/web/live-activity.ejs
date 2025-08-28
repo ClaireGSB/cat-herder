@@ -158,31 +158,46 @@
 
 <!-- Pass data to the client-side script -->
 <script>
-    const taskToShowJSON = '<%- JSON.stringify(taskToShow || null) %>';
-    const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
-    const isLiveJSON = '<%- JSON.stringify(isLive) %>';
+    console.log("[EJS DEBUG] Starting script block in live-activity.ejs...");
     
+    // Use a different approach - pass data through script tags to avoid string literal issues
+    const taskData = <%- JSON.stringify(taskToShow || null) %>;
+    const parentSequenceData = <%- JSON.stringify(parentSequence || null) %>;
+    const isLiveData = <%- JSON.stringify(isLive) %>;
+    const initialLogContentData = <%- JSON.stringify(initialLogContent || null) %>;
+    
+    console.log("[EJS DEBUG] taskData:", taskData);
+    console.log("[EJS DEBUG] parentSequenceData:", parentSequenceData);
+    console.log("[EJS DEBUG] isLiveData:", isLiveData);
+    console.log("[EJS DEBUG] initialLogContentData:", initialLogContentData);
+
     // Unify the data for dashboard.js
     window.liveActivityData = {
-        runningTask: JSON.parse(taskToShowJSON), // dashboard.js expects 'runningTask'
-        lastFinishedTask: null, // No longer needed
-        parentSequence: JSON.parse(parentSequenceJSON),
-        isLive: JSON.parse(isLiveJSON)
+        runningTask: taskData,
+        lastFinishedTask: null,
+        parentSequence: parentSequenceData,
+        isLive: isLiveData
     };
+    console.log("[EJS DEBUG] window.liveActivityData successfully set:", window.liveActivityData);
 
     // Client-side script to colorize the pre-loaded log
     document.addEventListener('DOMContentLoaded', () => {
         const logContainer = document.getElementById('live-log-content');
-        const initialContent = `<%- JSON.stringify(initialLogContent || null) %>`;
-
-        if (logContainer && initialContent && initialContent !== 'null') {
-            const parsedContent = JSON.parse(initialContent);
+        
+        if (logContainer && initialLogContentData) {
             if (window.dashboard && typeof window.dashboard.colorizeLogLine === 'function') {
-                const lines = parsedContent.split('\\n'); // Note the escaped newline
+                const lines = String(initialLogContentData).split('\n');
                 logContainer.innerHTML = lines.map(line => window.dashboard.colorizeLogLine(line)).join('');
+                console.log("[EJS DEBUG] Logs colorized and set into viewer.");
+            } else {
+                logContainer.textContent = String(initialLogContentData);
+                console.log("[EJS DEBUG] Logs set as plain text (no colorizer function).");
             }
+        } else {
+            console.log("[EJS DEBUG] No initial log content or logContainer not found.");
         }
     });
+    console.log("[EJS DEBUG] Finished script block in live-activity.ejs.");
 </script>
 
 <%- include('partials/footer', { page: 'live-activity' }) %>
