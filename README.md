@@ -1,6 +1,8 @@
 
 # cat-herder
 
+
+
 A command-line tool that orchestrates a structured, step-gated development workflow in your repository using AI.
 
 `cat-herder` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
@@ -11,12 +13,7 @@ A command-line tool that orchestrates a structured, step-gated development workf
   * [Installation](#installation)
   * [Initialize and Run Your First Task](#initialize-and-run-your-first-task)
 * [Running Task Sequences](#running-task-sequences)
-  * [The Dynamic Workflow Advantage](#the-dynamic-workflow-advantage)
-  * [Usage](#usage)
-  * [How It Works (Sequences)](#how-it-works-sequences)
-  * [Task Ordering and Naming](#task-ordering-and-naming)
-  * [Ignoring Files for Comments and Planning](#ignoring-files-for-comments-and-planning)
-  * [Example: Dynamic Task Generation from a PRD](#example-dynamic-task-generation-from-a-prd)
+  * [Usage (Sequences)](#usage-sequences)
 * [Local Development & Testing (for Contributors)](#local-development--testing-for-contributors)
   * [Part 1: Initial One-Time Setup (`npm link`)](#part-1-initial-one-time-setup-npm-link)
   * [Part 2: The Re-Testing Workflow (Every Time You Change Code)](#part-2-the-re-testing-workflow-every-time-you-change-code)
@@ -28,6 +25,12 @@ A command-line tool that orchestrates a structured, step-gated development workf
     * [Task-Level Override (Frontmatter)](#task-level-override-frontmatter)
   * [How to Enable and Use Interactive Halting](#how-to-enable-and-use-interactive-halting)
 * [Advanced Configuration & Features](#advanced-configuration--features)
+  * [Understanding Task Sequences (Detailed)](#understanding-task-sequences-detailed)
+    * [The Dynamic Workflow Advantage](#the-dynamic-workflow-advantage)
+    * [How It Works (Sequences)](#how-it-works-sequences)
+    * [Task Ordering and Naming](#task-ordering-and-naming)
+    * [Ignoring Files for Comments and Planning](#ignoring-files-for-comments-and-planning)
+    * [Example: Dynamic Task Generation from a PRD](#example-dynamic-task-generation-from-a-prd)
   * [Configurable Pipelines (`cat-herder.config.js`)](#configurable-pipelines-cat-herderconfigjs)
     * [Per-Step Model Selection](#per-step-model-selection)
     * [Pipeline Selection](#pipeline-selection)
@@ -77,23 +80,39 @@ A command-line tool that orchestrates a structured, step-gated development workf
 
 `cat-herder` is a powerful CLI tool designed to bring structure and automation to your development process using AI. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
 
-### Core Concepts: Tasks vs. Steps
+### Core Concepts: Sequences, Tasks, and Steps
 
-To effectively use `cat-herder`, it's important to understand two core concepts:
+To effectively use `cat-herder`, it's important to understand its three core hierarchical concepts:
 
-*   **Task**: A task represents a single, overarching goal or feature you want the AI to achieve. It's defined in a Markdown file (e.g., `feature-x.md`) and specifies *what* needs to be done.
-*   **Step**: A step is an individual, distinct action within a larger workflow. A task is broken down into a series of steps (e.g., `plan`, `write_tests`, `implement`, `review`). Each step has its own specific instructions and validation checks defined in your `cat-herder.config.js`.
+*   **Sequence**: An overarching project or a large feature that requires multiple, ordered tasks. It's a container for related tasks, allowing for dynamic task generation and execution on a single Git branch.
+*   **Task**: A single, self-contained goal or sub-feature within a sequence (or as a standalone unit). It's defined in a Markdown file (e.g., `01-feature-x.md`) and specifies *what* needs to be done.
+*   **Step**: An individual, distinct action within a larger workflow (a pipeline). A task is broken down into a series of steps (e.g., `plan`, `write_tests`, `implement`, `review`). Each step has its own specific instructions and validation checks defined in your `cat-herder.config.js`.
 
 **Conceptual Flow:**
 
 ```
-[ Your Goal (Task.md) ]
-         |
-         V
+[ Your Project Goal (Sequence Folder) ]
+                |
+                V
+          [ Task 1.md ]
+                |
+                V
 [ Pipeline (cat-herder.config.js) ]
-         |
-         V
+                |
+                V
 [ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
+                |
+                V
+          [ Task 2.md ]
+                |
+                V
+[ Pipeline (cat-herder.config.js) ]
+                |
+                V
+[ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
+                |
+                V
+             (and so on...)
 ```
 
 ### Key Capabilities and Workflows
@@ -104,6 +123,8 @@ To effectively use `cat-herder`, it's important to understand two core concepts:
 *   **Robust Error Handling**: Automatic retries for failed steps and graceful handling of API rate limits ensure your workflows are resilient.
 *   **Comprehensive Logging & Monitoring**: Detailed logs, state files, and a real-time web dashboard provide full visibility into the AI's reasoning, progress, and resource usage.
 *   **Version Control Integration**: Isolates AI work on dedicated Git branches, automatically committing progress and keeping your `main` branch clean.
+
+---
 
 ## Quick Start
 
@@ -155,17 +176,9 @@ Follow these steps to integrate `cat-herder` into your existing TypeScript proje
 
 ## Running Task Sequences
 
-For complex features that require multiple, ordered tasks that might not be known ahead of time, `cat-herder` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
+For complex features or projects requiring multiple, ordered tasks that might not be known ahead of time, `cat-herder` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
 
-### The Dynamic Workflow Advantage
-
-Traditional single-task execution works well for self-contained features, but complex workflows often require multiple coordinated steps. The sequence orchestrator transforms your development process by:
-
-- **Dynamic Task Discovery**: After completing each task, the orchestrator re-scans the folder for new tasks that may have been created
-- **Single Branch Execution**: All tasks in a sequence run on the same Git branch, maintaining workflow continuity
-- **Autonomous Multi-Step Workflows**: Initial tasks can generate the rest of the workflow, creating fully autonomous development sequences
-
-### Usage
+### Usage (Sequences)
 
 Execute a sequence of tasks from a folder:
 
@@ -176,89 +189,7 @@ cat-herder run-sequence cat-herder-tasks/my-feature
 # Via npm script  
 npm run cat-herder:run-sequence -- cat-herder-tasks/my-feature
 ```
-
-### How It Works (Sequences)
-
-1. **Initial Setup**: The orchestrator creates a dedicated Git branch for the entire sequence
-2. **Sequential Execution**: Tasks are executed in alphabetical order by filename
-3. **Dynamic Discovery**: After each task completes, the folder is re-scanned for new tasks
-4. **Continuation**: The cycle continues until no more tasks are found
-
-### Task Ordering and Naming
-
-Tasks are executed alphabetically by filename. For workflows requiring specific ordering, use a numbered naming convention:
-
-```
-cat-herder-tasks/my-feature/
-├── _PLAN.md
-├── _notes_on_api_changes.md
-├── 01-analyze-requirements.md
-├── 02-design-architecture.md
-├── 03-implement-core.md
-└── 04-write-tests.md
-```
-
-### Ignoring Files for Comments and Planning
-
-You can include notes, plans, or other context files within a sequence folder that shouldn't be executed as tasks. The sequence orchestrator will automatically ignore any file that is prefaced with an underscore (`_`).
-
-This allows you to keep your planning and execution in the same place.
-
-In the example above, `_PLAN.md` and `_notes_on_api_changes.md` will be ignored by the runner, and the sequence will execute starting with `01-analyze-requirements.md`.
-
-### Example: Dynamic Task Generation from a PRD
-
-This example demonstrates how an initial task can read a Product Requirements Document (`_PRD.md`) and then dynamically create a series of subsequent implementation tasks within a sequence.
-
-1.  **Create the Sequence Folder and PRD:**
-    First, create a folder for your feature sequence and an `_PRD.md` file within it. The underscore `_` ensures `_PRD.md` is ignored by the runner but available as context for your AI.
-
-    ```bash
-    # In your project root
-    mkdir -p cat-herder-tasks/new-feature-implementation
-    touch cat-herder-tasks/new-feature-implementation/_PRD.md
-    ```
-
-    Now, populate `cat-herder-tasks/new-feature-implementation/_PRD.md` with your feature requirements (e.g., details about a new user authentication system).
-
-2.  **Create the Initial "Break Down PRD" Task:**
-    Create a task file, `01-break-down-prd.md`, in the same folder. This task will instruct the AI to read the `_PRD.md` and then use the `Write` tool to generate the subsequent implementation tasks.
-
-    `cat-herder-tasks/new-feature-implementation/01-break-down-prd.md`:
-    ```markdown
-    ---
-    pipeline: default
-    ---
-    # Break Down PRD
-
-    Analyze the provided Product Requirements Document (`_PRD.md`) in the current directory.
-    Based on its content, identify the major implementation steps required for this new feature.
-
-    For each major step, use the `Write` tool to create a new markdown task file (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, `04-create-frontend-components.md`, `05-write-integration-tests.md`). Ensure these task files are named alphabetically (e.g., `02-`, `03-`, etc.) to maintain execution order within the sequence.
-
-    Each generated task file should:
-    - Have appropriate YAML frontmatter (e.g., `pipeline: default`).
-    - Clearly define the goal for that specific implementation step.
-    - Include all necessary context from the `_PRD.md` in its body, or reference the `_PRD.md` as context if it's too large.
-
-    **Reference:** `_PRD.md`
-    ```
-
-3.  **Run the Sequence:**
-    Execute the sequence orchestrator on your feature folder:
-
-    ```bash
-    npm run cat-herder:run-sequence -- cat-herder-tasks/new-feature-implementation
-    ```
-
-    The orchestrator will:
-
-    1.  Execute `01-break-down-prd.md`.
-    2.  The AI in `01-break-down-prd.md` will read `_PRD.md` and then *create* new task files (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, etc.) in the `cat-herder-tasks/new-feature-implementation/` directory using the `Write` tool.
-    3.  After `01-break-down-prd.md` completes, the orchestrator will re-scan the folder, discover the newly created tasks, and automatically execute them in alphabetical order.
-    4.  The sequence will continue through each generated task, completing the entire feature implementation autonomously on a single Git branch.
-
-This creates a fully autonomous, multi-step development workflow where the initial planning task drives the entire implementation sequence.
+For a detailed explanation of how sequences work, including dynamic task generation examples, see [Understanding Task Sequences (Detailed)](#understanding-task-sequences-detailed) in the Advanced Configuration & Features section.
 
 ## Local Development & Testing (for Contributors)
 
@@ -398,8 +329,7 @@ module.exports = {
   
   // Set the default interaction threshold (0-5)
   interactionThreshold: 0, // Default is 0 for backward compatibility
-};
-```
+};```
 
 #### Task-Level Override (Frontmatter)
 
@@ -438,6 +368,106 @@ This task involves major architectural changes. Be cautious and ask questions wh
 4.  **Resume:** Once an answer is provided from either source, the AI receives the guidance and continues the task. All interactions are saved and can be reviewed on the task detail page in the web dashboard.
 
 ## Advanced Configuration & Features
+
+This section delves into the detailed mechanisms and advanced configurations that power `cat-herder`.
+
+### Understanding Task Sequences (Detailed)
+
+`cat-herder`'s task sequencing capability allows for the orchestration of complex, multi-task workflows, including dynamic task generation.
+
+#### The Dynamic Workflow Advantage
+
+Traditional single-task execution works well for self-contained features, but complex workflows often require multiple coordinated tasks. The sequence orchestrator transforms your development process by:
+
+- **Dynamic Task Discovery**: After completing each task, the orchestrator re-scans the folder for new tasks that may have been created
+- **Single Branch Execution**: All tasks in a sequence run on the same Git branch, maintaining workflow continuity
+- **Autonomous Multi-Task Workflows**: Initial tasks can generate the rest of the workflow, creating fully autonomous development sequences
+
+#### How It Works (Sequences)
+
+1. **Initial Setup**: The orchestrator creates a dedicated Git branch for the entire sequence.
+2. **Sequential Execution**: Tasks are executed in alphabetical order by filename.
+3. **Dynamic Discovery**: After each task completes, the folder is re-scanned for new tasks.
+4. **Continuation**: The cycle continues until no more tasks are found.
+
+#### Task Ordering and Naming
+
+Tasks are executed alphabetically by filename. For workflows requiring specific ordering, use a numbered naming convention:
+
+```
+cat-herder-tasks/my-feature/
+├── _PLAN.md
+├── _notes_on_api_changes.md
+├── 01-analyze-requirements.md
+├── 02-design-architecture.md
+├── 03-implement-core.md
+└── 04-write-tests.md
+```
+
+#### Ignoring Files for Comments and Planning
+
+You can include notes, plans, or other context files within a sequence folder that shouldn't be executed as tasks. The sequence orchestrator will automatically ignore any file that is prefaced with an underscore (`_`).
+
+This allows you to keep your planning and execution in the same place.
+
+In the example above, `_PLAN.md` and `_notes_on_api_changes.md` will be ignored by the runner, and the sequence will execute starting with `01-analyze-requirements.md`.
+
+#### Example: Dynamic Task Generation from a PRD
+
+This example demonstrates how an initial task can read a Product Requirements Document (`_PRD.md`) and then dynamically create a series of subsequent implementation tasks within a sequence.
+
+1.  **Create the Sequence Folder and PRD:**
+    First, create a folder for your feature sequence and an `_PRD.md` file within it. The underscore `_` ensures `_PRD.md` is ignored by the runner but available as context for your AI.
+
+    ```bash
+    # In your project root
+    mkdir -p cat-herder-tasks/new-feature-implementation
+    touch cat-herder-tasks/new-feature-implementation/_PRD.md
+    ```
+
+    Now, populate `cat-herder-tasks/new-feature-implementation/_PRD.md` with your feature requirements (e.g., details about a new user authentication system).
+
+2.  **Create the Initial "Break Down PRD" Task:**
+    Create a task file, `01-break-down-prd.md`, in the same folder. This task will instruct the AI to read the `_PRD.md` and then use the `Write` tool to generate the subsequent implementation tasks.
+
+    **Remember:** When creating any task file, you need to define its YAML frontmatter, choosing the correct `pipeline` and `interactionThreshold` based on your project's `cat-herder.config.js` and the task's complexity.
+
+    `cat-herder-tasks/new-feature-implementation/01-break-down-prd.md`:
+    ```markdown
+    ---
+    pipeline: default
+    interactionThreshold: 3 # Set a medium threshold for this planning task
+    ---
+    # Break Down PRD
+
+    Analyze the provided Product Requirements Document (`_PRD.md`) in the current directory.
+    Based on its content, identify the major implementation steps required for this new feature.
+
+    For each major step, use the `Write` tool to create a new markdown task file (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, `04-create-frontend-components.md`, `05-write-integration-tests.md`). Ensure these task files are named alphabetically (e.g., `02-`, `03-`, etc.) to maintain execution order within the sequence.
+
+    Each generated task file should:
+    - Have appropriate YAML frontmatter (e.g., `pipeline: default`, `interactionThreshold`).
+    - Clearly define the goal for that specific implementation step.
+    - Include all necessary context from the `_PRD.md` in its body, or reference the `_PRD.md` as context if it's too large.
+
+    **Reference:** `_PRD.md`
+    ```
+
+3.  **Run the Sequence:**
+    Execute the sequence orchestrator on your feature folder:
+
+    ```bash
+    npm run cat-herder:run-sequence -- cat-herder-tasks/new-feature-implementation
+    ```
+
+    The orchestrator will:
+
+    1.  Execute `01-break-down-prd.md`.
+    2.  The AI in `01-break-down-prd.md` will read `_PRD.md` and then *create* new task files (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, etc.) in the `cat-herder-tasks/new-feature-implementation/` directory using the `Write` tool.
+    3.  After `01-break-down-prd.md` completes, the orchestrator will re-scan the folder, discover the newly created tasks, and automatically execute them in alphabetical order.
+    4.  The sequence will continue through each generated task, completing the entire feature implementation autonomously on a single Git branch.
+
+This creates a fully autonomous, multi-task development workflow where the initial planning task drives the entire implementation sequence.
 
 ### Configurable Pipelines (`cat-herder.config.js`)
 
@@ -1035,7 +1065,7 @@ All commands are available directly via the `cat-herder` executable.
 -   `cat-herder init`: Scaffolds the workflow in the current repository.
 -   `cat-herder run <path-to-task.md>`: Runs the full workflow for a specific task.
     -   `--pipeline <name>`: Specifies which pipeline to use, overriding config and task defaults.
--   `cat-herder run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder, executing them in alphabetical order and re-scanning for new tasks after each completion.
+-   `cat-herder run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder.
 -   `cat-herder validate`: Validates your `cat-herder.config.js` pipeline configuration.
 -   `cat-herder watch`: Watches the tasks directory and runs new tasks automatically.
 -   `cat-herder status`: Displays the status of the most recent task as JSON.
