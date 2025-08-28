@@ -98,10 +98,10 @@ export async function executePipelineForTask(
     // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
 
-    // Always include task definition (updated provider call)
+    // Always include task definition 
     context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
 
-    // Include plan content for any step after "plan" (updated provider call)
+    // Include plan content for any step after "plan" 
     const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
     if (planStepIndex !== -1 && index > planStepIndex) {
       try {

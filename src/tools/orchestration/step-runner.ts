@@ -3,7 +3,7 @@ import path from "node:path";
 import pc from "picocolors";
 import readline from "node:readline";
 import { runStreaming, killActiveProcess } from "../proc.js";
-import { updateStatus, readStatus, updateSequenceStatus, readAndDeleteAnswerFile } from "../status.js"; 
+import { updateStatus, readStatus, updateSequenceStatus, readAndDeleteAnswerFile } from "../status.js";
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
 import { InterruptedError, HumanInterventionRequiredError } from "./errors.js";
@@ -134,14 +134,14 @@ export async function executeStep(
               break; // Found a header separator. This marks the end of the previous reasoning block. Stop.
             }
             if (line.includes('[PROCESS-DEBUG] Stdin data written and closed')) {
-                continue; // Internal debug line, skip
+              continue; // Internal debug line, skip
             }
             if (line.includes("--- This file contains Claude's step-by-step reasoning process ---")) {
-                inReasoningSection = true; // Found the reasoning intro line, start collecting
-                continue;
+              inReasoningSection = true; // Found the reasoning intro line, start collecting
+              continue;
             }
             if (inReasoningSection && line.trim() !== '') {
-                filteredLines.unshift(line); // Add to the beginning to maintain original order
+              filteredLines.unshift(line); // Add to the beginning to maintain original order
             }
           }
           previousReasoningForPrompt = filteredLines.join('\n').trim();
@@ -166,9 +166,9 @@ export async function executeStep(
         // Use Promise.race to monitor both the AI process and state changes
         const stateDir = path.dirname(statusFile);
         const runningPromise = runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, taskId);
-        
+
         let pollInterval: NodeJS.Timeout | null = null;
-        
+
         // Promise that resolves when state becomes 'waiting_for_input'
         const statePollingPromise = new Promise<never>((resolve, reject) => {
           pollInterval = setInterval(() => {
@@ -198,9 +198,9 @@ export async function executeStep(
           updateStatus(statusFile, s => {
             s.phase = 'waiting_for_input';
             s.steps[name] = 'waiting_for_input'; // Set the current step's status
-            s.pendingQuestion = { 
-              question: error.question, 
-              timestamp: new Date().toISOString() 
+            s.pendingQuestion = {
+              question: error.question,
+              timestamp: new Date().toISOString()
             };
           });
 
@@ -219,16 +219,16 @@ export async function executeStep(
             const answer = await waitForHumanInput(error.question, stateDir, taskId);
             const pauseDurationSeconds = (Date.now() - pauseStartTime) / 1000;
 
-            // PROBLEM 1 FIX: Log the user's answer to the reasoning log file
+            // Log the user's answer to the reasoning log file
             const timestamp = new Date().toISOString().replace('T', ' ').slice(0, -5);
             fs.appendFileSync(reasoningLogFile, `[${timestamp}] [USER_INPUT] User answered: "${answer}"\n\n`);
 
             // 3. RESUME: Update task, step, AND sequence status, moving question to history and tracking pause time
             updateStatus(statusFile, s => {
-              s.interactionHistory.push({ 
-                question: error.question, 
-                answer, 
-                timestamp: new Date().toISOString() 
+              s.interactionHistory.push({
+                question: error.question,
+                answer,
+                timestamp: new Date().toISOString()
               });
               s.pendingQuestion = undefined;
               s.phase = 'running';
