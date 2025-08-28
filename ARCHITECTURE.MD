@@ -30,7 +30,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
-    *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results.
+    *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results. The reasoning logs now contain the complete interaction transcript, including user answers provided during interactive halting workflows.
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
     *   **Interactive Tool Detection:** Monitors the AI's tool usage, specifically detecting when the `askHuman` tool is invoked, triggering the interactive halting workflow by throwing a `HumanInterventionRequiredError`.
 
@@ -59,7 +59,7 @@ graph TD
     end
 
     subgraph State & Config
-        State[State Files (.json)]
+        State[State Files (.json)<br/>incl. Interaction History]
         Config[cat-herder.config.js]
         Prompts[Command Prompts (.md)]
     end
@@ -89,6 +89,7 @@ graph TD
     Orchestrator -- Prompts for input --> CLI
     CLI -- User response --> Orchestrator
     Orchestrator -- Updates interaction history --> State
+    State -- Provides interaction history for context --> Orchestrator
     
     %% Web UI Interactive Flow
     User -- Submits answer --> Web

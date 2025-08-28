@@ -365,7 +365,7 @@ This task involves major architectural changes. Be cautious and ask questions wh
     *   **Via CLI:** The command line will display the question and wait for your typed response.
     *   **Via Web Dashboard:** The dashboard will show an interactive card with the question and a form to submit your answer.
 
-4.  **Resume:** Once an answer is provided from either source, the AI receives the guidance and continues the task. All interactions are saved and can be reviewed on the task detail page in the web dashboard.
+4.  **Resume:** Once an answer is provided from either source, the AI receives the guidance and continues the task. Importantly, the complete history of questions and answers is automatically provided as context to all subsequent steps in the pipeline, ensuring that human guidance is consistently understood and applied throughout the entire development workflow. All interactions are saved and can be reviewed on the task detail page in the web dashboard.
 
 ## Advanced Configuration & Features
 
@@ -624,7 +624,7 @@ module.exports = {
 4. **First Available:** If no default is specified, the first pipeline defined in the `pipelines` object is used.
 
 #### Automatic Context Assembly
-The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition and any generated plans. No manual configuration of context providers is required.
+The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition, any generated plans, and the complete interaction history of human-AI questions and answers from previous steps in the task. This interaction history ensures that human guidance provided to earlier steps is automatically made available to all subsequent steps, maintaining consistency throughout the pipeline. No manual configuration of context providers is required.
 
 #### Check Types
 ```javascript
@@ -840,7 +840,7 @@ With this setting, instead of failing, the tool will pause execution and log a w
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `~/.cat-herder/logs/` directory:
 
 - **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
-- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
+- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output, and also includes any user answers provided during interactive halting, creating a complete chronological transcript of the human-AI dialogue. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
 - **`XX-step-name.raw.json.log`**: Contains the raw, line-by-line JSON objects streamed from the LLM. This is useful for deep debugging of the tool's behavior, as it shows every event, including tool use attempts and content chunks.
 
 #### When to use each log

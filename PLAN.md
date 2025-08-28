@@ -19,18 +19,18 @@ The result will be a much more robust, intelligent, and transparent interactive 
 
 ## Summary Checklist
 
-- [ ] **Feature:** Ensure `fs` is imported in `step-runner.ts` for file operations.
-- [ ] **Feature:** Implement logging of user answers directly into the reasoning log (`step-runner.ts`).
-- [ ] **Feature:** Refactor `step-runner.ts` to manage feedback consistently with `feedbackForNextRun`.
-- [ ] **Feature:** Implement logic in `step-runner.ts` to extract and include previous AI reasoning in resumption prompts.
-- [ ] **Feature:** Update existing context providers (`taskDefinition`, `planContent`) in `providers.ts` to accept new arguments.
-- [ ] **Feature:** Create a new `interactionHistory` context provider in `providers.ts`.
-- [ ] **Feature:** Integrate `interactionHistory` context into all step prompts in `pipeline-runner.ts`.
-- [ ] **Test:** Create a new test file for interactive halting.
-- [ ] **Test:** Write `vitest` tests for `interactionHistory` creation and content.
-- [ ] **Test:** Write `vitest` tests for `interactionHistory` presence in subsequent step prompts.
-- [ ] **Documentation:** Update `README.md` to describe the enhanced interaction logging and cross-step context propagation.
-- [ ] **Documentation:** Update `ARCHITECTURE.MD` to describe the new interaction flow and context management.
+- [x] **Feature:** Ensure `fs` is imported in `step-runner.ts` for file operations.
+- [x] **Feature:** Implement logging of user answers directly into the reasoning log (`step-runner.ts`).
+- [x] **Feature:** Refactor `step-runner.ts` to manage feedback consistently with `feedbackForNextRun`.
+- [x] **Feature:** Implement logic in `step-runner.ts` to extract and include previous AI reasoning in resumption prompts.
+- [x] **Feature:** Update existing context providers (`taskDefinition`, `planContent`) in `providers.ts` to accept new arguments.
+- [x] **Feature:** Create a new `interactionHistory` context provider in `providers.ts`.
+- [x] **Feature:** Integrate `interactionHistory` context into all step prompts in `pipeline-runner.ts`.
+- [x] **Test:** Create a new test file for interactive halting.
+- [x] **Test:** Write `vitest` tests for `interactionHistory` creation and content.
+- [x] **Test:** Write `vitest` tests for `interactionHistory` presence in subsequent step prompts.
+- [X] **Documentation:** Update `README.md` to describe the enhanced interaction logging and cross-step context propagation.
+- [x] **Documentation:** Update `ARCHITECTURE.MD` to describe the new interaction flow and context management.
 
 ## Detailed Implementation Steps
 

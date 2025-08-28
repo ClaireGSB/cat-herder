@@ -88,8 +88,9 @@ export async function executePipelineForTask(
 
   for (const [index, stepConfig] of selectedPipeline.entries()) {
     const { name, command, check } = stepConfig;
-    const currentStepStatus = readStatus(statusFile);
-    if (currentStepStatus.steps[name] === 'done') {
+    // Read the current status at the beginning of each step iteration
+    const currentTaskStatus = readStatus(statusFile);
+    if (currentTaskStatus.steps[name] === 'done') {
       console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
@@ -97,18 +98,24 @@ export async function executePipelineForTask(
     // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
 
-    // Always include task definition
-    context.taskDefinition = contextProviders.taskDefinition(projectRoot, taskContent);
+    // Always include task definition (updated provider call)
+    context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
 
-    // Include plan content for any step after "plan"
+    // Include plan content for any step after "plan" (updated provider call)
     const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
     if (planStepIndex !== -1 && index > planStepIndex) {
       try {
-        context.planContent = contextProviders.planContent(projectRoot, taskContent);
+        context.planContent = contextProviders.planContent(config, projectRoot, currentTaskStatus, taskContent);
       } catch (error) {
         // If PLAN.md doesn't exist, skip including plan content
         console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
       }
+    }
+
+    // NEW: Include human interaction history for all steps
+    const interactionHistory = contextProviders.interactionHistory(config, projectRoot, currentTaskStatus, taskContent);
+    if (interactionHistory) { // Only add if there's actual history
+      context.interactionHistory = interactionHistory;
     }
 
     // Read the specific command instructions for the current step
