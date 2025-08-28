@@ -80,6 +80,9 @@ A command-line tool that orchestrates a structured, step-gated development workf
 
 `cat-herder` is a powerful CLI tool designed to bring structure and automation to your development process using AI. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
 
+Note: It is still under development. My vision is to mostly use the dynamic task sequencing feature to create a fully autonomous AI development agent that can take a high-level feature request and implement it end-to-end with minimal human intervention... I think the core features are there, there are still bug fixes and improvements to be made. Feel free to open issues or PRs if you want to contribute!
+
+
 ### Core Concepts: Sequences, Tasks, and Steps
 
 To effectively use `cat-herder`, it's important to understand its three core hierarchical concepts:
@@ -130,6 +133,7 @@ To effectively use `cat-herder`, it's important to understand its three core hie
         │
         └── 01-break-down-feature.md # Initial Task for dynamic generation (the task is for the AI to read _INITIAL_REQUIREMENTS.md and create subsequent tasks)
             └── Uses Pipeline 'create-tasks'
+
                 ├── Step 1: Analyze & Generate Tasks
                 └── (This step will dynamically create subsequent tasks like:)
                     ├── 02-design-module.md
