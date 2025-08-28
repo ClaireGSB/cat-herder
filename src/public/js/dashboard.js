@@ -53,7 +53,7 @@ class CatHerderDashboard {
                     // This forces a full re-render for UI consistency
                     if ((oldTaskPhase === 'running' && newTaskPhase === 'waiting_for_input') ||
                         (oldTaskPhase === 'waiting_for_input' && newTaskPhase === 'running')) {
-                                console.log(`[Dashboard.js] CRITICAL RELOAD: Phase changed from '${oldTaskPhase}' to '${newTaskPhase}'. Triggering page reload.`); // <--- ADDED LOG
+                        console.log(`[Dashboard.js] CRITICAL RELOAD: Phase changed from '${oldTaskPhase}' to '${newTaskPhase}'. Triggering page reload.`); // <--- ADDED LOG
                         window.location.reload();
                         return; // Stop further processing to allow reload
                     }
@@ -69,7 +69,7 @@ class CatHerderDashboard {
                         window.location.reload();
                         return; // Stop further processing to allow reload
                     }
-                    
+
                     // Scenario 3: Task has finished, failed, or interrupted (and was live)
                     // This ensures the page refreshes to show the final state or redirects.
                     if (window.liveActivityData.isLive && newTaskPhase !== 'running' && newTaskPhase !== 'waiting_for_input') {
@@ -78,7 +78,7 @@ class CatHerderDashboard {
                         return; // Stop further processing to allow reload
                     }
                 }
-                
+
                 // If no reload was triggered, proceed with normal UI updates (e.g., status badge, minor info)
                 // This is important for updates on other pages (e.g., history) and minor updates on live page
                 this.updateTaskUI(data.data);
@@ -95,9 +95,12 @@ class CatHerderDashboard {
                 }
                 break;
             case 'journal_updated':
-                console.log(`[Dashboard.js] Journal updated event received. Path: ${window.location.pathname}`); // <--- ADDED LOG
-                if (window.location.pathname.endsWith('/history') || window.location.pathname === '/') {
-                    console.log('[Dashboard.js] JOURNAL RELOAD: Triggering page reload for history/root.'); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Journal updated event received. Path: ${window.location.pathname}`);
+                // Reload if on /history, /, OR on /live when no task is currently being displayed
+                if (window.location.pathname.endsWith('/history') ||
+                    window.location.pathname === '/' ||
+                    (window.location.pathname.endsWith('/live') && !window.liveActivityData?.runningTask)) { // <--- MODIFIED LINE
+                    console.log('[Dashboard.js] JOURNAL RELOAD: Triggering page reload for history/root/inactive live.');
                     window.location.reload();
                 }
                 break;
@@ -133,7 +136,7 @@ class CatHerderDashboard {
         if (window.location.pathname.endsWith('/live')) {
             const runningTask = window.liveActivityData?.runningTask;
             if (!runningTask) return;
-            
+
             // This part handles the log switching when a step changes,
             // which will now run after a page reload.
             const newStep = task.currentStep;
@@ -230,16 +233,16 @@ class CatHerderDashboard {
     colorizeLogLine(line) {
         // This regex captures all the patterns we want to style, in a single pass.
         const tokenizer = /(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]|\`.*?\`|(?<!\w)'.*?'|".*?"|\[ASSISTANT\]|\[USER\]|\[SYSTEM\]|\[TEXT\]|\[INIT\]|\[TOOL_USE\]|\[TOOL_RESULT\])/g;
-      
-        const escapeHtml = (unsafe) => 
+
+        const escapeHtml = (unsafe) =>
             unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-      
+
         // Split the string by our patterns. The captured delimiters are included in the array.
         const parts = line.split(tokenizer);
-      
+
         const htmlParts = parts.map(part => {
             if (!part) return ''; // Ignore empty strings from the split.
-      
+
             // Check if the part is one of our special tokens and apply the correct class.
             if (part.match(/^\[\d{4}/)) return `<span class="log-meta">${escapeHtml(part)}</span>`;
             if (part.startsWith('`') || part.startsWith('"') || part.startsWith("'")) return `<span class="log-quote">${escapeHtml(part)}</span>`;
@@ -248,33 +251,33 @@ class CatHerderDashboard {
             if (part === '[SYSTEM]') return `<span class="log-system">${escapeHtml(part)}</span>`;
             if (part === '[TEXT]' || part === '[INIT]') return `<span class="log-info">${escapeHtml(part)}</span>`;
             if (part === '[TOOL_USE]' || part === '[TOOL_RESULT]') return `<span class="log-tool">${escapeHtml(part)}</span>`;
-            
+
             // If it's not a special token, it's plain text. Escape it.
             return escapeHtml(part);
         });
-      
+
         return `<div class="log-line">${htmlParts.join('')}</div>`;
-      }
+    }
 
     handleLogUpdate(data) {
         if (!window.location.pathname.endsWith('/live')) return;
         const logContainer = document.getElementById('live-log-content');
         if (!logContainer) return;
-  
+
         if (data.type === 'error') {
             logContainer.innerHTML += this.colorizeLogLine(`[SYSTEM] [ERROR] ${data.message}`);
         } else if (data.content) {
             // Process each line individually
             const lines = data.content.split('\n');
             const newHtml = lines.map(line => this.colorizeLogLine(line)).join('');
-  
+
             if (data.type === 'log_content' || logContainer.textContent.startsWith('--- Switched to step')) {
                 logContainer.innerHTML = newHtml; // Replace content
             } else {
                 logContainer.innerHTML += newHtml; // Append content
             }
         }
-        
+
         if (logContainer.parentElement) {
             logContainer.parentElement.scrollTop = logContainer.parentElement.scrollHeight;
         }
