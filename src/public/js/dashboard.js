@@ -2,13 +2,11 @@ class CatHerderDashboard {
     constructor() {
         this.websocket = null;
         this.reconnectInterval = 5000;
-        // --- NEW: Keep track of the log file we are currently watching ---
         this.currentWatchedLogFile = null;
         this.currentTaskPhase = null;
     }
 
     initWebSocket() {
-        // ... (The initWebSocket function remains exactly the same)
         if (typeof WebSocket === 'undefined') {
             console.error("WebSockets are not supported in this browser.");
             return;
@@ -22,10 +20,10 @@ class CatHerderDashboard {
         this.websocket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log('[Dashboard.js] WebSocket message received:', data); // <--- ADDED LOG
+                console.log('[Dashboard.js] WebSocket message received:', data); 
                 this.handleRealtimeUpdate(data);
             } catch (e) {
-                console.error('[Dashboard.js] Failed to parse WebSocket message:', e, 'Raw data:', event.data); // <--- UPDATED LOG
+                console.error('[Dashboard.js] Failed to parse WebSocket message:', e, 'Raw data:', event.data); 
             }
         };
 
@@ -38,14 +36,14 @@ class CatHerderDashboard {
     }
 
     handleRealtimeUpdate(data) {
-        console.log(`[Dashboard.js] Handling real-time update: ${data.type}`); // <--- ADDED LOG
+        console.log(`[Dashboard.js] Handling real-time update: ${data.type}`); 
         switch (data.type) {
             case 'task_update':
-                const oldTaskPhase = this.currentTaskPhase; // Get phase before update
-                this.currentTaskPhase = data.data.phase; // ALWAYS update the internal phase tracker
+                const oldTaskPhase = this.currentTaskPhase;
+                this.currentTaskPhase = data.data.phase;
                 const newTaskPhase = this.currentTaskPhase;
 
-                console.log(`[Dashboard.js] Task update received: Task ID ${data.data.taskId}, Phase ${newTaskPhase}, Step ${data.data.currentStep}`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Task update received: Task ID ${data.data.taskId}, Phase ${newTaskPhase}, Step ${data.data.currentStep}`); 
 
                 // Only perform reloads if we are currently on the /live page
                 if (window.location.pathname.endsWith('/live')) {
@@ -53,7 +51,7 @@ class CatHerderDashboard {
                     // This forces a full re-render for UI consistency
                     if ((oldTaskPhase === 'running' && newTaskPhase === 'waiting_for_input') ||
                         (oldTaskPhase === 'waiting_for_input' && newTaskPhase === 'running')) {
-                        console.log(`[Dashboard.js] CRITICAL RELOAD: Phase changed from '${oldTaskPhase}' to '${newTaskPhase}'. Triggering page reload.`); // <--- ADDED LOG
+                        console.log(`[Dashboard.js] CRITICAL RELOAD: Phase changed from '${oldTaskPhase}' to '${newTaskPhase}'. Triggering page reload.`); 
                         window.location.reload();
                         return; // Stop further processing to allow reload
                     }
@@ -65,7 +63,7 @@ class CatHerderDashboard {
                     if (currentTaskInView && currentTaskInView.taskId === data.data.taskId &&
                         currentTaskInView.currentStep !== data.data.currentStep &&
                         (newTaskPhase === 'running' || newTaskPhase === 'waiting_for_input')) {
-                        console.log(`[Dashboard.js] STEP CHANGE RELOAD: Current step changed from '${currentTaskInView.currentStep}' to '${data.data.currentStep}'. Triggering page reload.`); // <--- ADDED LOG
+                        console.log(`[Dashboard.js] STEP CHANGE RELOAD: Current step changed from '${currentTaskInView.currentStep}' to '${data.data.currentStep}'. Triggering page reload.`); 
                         window.location.reload();
                         return; // Stop further processing to allow reload
                     }
@@ -73,7 +71,7 @@ class CatHerderDashboard {
                     // Scenario 3: Task has finished, failed, or interrupted (and was live)
                     // This ensures the page refreshes to show the final state or redirects.
                     if (window.liveActivityData.isLive && newTaskPhase !== 'running' && newTaskPhase !== 'waiting_for_input') {
-                        console.log(`[Dashboard.js] FINAL STATE RELOAD: Task phase changed to '${newTaskPhase}'. Triggering page reload for final state.`); // <--- ADDED LOG
+                        console.log(`[Dashboard.js] FINAL STATE RELOAD: Task phase changed to '${newTaskPhase}'. Triggering page reload for final state.`); 
                         setTimeout(() => window.location.reload(), 1200);
                         return; // Stop further processing to allow reload
                     }
@@ -84,11 +82,11 @@ class CatHerderDashboard {
                 this.updateTaskUI(data.data);
                 break;
             case 'sequence_update':
-                console.log(`[Dashboard.js] Sequence update received: Sequence ID ${data.data.sequenceId}, Phase ${data.data.phase}`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Sequence update received: Sequence ID ${data.data.sequenceId}, Phase ${data.data.phase}`); 
                 this.updateSequenceUI(data.data);
                 if (window.location.pathname.endsWith('/live')) {
                     if (['done', 'failed', 'interrupted'].includes(data.data.phase)) {
-                        console.log(`[Dashboard.js] SEQUENCE FINAL: Sequence finished. Redirecting to history.`); // <--- ADDED LOG
+                        console.log(`[Dashboard.js] SEQUENCE FINAL: Sequence finished. Redirecting to history.`); 
                         setTimeout(() => window.location.href = '/history', 1500);
                         return;
                     }
@@ -99,7 +97,7 @@ class CatHerderDashboard {
                 // Reload if on /history, /, OR on /live when no task is currently being displayed
                 if (window.location.pathname.endsWith('/history') ||
                     window.location.pathname === '/' ||
-                    (window.location.pathname.endsWith('/live') && !window.liveActivityData?.runningTask)) { // <--- MODIFIED LINE
+                    (window.location.pathname.endsWith('/live') && !window.liveActivityData?.runningTask)) { 
                     console.log('[Dashboard.js] JOURNAL RELOAD: Triggering page reload for history/root/inactive live.');
                     window.location.reload();
                 }
@@ -107,13 +105,12 @@ class CatHerderDashboard {
             case 'log_content':
             case 'log_update':
             case 'error':
-                console.log(`[Dashboard.js] Log update event received: ${data.type}`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Log update event received: ${data.type}`); 
                 this.handleLogUpdate(data);
                 break;
         }
     }
 
-    // --- NEW: A dedicated function to start the live view ---
     initializeLiveView(runningTask) {
         if (!runningTask) {
             console.log("Live view initialized, no task is currently running.");
@@ -126,7 +123,7 @@ class CatHerderDashboard {
     }
 
     updateTaskUI(task) {
-        console.log(`[Dashboard.js] Updating Task UI for Task ID ${task.taskId}, Phase ${task.phase}, Step ${task.currentStep}`); // <--- ADDED LOG
+        console.log(`[Dashboard.js] Updating Task UI for Task ID ${task.taskId}, Phase ${task.phase}, Step ${task.currentStep}`); 
         // This part updates the history page badge in real-time
         const taskRow = document.querySelector(`[data-task-id="${task.taskId}"]`);
         if (taskRow) {
@@ -143,11 +140,11 @@ class CatHerderDashboard {
             const newLogFile = task.logs?.[newStep]?.reasoning;
 
             if (newLogFile && this.currentWatchedLogFile !== newLogFile) {
-                console.log(`[Dashboard.js] SWITCHING LOG WATCH to ${newLogFile}`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] SWITCHING LOG WATCH to ${newLogFile}`); 
                 this.currentWatchedLogFile = newLogFile;
                 this.watchLogFile(task.taskId, newLogFile);
-            } else if (!newLogFile) { // <--- ADDED ELSE IF BLOCK
-                console.warn(`[Dashboard.js] No reasoning log file found for step ${newStep} in task ${task.taskId}.`); // <--- ADDED LOG
+            } else if (!newLogFile) { 
+                console.warn(`[Dashboard.js] No reasoning log file found for step ${newStep} in task ${task.taskId}.`); 
             }
 
             // Update status indicators for waiting_for_input phase
@@ -157,26 +154,26 @@ class CatHerderDashboard {
 
             // Existing logic to reload when the task is finished
             if (window.liveActivityData.isLive && task.phase !== 'running' && task.phase !== 'waiting_for_input') {
-                console.log(`[Dashboard.js] Task phase changed to final state '${task.phase}'. Reloading to show final state.`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Task phase changed to final state '${task.phase}'. Reloading to show final state.`); 
                 setTimeout(() => window.location.reload(), 1200);
             }
         }
     }
 
-    // --- NEW: A reusable function to send the watch_log message ---
+    // Reusable function to send the watch_log message ---
     watchLogFile(taskId, logFile) {
         const sendRequest = () => {
             if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
                 const watchMessage = { type: 'watch_log', taskId: taskId, logFile: logFile };
                 this.websocket.send(JSON.stringify(watchMessage));
-                console.log(`[Dashboard.js] Sent 'watch_log' message for ${logFile}`); // <--- ADDED LOG
+                console.log(`[Dashboard.js] Sent 'watch_log' message for ${logFile}`); 
 
                 const logContainer = document.getElementById('live-log-content');
                 if (logContainer) {
                     logContainer.textContent = `--- Switched to step: ${taskId} ---\nConnecting to log stream for ${logFile}...\n`;
                 }
             } else {
-                console.log('[Dashboard.js] WebSocket not open, retrying watchLogFile...'); // <--- ADDED LOG
+                console.log('[Dashboard.js] WebSocket not open, retrying watchLogFile...'); 
                 setTimeout(sendRequest, 200);
             }
         };
@@ -185,7 +182,7 @@ class CatHerderDashboard {
 
     // Handle UI updates for waiting_for_input phase
     updateWaitingForInputUI(task) {
-        console.log(`[Dashboard.js] Updating UI for 'waiting_for_input' phase. Task ID: ${task.taskId}, Current Step: ${task.currentStep}`); // <--- ADDED LOG
+        console.log(`[Dashboard.js] Updating UI for 'waiting_for_input' phase. Task ID: ${task.taskId}, Current Step: ${task.currentStep}`); 
         // Update the running step indicator
         const runningStepElement = document.getElementById('running-step-name');
         if (runningStepElement) {
@@ -272,9 +269,9 @@ class CatHerderDashboard {
             const newHtml = lines.map(line => this.colorizeLogLine(line)).join('');
 
             if (data.type === 'log_content' || logContainer.textContent.startsWith('--- Switched to step')) {
-                logContainer.innerHTML = newHtml; // Replace content
+                logContainer.innerHTML = newHtml;
             } else {
-                logContainer.innerHTML += newHtml; // Append content
+                logContainer.innerHTML += newHtml;
             }
         }
 

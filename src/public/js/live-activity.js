@@ -1,1 +1,0 @@
-// This file's logic has been merged into live-activity-page.js
