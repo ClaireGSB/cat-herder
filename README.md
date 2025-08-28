@@ -91,7 +91,7 @@ To effectively use `cat-herder`, it's important to understand its three core hie
 
 **Conceptual Flow:**
 
-
+```markdown
 /your-project-root
 ├── cat-herder.config.js             # Defines pipelines (ordered lists of steps)
 └── cat-herder-tasks/                # Main directory for all tasks and sequences
@@ -131,7 +131,6 @@ To effectively use `cat-herder`, it's important to understand its three core hie
         │
         └── 01-break-down-feature.md # Initial Task for dynamic generation (the task is for the AI to read _INITIAL_REQUIREMENTS.md and create subsequent tasks)
             └── Uses Pipeline 'create-tasks'
-
                 ├── Step 1: Analyze & Generate Tasks
                 └── (This step will dynamically create subsequent tasks like:)
                     ├── 02-design-module.md
@@ -139,6 +138,7 @@ To effectively use `cat-herder`, it's important to understand its three core hie
                     ├── 03-implement-service.md
                     │   └── Uses Pipeline 'default' (...)
                     └── (and so on...)
+```
 
 ### Key Capabilities and Workflows
 
