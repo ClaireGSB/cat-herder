@@ -11,7 +11,8 @@ import { startTui } from "./tools/tui.js";
 import { showStatus } from "./tools/status-cli.js";
 import { startWatcher } from "./tools/watch-tasks.js";
 import { validatePipeline } from "./tools/validator.js";
-import { getConfig, getProjectRoot } from "./config.js";
+import { getConfig, getProjectRoot, resolveDataPath } from "./config.js";
+import { updateStatus } from "./tools/status.js";
 
 export async function initAction(): Promise<void> {
   try {
@@ -99,6 +100,34 @@ export const tuiAction = startTui;
 export const statusAction = showStatus;
 
 export const watchAction = startWatcher;
+
+export async function askAction(question: string): Promise<void> {
+  const taskId = process.env.CLAUDE_TASK_ID;
+  if (!taskId) {
+    console.error(pc.red("Error: CLAUDE_TASK_ID environment variable not set. This command is for internal use only."));
+    process.exit(1);
+  }
+
+  try {
+    const config = await getConfig();
+    const projectRoot = getProjectRoot();
+    const stateDir = resolveDataPath(config.statePath, projectRoot);
+    const statusFile = path.join(stateDir, `${taskId}.state.json`);
+
+    updateStatus(statusFile, (s) => {
+      s.phase = 'waiting_for_input';
+      s.pendingQuestion = { 
+        question, 
+        timestamp: new Date().toISOString() 
+      };
+    });
+
+    process.exit(0); // Exit successfully
+  } catch (error: any) {
+    console.error(pc.red(`Failed to ask question: ${error.message}`));
+    process.exit(1);
+  }
+}
 
 // Helper function to safely update settings.json
 export function fixPermissions(projectRoot: string, permissionsToAdd: string[]): void {

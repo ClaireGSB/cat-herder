@@ -27,6 +27,7 @@ export interface CatHerderConfig {
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
+  interactionThreshold?: number;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
   // Backward compatibility - will be removed in future versions
@@ -41,6 +42,7 @@ const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pi
   manageGitBranch: true,
   autoCommit: false,
   waitForRateLimitReset: false,
+  interactionThreshold: 0,
 };
 
 let loadedConfig: CatHerderConfig | null = null;
@@ -153,4 +155,9 @@ function ensureCatHerderDirectory(fullPath: string): void {
 // Utility to get a path to a command template inside the global package
 export function getCommandTemplatePath(commandName: string): string {
     return path.resolve(new URL(`./dot-claude/commands/${commandName}`, import.meta.url).pathname);
+}
+
+// Utility to get a path to a prompt template inside the global package
+export function getPromptTemplatePath(templateName: string): string {
+    return path.resolve(new URL(`./tools/prompts/${templateName}`, import.meta.url).pathname);
 }

@@ -9,7 +9,8 @@ import {
   webAction,
   tuiAction,
   statusAction,
-  watchAction
+  watchAction,
+  askAction
 } from "./cli-actions.js";
 
 const program = new Command();
@@ -66,6 +67,12 @@ program
   .command("watch")
   .description("Watches the tasks directory and runs new tasks automatically.")
   .action(watchAction);
+
+// `ask` command
+program
+  .command("ask <question>")
+  .description("INTERNAL: Used by the AI to ask a clarifying question.")
+  .action(askAction);
 
 // Parse commands from the process arguments
 program.parseAsync(process.argv);

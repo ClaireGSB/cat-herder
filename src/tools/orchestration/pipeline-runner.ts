@@ -28,7 +28,7 @@ export async function executePipelineForTask(
 
   // Parse the task file to extract frontmatter
   const rawTaskContent = readFileSync(taskPath, 'utf-8');
-  const { pipeline: taskPipelineName, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
+  const { pipeline: taskPipelineName, interactionThreshold: taskInteractionThreshold, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
 
   // Determine task ID and status file path
   const taskId = taskPathToTaskId(taskPath, projectRoot);
@@ -60,6 +60,9 @@ export async function executePipelineForTask(
     }
   }
 
+  // Resolve interaction threshold (priority: task frontmatter > config > default 0)
+  const resolvedInteractionThreshold = taskInteractionThreshold ?? config.interactionThreshold ?? 0;
+
   // Extract sequence ID if this task is part of a sequence
   const sequenceId = options.sequenceStatusFile
     ? path.basename(options.sequenceStatusFile, '.state.json')
@@ -85,8 +88,9 @@ export async function executePipelineForTask(
 
   for (const [index, stepConfig] of selectedPipeline.entries()) {
     const { name, command, check } = stepConfig;
-    const currentStepStatus = readStatus(statusFile);
-    if (currentStepStatus.steps[name] === 'done') {
+    // Read the current status at the beginning of each step iteration
+    const currentTaskStatus = readStatus(statusFile);
+    if (currentTaskStatus.steps[name] === 'done') {
       console.log(pc.gray(`[Orchestrator] Skipping '${name}' (already done).`));
       continue;
     }
@@ -94,18 +98,24 @@ export async function executePipelineForTask(
     // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
 
-    // Always include task definition
-    context.taskDefinition = contextProviders.taskDefinition(projectRoot, taskContent);
+    // Always include task definition 
+    context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
 
-    // Include plan content for any step after "plan"
+    // Include plan content for any step after "plan" 
     const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
     if (planStepIndex !== -1 && index > planStepIndex) {
       try {
-        context.planContent = contextProviders.planContent(projectRoot, taskContent);
+        context.planContent = contextProviders.planContent(config, projectRoot, currentTaskStatus, taskContent);
       } catch (error) {
         // If PLAN.md doesn't exist, skip including plan content
         console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
       }
+    }
+
+    // NEW: Include human interaction history for all steps
+    const interactionHistory = contextProviders.interactionHistory(config, projectRoot, currentTaskStatus, taskContent);
+    if (interactionHistory) { // Only add if there's actual history
+      context.interactionHistory = interactionHistory;
     }
 
     // Read the specific command instructions for the current step
@@ -113,7 +123,7 @@ export async function executePipelineForTask(
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
     // Assemble the full prompt using the assemblePrompt function
-    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions);
+    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions, resolvedInteractionThreshold);
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);

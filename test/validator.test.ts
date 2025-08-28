@@ -36,7 +36,7 @@ describe('Validator - Retry Property Validation', () => {
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       const pathStr = filePath.toString();
       if (pathStr.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(cat-herder ask:*)'] } });
       }
       if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
@@ -307,7 +307,7 @@ describe('Validator - Check Object Validation', () => {
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       const pathStr = filePath.toString();
       if (pathStr.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(cat-herder ask:*)'] } });
       }
       if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
@@ -634,7 +634,7 @@ describe('Validator - Model Property Validation', () => {
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       const pathStr = filePath.toString();
       if (pathStr.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(cat-herder ask:*)'] } });
       }
       if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
@@ -933,7 +933,7 @@ describe('Validator - FileAccess Property Validation', () => {
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       const pathStr = filePath.toString();
       if (pathStr.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(cat-herder ask:*)'] } });
       }
       if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
@@ -1300,7 +1300,7 @@ describe('Validator - Array Check Validation', () => {
     // Mock file reads
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       if (filePath.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(npx tsc --noEmit)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(npx tsc --noEmit)', 'Bash(cat-herder ask:*)'] } });
       }
       if (filePath.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });
@@ -1591,7 +1591,7 @@ describe('Validator - Top-Level Config Validation', () => {
     vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike, encoding: any) => {
       const pathStr = filePath.toString();
       if (pathStr.includes('settings.json')) {
-        return JSON.stringify({ permissions: { allow: ['Bash(npm test)'] } });
+        return JSON.stringify({ permissions: { allow: ['Bash(npm test)', 'Bash(cat-herder ask:*)'] } });
       }
       if (pathStr.includes('package.json')) {
         return JSON.stringify({ scripts: { test: 'vitest' } });

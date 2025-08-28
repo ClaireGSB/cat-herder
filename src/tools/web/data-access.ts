@@ -1,53 +1,33 @@
 import fs from "node:fs";
 import path from "node:path";
-import { readJournal, JournalEvent } from "../status.js";
-import { ALL_STATUS_PHASES, StatusPhase } from '../../types.js';
+
+import { TaskStatus, SequenceStatus, Phase, JournalEvent, ALL_STATUS_PHASES } from "../../types.js";
 
 
-export interface TaskStatus {
-  taskId: string;
-  taskPath: string;
-  phase: StatusPhase;
-  currentStep?: string;
-  lastUpdate: string;
-  stats?: { totalDuration?: number; totalDurationExcludingPauses?: number; totalPauseTime?: number; };
-  tokenUsage?: Record<string, any>;
-  branch?: string;
-  pipeline?: string;
-  parentSequenceId?: string;
-}
-
+// TaskDetails extends the full TaskStatus and just adds the 'logs' property.
 export interface TaskDetails extends TaskStatus {
-  steps?: Array<{ name: string; status: StatusPhase; duration?: number; }>;
   logs?: { [stepName: string]: { log?: string; reasoning?: string; raw?: string; }; };
 }
 
+// SequenceInfo is a lightweight interface for parent sequence links in tasks.
 export interface SequenceInfo {
   sequenceId: string;
-  phase: StatusPhase;
+  phase: Phase;
   folderPath?: string;
   branch?: string;
 }
 
-export interface SequenceStatus {
-  sequenceId: string;
-  phase: StatusPhase;
-  lastUpdate: string;
-  stats?: { totalDuration?: number; totalDurationExcludingPauses?: number; totalPauseTime?: number; totalTokenUsage?: Record<string, any>; };
-  branch?: string;
-  folderPath?: string;
-  currentTaskPath?: string;
-}
-
+// SequenceTaskInfo describes tasks within a sequence.
 export interface SequenceTaskInfo {
   taskId: string;
   taskPath: string;
   filename: string;
-  status: StatusPhase;
-  phase?: StatusPhase;
+  status: Phase;
+  phase?: Phase; // Optional, can be same as status but kept for consistency with original
   lastUpdate?: string;
 }
 
+// SequenceDetails extends the full SequenceStatus and adds the 'tasks' array.
 export interface SequenceDetails extends SequenceStatus {
   tasks: SequenceTaskInfo[];
 }
@@ -61,21 +41,38 @@ export function getAllTaskStatuses(stateDir: string): TaskStatus[] {
       const content = fs.readFileSync(path.join(stateDir, file), "utf8");
       const state = JSON.parse(content);
       const fileStat = fs.statSync(path.join(stateDir, file));
+
+      // Construct TaskStatus object, ensuring all properties are explicitly set
+      // with fallbacks for older state file formats.
       tasks.push({
+        version: state.version || 2, // Default to version 2
         taskId: state.taskId || file.replace(".state.json", ""),
         taskPath: state.taskPath || "unknown",
-        phase: state.phase || "unknown",
-        currentStep: state.currentStep,
+        startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
+        branch: state.branch || "",
+        pipeline: state.pipeline || undefined,
+        parentSequenceId: state.parentSequenceId || undefined,
+        currentStep: state.currentStep || "",
+        phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
+        steps: state.steps || {},
+        tokenUsage: state.tokenUsage || {},
+        stats: state.stats || null,
         lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-        stats: state.stats,
-        tokenUsage: state.tokenUsage,
-        branch: state.branch,
-        pipeline: state.pipeline,
-        parentSequenceId: state.parentSequenceId
+        prUrl: state.prUrl || undefined,
+        lastCommit: state.lastCommit || undefined,
+        pendingQuestion: state.pendingQuestion || undefined,
+        interactionHistory: state.interactionHistory || []
       });
     } catch (error) {
       console.error(`Error reading state file ${file}:`, error);
-      tasks.push({ taskId: `ERROR: ${file}`, taskPath: "unknown", phase: "failed", lastUpdate: new Date().toISOString() });
+      // For errors, create a minimal but valid TaskStatus object
+      tasks.push({
+        version: 2, taskId: `ERROR: ${file}`, taskPath: "unknown",
+        startTime: new Date().toISOString(), branch: "", currentStep: "",
+        phase: "failed", steps: {}, tokenUsage: {}, stats: null,
+        lastUpdate: new Date().toISOString(), interactionHistory: [],
+        pipeline: undefined, parentSequenceId: undefined, prUrl: undefined, lastCommit: undefined, pendingQuestion: undefined
+      });
     }
   }
   return tasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
@@ -90,19 +87,28 @@ export function getAllSequenceStatuses(stateDir: string): SequenceStatus[] {
       const content = fs.readFileSync(path.join(stateDir, file), "utf8");
       const state = JSON.parse(content);
       const fileStat = fs.statSync(path.join(stateDir, file));
-      const folderName = state.sequenceId?.replace('sequence-', '');
+
+      // Construct SequenceStatus object, ensuring all properties are explicitly set
+      // with fallbacks for older state file formats.
       sequences.push({
+        version: state.version || 1,
         sequenceId: state.sequenceId || file.replace('.state.json', ''),
-        phase: state.phase || "unknown",
+        startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
+        branch: state.branch || "",
+        phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
+        currentTaskPath: state.currentTaskPath || null,
+        completedTasks: state.completedTasks || [],
         lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-        stats: state.stats,
-        branch: state.branch,
-        folderPath: folderName,
-        currentTaskPath: state.currentTaskPath
+        stats: state.stats || null,
       });
     } catch (error) {
       console.error(`Error reading sequence state file ${file}:`, error);
-      sequences.push({ sequenceId: `ERROR: ${file}`, phase: "failed", lastUpdate: new Date().toISOString() });
+      // For errors, create a minimal but valid SequenceStatus object
+      sequences.push({
+        version: 1, sequenceId: `ERROR: ${file}`, startTime: new Date().toISOString(),
+        branch: "", phase: "failed", currentTaskPath: null, completedTasks: [],
+        lastUpdate: new Date().toISOString(), stats: null
+      });
     }
   }
   return sequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
@@ -115,22 +121,36 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
     const content = fs.readFileSync(stateFile, "utf8");
     const state = JSON.parse(content);
     const fileStat = fs.statSync(stateFile);
-    const taskDetails: TaskDetails = {
+
+    // Create a base TaskStatus object with defaults to ensure all required fields are present
+    const baseTask: TaskStatus = {
+      version: state.version || 2,
       taskId: state.taskId || taskId,
       taskPath: state.taskPath || "unknown",
-      phase: state.phase || "unknown",
-      currentStep: state.currentStep,
+      startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
+      branch: state.branch || "",
+      pipeline: state.pipeline || undefined,
+      parentSequenceId: state.parentSequenceId || undefined,
+      currentStep: state.currentStep || "",
+      phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
+      steps: state.steps || {},
+      tokenUsage: state.tokenUsage || {},
+      stats: state.stats || null,
       lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-      stats: state.stats,
-      tokenUsage: state.tokenUsage,
-      branch: state.branch,
-      pipeline: state.pipeline,
-      parentSequenceId: state.parentSequenceId,
-      steps: state.steps
+      prUrl: state.prUrl || undefined,
+      lastCommit: state.lastCommit || undefined,
+      pendingQuestion: state.pendingQuestion || undefined,
+      interactionHistory: state.interactionHistory || []
     };
+
+    // Construct TaskDetails object from baseTask and add the 'logs' property
+    const taskDetails: TaskDetails = {
+      ...baseTask,
+      logs: {} // Initialize logs as an empty object, specific to TaskDetails
+    };
+
     const taskLogDir = path.join(logsDir, taskId);
     if (fs.existsSync(taskLogDir)) {
-      taskDetails.logs = {};
       const logFiles = fs.readdirSync(taskLogDir);
       const stepLogs: { [stepName: string]: any } = {};
       for (const logFile of logFiles) {
@@ -155,10 +175,15 @@ export function getTaskDetails(stateDir: string, logsDir: string, taskId: string
 export function readLogFile(logsDir: string, taskId: string, logFile: string): string | null {
   const sanitizedTaskId = taskId.replace(/[^a-zA-Z0-9_-]/g, "");
   const sanitizedLogFile = logFile.replace(/[^a-zA-Z0-9._-]/g, "");
-  if (!sanitizedLogFile.match(/\.(log|reasoning\.log|raw\.json\.log)$/)) return null;
+  // Basic sanity check to prevent directory traversal
+  if (!sanitizedLogFile.match(/^[a-zA-Z0-9._-]+$/)) return null;
+  if (sanitizedLogFile.includes('..') || sanitizedLogFile.includes('/') || sanitizedLogFile.includes('\\')) return null;
+
   const logPath = path.join(logsDir, sanitizedTaskId, sanitizedLogFile);
   const expectedDir = path.join(logsDir, sanitizedTaskId);
+  // Ensure the resolved path is within the expected log directory
   if (!path.resolve(logPath).startsWith(path.resolve(expectedDir))) return null;
+
   try {
     if (!fs.existsSync(logPath)) return null;
     return fs.readFileSync(logPath, "utf8");
@@ -182,7 +207,7 @@ export function findParentSequence(stateDir: string, taskId: string): SequenceIn
     const folderName = sequenceState.sequenceId?.replace('sequence-', '');
     return {
       sequenceId: sequenceState.sequenceId,
-      phase: sequenceState.phase,
+      phase: (sequenceState.phase && ALL_STATUS_PHASES.includes(sequenceState.phase as Phase)) ? sequenceState.phase : "pending",
       folderPath: folderName,
       branch: sequenceState.branch
     };
@@ -199,38 +224,34 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
     const content = fs.readFileSync(stateFile, "utf8");
     const state = JSON.parse(content);
     const fileStat = fs.statSync(stateFile);
-    const folderName = state.sequenceId?.replace('sequence-', '');
-    if (!folderName) return null;
-    const sequenceDetails: SequenceDetails = {
+
+    // Create a base SequenceStatus object with defaults to ensure all required fields are present
+    const baseSequence: SequenceStatus = {
+      version: state.version || 1,
       sequenceId: state.sequenceId || sequenceId,
-      phase: state.phase || "unknown",
+      startTime: state.startTime || new Date(fileStat.birthtime).toISOString(),
+      branch: state.branch || "",
+      phase: (state.phase && ALL_STATUS_PHASES.includes(state.phase as Phase)) ? state.phase : "pending",
+      currentTaskPath: state.currentTaskPath || null,
+      completedTasks: state.completedTasks || [],
       lastUpdate: state.lastUpdate || fileStat.mtime.toISOString(),
-      stats: state.stats,
-      branch: state.branch,
-      folderPath: folderName,
-      tasks: []
+      stats: state.stats || null,
     };
+
+    // Construct SequenceDetails object from baseSequence and add the 'tasks' array.
+    const sequenceDetails: SequenceDetails = {
+      ...baseSequence,
+      tasks: [] // Initialize tasks as an empty array, specific to SequenceDetails
+    };
+
     const allStateFiles = fs.readdirSync(stateDir).filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
     for (const stateFileName of allStateFiles) {
       try {
         const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
         const taskState = JSON.parse(taskStateContent);
         if (taskState.parentSequenceId === sequenceId) {
-          const taskPhase: StatusPhase = taskState.phase || 'pending';
-          let taskStatus: StatusPhase;
-
-          // We check if the phase from the file is a valid, known status.
-          if (taskPhase && ALL_STATUS_PHASES.includes(taskPhase as any)) {
-            // If it's valid, we can safely cast it and use it.
-            taskStatus = taskPhase as StatusPhase;
-          } else {
-            // If it's missing, null, or an unknown value, we default to 'failed'
-            // to make the problem visible in the UI and log a warning.
-            if (taskPhase) { // Only log if there was an invalid value
-              console.warn(`Unknown task phase encountered: '${taskPhase}'. Defaulting to 'failed'.`);
-            }
-            taskStatus = 'failed';
-          }
+          const taskPhase: Phase = (taskState.phase && ALL_STATUS_PHASES.includes(taskState.phase as Phase)) ? taskState.phase : 'pending';
+          let taskStatus: Phase = taskPhase; // Directly use the validated taskPhase
 
           const taskPath = taskState.taskPath || 'unknown';
           sequenceDetails.tasks.push({
@@ -238,7 +259,7 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
             taskPath: taskPath,
             filename: path.basename(taskPath),
             status: taskStatus,
-            phase: taskState.phase,
+            phase: taskState.phase, // Keep original phase for display if it was 'unknown' or broader
             lastUpdate: taskState.lastUpdate
           });
         }
@@ -253,69 +274,60 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
 }
 
 export function findLastStepName(taskDetails: TaskDetails): string | null {
-  if (!taskDetails.steps) return null;
+  if (!taskDetails.steps || Object.keys(taskDetails.steps).length === 0) {
+    return null;
+  }
 
-  let lastStep: { name: string; status: string } | null = null;
-  let lastDoneStep: { name: string; status: string } | null = null;
+  let lastDoneStepName: string | null = null;
 
-  // The order of steps in the state file isn't guaranteed, so we can't just take the last one.
-  // We must find the one with the most important status.
-  for (const [name, status] of Object.entries(taskDetails.steps)) {
-    if (status.status === 'running' || status.status === 'interrupted' || status.status === 'failed') {
-      // These are terminal or active states, this is definitely the one we want.
-      return name;
+  // Iterate over the entries (key-value pairs) of the steps object
+  for (const [stepName, stepStatus] of Object.entries(taskDetails.steps)) {
+    const primaryStates = ['running', 'interrupted', 'failed', 'waiting_for_input'] as const; // Explicitly type this array
+
+    // Check if the current stepStatus is one of the primary (active) states
+    if (primaryStates.includes(stepStatus as any)) {
+      return stepName; // Return the name of the active step immediately
     }
-    if (status.status === 'done') {
-      lastDoneStep = { name, status: status.status };
+
+    if (stepStatus === 'done') {
+      lastDoneStepName = stepName; // Keep track of the last completed step
     }
   }
 
-  // If we finished the loop without finding a more important status, return the last 'done' step.
-  return lastDoneStep?.name || null;
+  // If no active step was found, return the last completed one.
+  return lastDoneStepName;
 }
 
 // Helper function to find the currently active task from journal events
 export function findActiveTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
-  // Use a Map to track tasks that have started but not yet finished.
-  // The key is the task ID, the value is the 'task_started' event object.
   const activeTasks = new Map<string, JournalEvent>();
 
   for (const event of journal) {
     if (event.eventType === 'task_started') {
-      // When a task starts, add it to our set of active tasks.
-      // If the same task ID was active before (from a failed run), this updates it
-      // to the latest "started" event, which is correct.
       activeTasks.set(event.id, event);
     } else if (event.eventType === 'task_finished') {
-      // When a task finishes, it's no longer active. Remove it from the map.
       activeTasks.delete(event.id);
     }
   }
 
-  // If there are any tasks left in the map after processing the whole journal,
-  // they are the ones that are currently running.
   if (activeTasks.size > 0) {
-    // The map preserves insertion order. The "last" value in the map is the
-    // most recently started, currently active task.
-    // We convert the map values to an array and return the last element.
     return Array.from(activeTasks.values()).pop() || null;
   }
 
-  return null; // No active tasks found.
+  return null;
 }
 
 /**
  * Finds the most recently finished task from the journal.
  */
 export function findLastFinishedTaskFromJournal(journal: JournalEvent[]): JournalEvent | null {
-  // Iterate backwards through the journal to find the newest event first.
   for (let i = journal.length - 1; i >= 0; i--) {
     const event = journal[i];
     if (event.eventType === 'task_finished') {
-      return event; // Found the most recent finished task.
+      return event;
     }
   }
-  return null; // No finished tasks in the journal.
+  return null;
 }
 
 /**
@@ -325,15 +337,15 @@ export function findLastFinishedTaskFromJournal(journal: JournalEvent[]): Journa
 export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: string): TaskStatus[] {
   const taskMap = new Map<string, TaskStatus>();
 
-  // Process journal events chronologically to build task states
   for (const event of journal) {
     if (event.eventType === 'task_started') {
+      // Create a minimal TaskStatus object. The rest will be filled by state file.
       taskMap.set(event.id, {
-        taskId: event.id,
-        taskPath: "unknown", // Will be enriched from state file
-        phase: "running",
-        lastUpdate: event.timestamp,
-        parentSequenceId: event.parentId
+        version: 2, taskId: event.id, taskPath: "unknown",
+        startTime: event.timestamp, branch: "", currentStep: "",
+        phase: "running", steps: {}, tokenUsage: {}, stats: null,
+        lastUpdate: event.timestamp, interactionHistory: [],
+        pipeline: undefined, parentSequenceId: event.parentId, prUrl: undefined, lastCommit: undefined, pendingQuestion: undefined
       });
     } else if (event.eventType === 'task_finished') {
       const existingTask = taskMap.get(event.id);
@@ -344,7 +356,6 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
     }
   }
 
-  // Enrich with details from state files
   const enrichedTasks: TaskStatus[] = [];
   for (const [taskId, taskStatus] of taskMap.entries()) {
     const stateFile = path.join(stateDir, `${taskId}.state.json`);
@@ -353,14 +364,23 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
         const content = fs.readFileSync(stateFile, "utf8");
         const state = JSON.parse(content);
         enrichedTasks.push({
-          ...taskStatus,
-          taskPath: state.taskPath || taskStatus.taskPath,
-          currentStep: state.currentStep,
-          stats: state.stats,
-          tokenUsage: state.tokenUsage,
-          branch: state.branch,
-          pipeline: state.pipeline,
-          // Keep journal-based phase and timestamp as authoritative
+          ...state, // All properties from the state file
+          ...taskStatus, // Overwrite with authoritative journal data if present (phase, lastUpdate)
+          // Explicitly ensure optional properties are handled
+          version: state.version || 2,
+          taskPath: state.taskPath || "unknown",
+          startTime: state.startTime || taskStatus.startTime,
+          branch: state.branch || "",
+          currentStep: state.currentStep || "",
+          steps: state.steps || {},
+          tokenUsage: state.tokenUsage || {},
+          stats: state.stats || null,
+          interactionHistory: state.interactionHistory || [],
+          pipeline: state.pipeline || undefined,
+          parentSequenceId: state.parentSequenceId || undefined,
+          prUrl: state.prUrl || undefined,
+          lastCommit: state.lastCommit || undefined,
+          pendingQuestion: state.pendingQuestion || undefined,
         });
       } catch (error) {
         console.error(`Error reading state file for ${taskId}:`, error);
@@ -371,7 +391,6 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
     }
   }
 
-  // Sort by lastUpdate descending (most recent first)
   return enrichedTasks.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }
 
@@ -382,13 +401,12 @@ export function buildTaskHistoryFromJournal(journal: JournalEvent[], stateDir: s
 export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDir: string): SequenceStatus[] {
   const sequenceMap = new Map<string, SequenceStatus>();
 
-  // Process journal events chronologically to build sequence states
   for (const event of journal) {
     if (event.eventType === 'sequence_started') {
       sequenceMap.set(event.id, {
-        sequenceId: event.id,
-        phase: "running",
-        lastUpdate: event.timestamp
+        version: 1, sequenceId: event.id, startTime: event.timestamp,
+        branch: "", phase: "running", currentTaskPath: null,
+        completedTasks: [], lastUpdate: event.timestamp, stats: null
       });
     } else if (event.eventType === 'sequence_finished') {
       const existingSequence = sequenceMap.get(event.id);
@@ -399,7 +417,6 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
     }
   }
 
-  // Enrich with details from state files
   const enrichedSequences: SequenceStatus[] = [];
   for (const [sequenceId, sequenceStatus] of sequenceMap.entries()) {
     const stateFile = path.join(stateDir, `${sequenceId}.state.json`);
@@ -409,12 +426,17 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
         const state = JSON.parse(content);
         const folderName = state.sequenceId?.replace('sequence-', '');
         enrichedSequences.push({
-          ...sequenceStatus,
-          stats: state.stats,
-          branch: state.branch,
-          folderPath: folderName,
-          currentTaskPath: state.currentTaskPath,
-          // Keep journal-based phase and timestamp as authoritative
+          ...state, // All properties from the state file
+          ...sequenceStatus, // Overwrite with authoritative journal data (phase, lastUpdate)
+          // Ensure mandatory properties are not undefined
+          version: state.version || 1,
+          startTime: state.startTime || sequenceStatus.startTime,
+          branch: state.branch || "",
+          currentTaskPath: state.currentTaskPath || null,
+          completedTasks: state.completedTasks || [],
+          stats: state.stats || null,
+          // folderPath is not part of core SequenceStatus, so handle it separately
+          folderPath: folderName || undefined,
         });
       } catch (error) {
         console.error(`Error reading sequence state file for ${sequenceId}:`, error);
@@ -425,6 +447,5 @@ export function buildSequenceHistoryFromJournal(journal: JournalEvent[], stateDi
     }
   }
 
-  // Sort by lastUpdate descending (most recent first)
   return enrichedSequences.sort((a, b) => new Date(b.lastUpdate).getTime() - new Date(a.lastUpdate).getTime());
 }

@@ -2,6 +2,7 @@ import { spawn, ChildProcess } from "node:child_process";
 import { mkdirSync, createWriteStream, WriteStream, readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import pc from "picocolors";
+import { HumanInterventionRequiredError } from "./orchestration/errors.js";
 
 let activeProcess: ChildProcess | null = null;
 let wasKilled = false;
@@ -47,7 +48,8 @@ export function runStreaming(
   stdinData?: string,
   rawJsonLogPath?: string,
   model?: string,
-  options?: RunStreamingOptions
+  options?: RunStreamingOptions,
+  taskId?: string
 ): Promise<StreamResult> {
   wasKilled = false;
   // Build final args with JSON streaming flags and enhanced debugging
@@ -128,6 +130,7 @@ export function runStreaming(
       env: {
         ...process.env,
         CAT_HERDER_ACTIVE: "true",
+        ...(taskId && { CLAUDE_TASK_ID: taskId }),
       },
     });
     activeProcess = p;
@@ -200,6 +203,14 @@ export function runStreaming(
           // 2. Capture the tool name when it's used
           if (contentItem?.type === 'tool_use') {
             lastToolUsed = contentItem.name;
+            
+            // Detect askHuman tool usage and throw error to pause execution
+            if (contentItem.name === 'askHuman') {
+              const question = contentItem.input?.question;
+              if (typeof question === 'string') {
+                throw new HumanInterventionRequiredError(question);
+              }
+            }
           }
 
           // 3. Summarize tool results before logging

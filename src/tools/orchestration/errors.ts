@@ -4,3 +4,12 @@ export class InterruptedError extends Error {
     this.name = "InterruptedError";
   }
 }
+
+export class HumanInterventionRequiredError extends Error {
+  public readonly question: string;
+  constructor(question: string) {
+    super("Human intervention is required.");
+    this.name = "HumanInterventionRequiredError";
+    this.question = question;
+  }
+}

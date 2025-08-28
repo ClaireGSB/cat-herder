@@ -1,61 +1,184 @@
 
 # cat-herder
 
+
+
 A command-line tool that orchestrates a structured, step-gated development workflow in your repository using AI.
 
 `cat-herder` transforms your development process into a systematic and automated pipeline. By installing this single tool, you can run tasks through a controlled, multi-step process that includes planning, test generation, implementation, documentation updates, and code review, all with automated checkpoints and git commits.
 
-## Installation
+## Table of Contents
+* [Overview](#overview)
+* [Quick Start](#quick-start)
+  * [Installation](#installation)
+  * [Initialize and Run Your First Task](#initialize-and-run-your-first-task)
+* [Running Task Sequences](#running-task-sequences)
+  * [Usage (Sequences)](#usage-sequences)
+* [Local Development & Testing (for Contributors)](#local-development--testing-for-contributors)
+  * [Part 1: Initial One-Time Setup (`npm link`)](#part-1-initial-one-time-setup-npm-link)
+  * [Part 2: The Re-Testing Workflow (Every Time You Change Code)](#part-2-the-re-testing-workflow-every-time-you-change-code)
+  * [Part 3: Testing the Web Dashboard](#part-3-testing-the-web-dashboard)
+* [Interactive Halting (Interaction Threshold)](#interactive-halting-interaction-threshold)
+  * [The Interaction Threshold Scale](#the-interaction-threshold-scale)
+  * [Configuration](#configuration)
+    * [Global Configuration (`cat-herder.config.js`)](#global-configuration-cat-herderconfigjs)
+    * [Task-Level Override (Frontmatter)](#task-level-override-frontmatter)
+  * [How to Enable and Use Interactive Halting](#how-to-enable-and-use-interactive-halting)
+* [Advanced Configuration & Features](#advanced-configuration--features)
+  * [Understanding Task Sequences (Detailed)](#understanding-task-sequences-detailed)
+    * [The Dynamic Workflow Advantage](#the-dynamic-workflow-advantage)
+    * [How It Works (Sequences)](#how-it-works-sequences)
+    * [Task Ordering and Naming](#task-ordering-and-naming)
+    * [Ignoring Files for Comments and Planning](#ignoring-files-for-comments-and-planning)
+    * [Example: Dynamic Task Generation from a PRD](#example-dynamic-task-generation-from-a-prd)
+  * [Configurable Pipelines (`cat-herder.config.js`)](#configurable-pipelines-cat-herderconfigjs)
+    * [Per-Step Model Selection](#per-step-model-selection)
+    * [Pipeline Selection](#pipeline-selection)
+    * [Automatic Context Assembly](#automatic-context-assembly)
+    * [Check Types](#check-types)
+    * [Multiple Checks (Sequential Validation)](#multiple-checks-sequential-validation)
+    * [Important Note on Shell Checks](#important-note-on-shell-checks)
+  * [Customizable Guardrails (`fileAccess`)](#customizable-guardrails-fileaccess)
+    * [Basic Usage](#basic-usage)
+    * [Key Features](#key-features)
+    * [Common Examples](#common-examples)
+    * [Error Handling (Guardrails)](#error-handling-guardrails)
+  * [Automatic Retries on Failure](#automatic-retries-on-failure)
+    * [Basic Configuration](#basic-configuration)
+    * [How Retries Work with Multiple Checks](#how-retries-work-with-multiple-checks)
+    * [How It Works (Retries)](#how-it-works-retries)
+    * [Key Features (Retries)](#key-features-retries)
+    * [Common Use Cases (Retries)](#common-use-cases-retries)
+    * [Error Handling (Retries)](#error-handling-retries)
+  * [Handling API Rate Limits](#handling-api-rate-limits)
+    * [Graceful Failure (Default)](#graceful-failure-default)
+    * [Automatic Wait & Resume (Opt-in)](#automatic-wait--resume-opt-in)
+  * [Debugging and Logs](#debugging-and-logs)
+    * [When to use each log](#when-to-use-each-log)
+  * [State Files](#state-files)
+    * [Task State File (`<task-id>.state.json`)](#task-state-file-task-idstatejson)
+    * [Sequence State File (`<sequence-id>.state.json`)](#sequence-state-file-sequence-idstatejson)
+  * [Cost and Usage Monitoring](#cost-and-usage-monitoring)
+    * [Token Usage in Log Files](#token-usage-in-log-files)
+    * [Token Usage in State Files](#token-usage-in-state-files)
+    * [Understanding Token Types](#understanding-token-types)
+  * [Isolated and Resumable Git Branches](#isolated-and-resumable-git-branches)
+    * [Alternative Mode](#alternative-mode)
+  * [Enabling Auto-Commits](#enabling-auto-commits)
+    * [Adding Commit Instructions to Command Prompts](#adding-commit-instructions-to-command-prompts)
+  * [Permissions and Security (`.claude/settings.json`)](#permissions-and-security-claudesettingsjson)
+* [Interactive Web Dashboard](#interactive-web-dashboard)
+  * [Getting Started](#getting-started)
+* [Commands Reference](#commands-reference)
+  * [CLI Commands](#cli-commands)
+  * [NPM Scripts](#npm-scripts)
+* [System Requirements](#system-requirements)
 
-Install the CLI globally using npm. This makes the `cat-herder` command available anywhere on your system.
+---
 
-```bash
-npm install -g @your-scope/cat-herder
+## Overview
+
+`cat-herder` is a powerful CLI tool designed to bring structure and automation to your development process using AI. It enables you to define complex workflows and execute them autonomously, with built-in mechanisms for collaboration, validation, and recovery.
+
+### Core Concepts: Sequences, Tasks, and Steps
+
+To effectively use `cat-herder`, it's important to understand its three core hierarchical concepts:
+
+*   **Sequence**: An overarching project or a large feature that requires multiple, ordered tasks. It's a container for related tasks, allowing for dynamic task generation and execution on a single Git branch.
+*   **Task**: A single, self-contained goal or sub-feature within a sequence (or as a standalone unit). It's defined in a Markdown file (e.g., `01-feature-x.md`) and specifies *what* needs to be done.
+*   **Step**: An individual, distinct action within a larger workflow (a pipeline). A task is broken down into a series of steps (e.g., `plan`, `write_tests`, `implement`, `review`). Each step has its own specific instructions and validation checks defined in your `cat-herder.config.js`.
+
+**Conceptual Flow:**
+
 ```
+[ Your Project Goal (Sequence Folder) ]
+                |
+                V
+          [ Task 1.md ]
+                |
+                V
+[ Pipeline (cat-herder.config.js) ]
+                |
+                V
+[ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
+                |
+                V
+          [ Task 2.md ]
+                |
+                V
+[ Pipeline (cat-herder.config.js) ]
+                |
+                V
+[ Step 1: Plan ] --(Pass/Fail)--> [ Step 2: Write Tests ] --(Pass/Fail)--> ... --> [ Step N: Review ]
+                |
+                V
+             (and so on...)
+```
+
+### Key Capabilities and Workflows
+
+*   **Automated Development Pipelines**: Define multi-step workflows (pipelines) in `cat-herder.config.js` to systematically guide the AI through stages like planning, coding, testing, and documentation.
+*   **Dynamic Task Sequences**: Orchestrate a series of related tasks from a folder, where early tasks can dynamically create subsequent tasks for a fully autonomous feature implementation.
+*   **Interactive Human Collaboration**: Set an "Interaction Threshold" to allow the AI to pause and ask for human clarification, balancing automation with oversight.
+*   **Robust Error Handling**: Automatic retries for failed steps and graceful handling of API rate limits ensure your workflows are resilient.
+*   **Comprehensive Logging & Monitoring**: Detailed logs, state files, and a real-time web dashboard provide full visibility into the AI's reasoning, progress, and resource usage.
+*   **Version Control Integration**: Isolates AI work on dedicated Git branches, automatically committing progress and keeping your `main` branch clean.
+
+---
 
 ## Quick Start
 
-Follow these steps to integrate the Claude workflow into your existing TypeScript project.
+`cat-herder` streamlines your development workflow using AI. This section will guide you through getting started with a new or existing TypeScript project.
+
+### Installation
+
+**Important Note: This package (`@your-scope/cat-herder`) is currently under development and is not yet published to npm.**
+
+For now, if you wish to use `cat-herder`, you will need to clone the repository and follow the instructions in the [Local Development & Testing (for Contributors)](#local-development--testing-for-contributors) section to set up `npm link`. Once the package is officially published, you will be able to install it globally with:
+
+```bash
+# This command will work once the package is published to npm.
+npm install -g @your-scope/cat-herder
+```
+
+### Initialize and Run Your First Task
+
+Follow these steps to integrate `cat-herder` into your existing TypeScript project.
 
 1.  **Navigate to your project's root directory:**
 
-```bash
-cd your-typescript-project
-```
+    ```bash
+    cd your-typescript-project
+    ```
 
 2.  **Initialize the project:**
-This command sets up everything you need: it creates a `cat-herder.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `cat-herder:*` helper scripts and recommended dependencies.
-```bash
-cat-herder init
-```
+    This command sets up everything you need: it creates a `cat-herder.config.js` file, scaffolds default command prompts in a `.claude` directory, adds a sample task, and updates your `package.json` with `cat-herder:*` helper scripts and recommended dependencies.
+
+    ```bash
+    cat-herder init
+    ```
 
 3.  **Install dependencies:**
-The `init` command recommends development dependencies (like `vitest` and `prettier`) by adding them to your `package.json`. Run `npm install` to add them to your project.
-```bash
-npm install
-```
+    The `init` command recommends development dependencies (like `vitest` and `prettier`) by adding them to your `package.json`. Run `npm install` to add them to your project.
+
+    ```bash
+    npm install
+    ```
 
 4.  **Run the automated workflow:**
-Use the npm script to execute the sample task.
-```bash
-npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
-```
+    Use the npm script to execute the sample task.
 
-The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
+    ```bash
+    npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
+    ```
+
+    The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
 
 ## Running Task Sequences
 
-For complex features that require multiple, ordered steps that might not be known ahead of time, `cat-herder` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
+For complex features or projects requiring multiple, ordered tasks that might not be known ahead of time, `cat-herder` offers the `run-sequence` command. This feature enables dynamic task creation within a single workflow, allowing an initial task to generate subsequent tasks that are automatically discovered and executed.
 
-### The Dynamic Workflow Advantage
-
-Traditional single-task execution works well for self-contained features, but complex workflows often require multiple coordinated steps. The sequence orchestrator transforms your development process by:
-
-- **Dynamic Task Discovery**: After completing each task, the orchestrator re-scans the folder for new tasks that may have been created
-- **Single Branch Execution**: All tasks in a sequence run on the same Git branch, maintaining workflow continuity
-- **Autonomous Multi-Step Workflows**: Initial tasks can generate the rest of the workflow, creating fully autonomous development sequences
-
-### Usage
+### Usage (Sequences)
 
 Execute a sequence of tasks from a folder:
 
@@ -66,15 +189,208 @@ cat-herder run-sequence cat-herder-tasks/my-feature
 # Via npm script  
 npm run cat-herder:run-sequence -- cat-herder-tasks/my-feature
 ```
+For a detailed explanation of how sequences work, including dynamic task generation examples, see [Understanding Task Sequences (Detailed)](#understanding-task-sequences-detailed) in the Advanced Configuration & Features section.
 
-### How It Works
+## Local Development & Testing (for Contributors)
 
-1. **Initial Setup**: The orchestrator creates a dedicated Git branch for the entire sequence
-2. **Sequential Execution**: Tasks are executed in alphabetical order by filename
-3. **Dynamic Discovery**: After each task completes, the folder is re-scanned for new tasks
-4. **Continuation**: The cycle continues until no more tasks are found
+When contributing to the `cat-herder` tool itself, you need a way to test your local changes without publishing to npm. This is achieved using `npm link`, which creates symbolic links.
 
-### Task Ordering and Naming
+### Part 1: Initial One-Time Setup (`npm link`)
+
+First, set up your `cat-herder` tool and create a dedicated test environment.
+
+1.  **Globally Link Your Tool:** In the root directory of your `cat-herder` source code, run these commands. This builds your tool and creates a global symlink to it that your system can use.
+
+    ```bash
+    # In your cat-herder repository root (e.g., where this README is located)
+    npm run build
+    npm link
+    ```
+
+2.  **Create a Test Environment:** Set up a separate, clean project to test in. This should be *outside* of your `cat-herder` repository.
+
+    ```bash
+    # From a parent directory (e.g., cd .. from cat-herder-repo-root)
+    rm -rf my-test-app
+    mkdir my-test-app
+    cd my-test-app
+    npm init -y
+    git init
+    git commit --allow-empty -m "Initial commit"
+    ```
+
+3.  **Initialize and Link in the Test App:** Now, from inside `my-test-app`, run the setup process. The order is important.
+
+    ```bash
+    # Inside the my-test-app directory
+
+    # Run your tool's init command (which is globally linked)
+    cat-herder init
+
+    # Link the @your-scope/cat-herder dependency in your test app
+    # to your local source code.
+    npm link @your-scope/cat-herder
+
+    # Install other dependencies like vitest and prettier (recommended by init)
+    npm install
+    ```
+    Your test environment is now ready. The `cat-herder` command within `my-test-app` will now execute your locally linked version.
+
+### Part 2: The Re-Testing Workflow (Every Time You Change Code)
+
+This is the loop you will follow every time you make changes to `cat-herder` and want to test them.
+
+1.  **Rebuild Your Tool:** After saving changes in your `cat-herder` source code, you must rebuild it.
+
+    ```bash
+    # In your cat-herder repository root
+    npm run build
+    ```
+
+2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
+
+    ```bash
+    # In your my-test-app directory
+    rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
+    ```
+
+    **Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts in `.claude/commands/` are preserved.
+
+3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
+
+    ```bash
+    # In your my-test-app directory
+    npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
+    ```
+
+4.  **Removing Old Test Repo and Creating Fresh One**
+
+    If you want to start over with a completely fresh test environment (e.g., after major `cat-herder init` changes), you can delete the `my-test-app` directory and repeat the initial setup steps.
+
+    ```bash
+    # From the parent directory of my-test-app (e.g., cd .. from my-test-app)
+    # --- 1. Tear Down the Old Environment ---
+    echo "Removing old test environment..."
+    rm -rf my-test-app
+
+    # --- 2. Create the New Project Shell ---
+    echo "Creating a fresh test environment..."
+    mkdir my-test-app
+    cd my-test-app
+    npm init -y > /dev/null
+    git init > /dev/null
+    git commit --allow-empty -m "Initial commit" > /dev/null
+
+    # --- 3. Link and Initialize Your Tool ---
+    echo "Linking to local cat-herder and initializing..."
+    npm link @your-scope/cat-herder # This uses your globally linked version
+    cat-herder init # This uses your globally linked version
+    npm install # Installs dependencies for my-test-app
+
+    echo "\n✅ Fresh test environment is ready!"
+    ```
+
+### Part 3: Testing the Web Dashboard
+
+To test the web dashboard UI without running a live task, you can use the built-in test environment, which uses a static set of mock data from the `test/e2e-data/` directory.
+
+```bash
+# In your cat-herder repository root
+npm run test:manual:web
+```
+
+This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes without needing to run a live AI task or having existing data in your `~/.cat-herder` directory.
+
+## Interactive Halting (Interaction Threshold)
+
+The `cat-herder` tool includes a powerful feature that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Interaction Threshold**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
+
+### The Interaction Threshold Scale
+
+The `interactionThreshold` is configured in your `cat-herder.config.js` or a task's frontmatter as an integer from `0` to `5`. This number determines how cautious the AI will be.
+
+-   **`0` - Fully Autonomous (Default):** The AI will never ask questions. It makes its best assumptions and proceeds without interruption.
+-   **`1-2` - Low Interruption:** The AI will only pause if it is completely blocked by a contradiction in the requirements or is about to perform a potentially destructive action (like deleting a file).
+-   **`3-4` - Medium Interruption:** The AI will ask for clarification when faced with significant architectural or technical decisions that aren't clearly specified (e.g., "Should I add this to API v1 or create a new v2?").
+-   **`5` - High Interruption:** The AI will be very cautious. It will ask to clarify any ambiguity, no matter how small, and may present you with options before proceeding with a complex implementation.
+
+### Configuration
+
+You can set the threshold globally or per-task.
+
+#### Global Configuration (`cat-herder.config.js`)
+
+Set a default threshold for all tasks in your project.
+
+```javascript
+// cat-herder.config.js
+module.exports = {
+  // ... other configuration
+  
+  // Set the default interaction threshold (0-5)
+  interactionThreshold: 0, // Default is 0 for backward compatibility
+};```
+
+#### Task-Level Override (Frontmatter)
+
+For specific tasks that require more or less caution, override the global setting in the task's `.md` file.
+
+```markdown
+---
+pipeline: default
+interactionThreshold: 5
+---
+# Complex Refactoring Task
+This task involves major architectural changes. Be cautious and ask questions when uncertain.```
+
+### How to Enable and Use Interactive Halting
+
+1.  **Set the Threshold:** Choose a value greater than `0` in your config or task frontmatter.
+
+2.  **Grant Permission:** For this feature to work, the AI needs permission to use the `cat-herder ask` command. You **must** add the `Bash(cat-herder ask:*)` permission to your `.claude/settings.json` file. The `cat-herder validate` command will detect if this is missing and offer to add it for you.
+
+    ```json
+    // .claude/settings.json
+    {
+      "permissions": {
+        "allow": [
+          "Bash(npm test:*)",
+          "Bash(cat-herder ask:*)"
+        ]
+      }
+    }
+    ```
+
+3.  **Run the Task:** When the AI needs to ask a question, it will pause. The specific pipeline step, the task, and if applicable, the parent sequence are all set to a `waiting_for_input` status in the UI, providing consistent status visibility across all workflow levels. You can answer in two ways:
+    *   **Via CLI:** The command line will display the question and wait for your typed response.
+    *   **Via Web Dashboard:** The dashboard will show an interactive card with the question and a form to submit your answer.
+
+4.  **Resume:** Once an answer is provided from either source, the AI receives the guidance and continues the task. Importantly, the complete history of questions and answers is automatically provided as context to all subsequent steps in the pipeline, ensuring that human guidance is consistently understood and applied throughout the entire development workflow. All interactions are saved and can be reviewed on the task detail page in the web dashboard.
+
+## Advanced Configuration & Features
+
+This section delves into the detailed mechanisms and advanced configurations that power `cat-herder`.
+
+### Understanding Task Sequences (Detailed)
+
+`cat-herder`'s task sequencing capability allows for the orchestration of complex, multi-task workflows, including dynamic task generation.
+
+#### The Dynamic Workflow Advantage
+
+Traditional single-task execution works well for self-contained features, but complex workflows often require multiple coordinated tasks. The sequence orchestrator transforms your development process by:
+
+- **Dynamic Task Discovery**: After completing each task, the orchestrator re-scans the folder for new tasks that may have been created
+- **Single Branch Execution**: All tasks in a sequence run on the same Git branch, maintaining workflow continuity
+- **Autonomous Multi-Task Workflows**: Initial tasks can generate the rest of the workflow, creating fully autonomous development sequences
+
+#### How It Works (Sequences)
+
+1. **Initial Setup**: The orchestrator creates a dedicated Git branch for the entire sequence.
+2. **Sequential Execution**: Tasks are executed in alphabetical order by filename.
+3. **Dynamic Discovery**: After each task completes, the folder is re-scanned for new tasks.
+4. **Continuation**: The cycle continues until no more tasks are found.
+
+#### Task Ordering and Naming
 
 Tasks are executed alphabetically by filename. For workflows requiring specific ordering, use a numbered naming convention:
 
@@ -88,7 +404,7 @@ cat-herder-tasks/my-feature/
 └── 04-write-tests.md
 ```
 
-### Ignoring Files for Comments and Planning
+#### Ignoring Files for Comments and Planning
 
 You can include notes, plans, or other context files within a sequence folder that shouldn't be executed as tasks. The sequence orchestrator will automatically ignore any file that is prefaced with an underscore (`_`).
 
@@ -96,139 +412,62 @@ This allows you to keep your planning and execution in the same place.
 
 In the example above, `_PLAN.md` and `_notes_on_api_changes.md` will be ignored by the runner, and the sequence will execute starting with `01-analyze-requirements.md`.
 
-### Example Dynamic Workflow
+#### Example: Dynamic Task Generation from a PRD
 
-Consider a feature development sequence:
+This example demonstrates how an initial task can read a Product Requirements Document (`_PRD.md`) and then dynamically create a series of subsequent implementation tasks within a sequence.
 
-**Initial Task**: `01-break-down-prd.md`
-```markdown
----
-pipeline: default
----
-# Break Down PRD
+1.  **Create the Sequence Folder and PRD:**
+    First, create a folder for your feature sequence and an `_PRD.md` file within it. The underscore `_` ensures `_PRD.md` is ignored by the runner but available as context for your AI.
 
-Analyze the product requirements document (`_PRD.md`) and create individual task files for each implementation step.
+    ```bash
+    # In your project root
+    mkdir -p cat-herder-tasks/new-feature-implementation
+    touch cat-herder-tasks/new-feature-implementation/_PRD.md
+    ```
 
-Use the Write tool to create:
-- `02-setup-database-schema.md`
-- `03-implement-api-endpoints.md` 
-- `04-create-frontend-components.md`
-- `05-write-integration-tests.md`
-```
+    Now, populate `cat-herder-tasks/new-feature-implementation/_PRD.md` with your feature requirements (e.g., details about a new user authentication system).
 
-When you run `cat-herder run-sequence cat-herder-tasks/new-feature`, the orchestrator will:
+2.  **Create the Initial "Break Down PRD" Task:**
+    Create a task file, `01-break-down-prd.md`, in the same folder. This task will instruct the AI to read the `_PRD.md` and then use the `Write` tool to generate the subsequent implementation tasks.
 
-1. Execute `01-break-down-prd.md`, which creates the additional task files
-2. Automatically discover and execute `02-setup-database-schema.md`
-3. Continue through each generated task in sequence
-4. Complete the entire workflow autonomously on a single branch
+    **Remember:** When creating any task file, you need to define its YAML frontmatter, choosing the correct `pipeline` and `interactionThreshold` based on your project's `cat-herder.config.js` and the task's complexity.
 
-This creates a fully autonomous, multi-step development workflow where the initial planning task drives the entire implementation sequence.
+    `cat-herder-tasks/new-feature-implementation/01-break-down-prd.md`:
+    ```markdown
+    ---
+    pipeline: default
+    interactionThreshold: 3 # Set a medium threshold for this planning task
+    ---
+    # Break Down PRD
 
-## How to Test Locally (for Developers)
+    Analyze the provided Product Requirements Document (`_PRD.md`) in the current directory.
+    Based on its content, identify the major implementation steps required for this new feature.
 
-When developing the `cat-herder` tool itself, you need a way to test your local changes without publishing to npm. This is done using `npm link`.
+    For each major step, use the `Write` tool to create a new markdown task file (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, `04-create-frontend-components.md`, `05-write-integration-tests.md`). Ensure these task files are named alphabetically (e.g., `02-`, `03-`, etc.) to maintain execution order within the sequence.
 
-### Part 1: Initial One-Time Setup
+    Each generated task file should:
+    - Have appropriate YAML frontmatter (e.g., `pipeline: default`, `interactionThreshold`).
+    - Clearly define the goal for that specific implementation step.
+    - Include all necessary context from the `_PRD.md` in its body, or reference the `_PRD.md` as context if it's too large.
 
-First, set up your `cat-herder` tool and create a dedicated test environment.
+    **Reference:** `_PRD.md`
+    ```
 
-1.  **Globally Link Your Tool:** In the root directory of your `cat-herder` source code, run these commands. This builds your tool and creates a global symlink to it that your system can use.
-```bash
-# In your cat-herder repository root
-npm run build
-npm link
-```
+3.  **Run the Sequence:**
+    Execute the sequence orchestrator on your feature folder:
 
-2.  **Create a Test Environment:** Set up a separate, clean project to test in.
-```bash
-# From a parent directory (e.g., cd ..)
-rm -rf my-test-app
-mkdir my-test-app
-cd my-test-app
-npm init -y
-git init
-git commit --allow-empty -m "Initial commit"
-```
+    ```bash
+    npm run cat-herder:run-sequence -- cat-herder-tasks/new-feature-implementation
+    ```
 
-3.  **Initialize and Install in the Test App:** Now, from inside `my-test-app`, run the setup process. The order is important.
-```bash
-# Inside the my-test-app directory
+    The orchestrator will:
 
-# Run your tool's init command
-cat-herder init
+    1.  Execute `01-break-down-prd.md`.
+    2.  The AI in `01-break-down-prd.md` will read `_PRD.md` and then *create* new task files (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, etc.) in the `cat-herder-tasks/new-feature-implementation/` directory using the `Write` tool.
+    3.  After `01-break-down-prd.md` completes, the orchestrator will re-scan the folder, discover the newly created tasks, and automatically execute them in alphabetical order.
+    4.  The sequence will continue through each generated task, completing the entire feature implementation autonomously on a single Git branch.
 
-# Link the dependency to your local source
-npm link @your-scope/cat-herder
-
-# Install other dependencies like vitest and prettier
-npm install
-```
-Your test environment is now ready.
-
-### Part 2: The Re-Testing Workflow (Every Time You Change Code)
-
-This is the loop you will follow every time you make changes to `cat-herder` and want to test them.
-
-1.  **Rebuild Your Tool:** After saving changes in your `cat-herder` source code, you must rebuild it.
-```bash
-# In your cat-herder repository root
-npm run build
-```
-
-2.  **Run the "Safe Clean" Command:** Navigate to your test app directory and run this command. It removes all artifacts from the last run **without deleting your custom commands or pipeline configuration**.
-```bash
-# In your my-test-app directory
-rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
-```
-
-**Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts in `.claude/commands/` are preserved.
-
-
-3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
-```bash
-# In your my-test-app directory
-npm run cat-herder:run -- cat-herder-tasks/task-001-sample.md
-```
-
-4. **Removing old test repo and creating fresh one** 
-
-If you want to start over with a fresh test environment, you can delete the `my-test-app` directory and repeat the initial setup steps.
-
-```bash
-# --- 1. Tear Down the Old Environment ---
-echo "Removing old test environment..."
-rm -rf my-test-app
-
-# --- 2. Create the New Project Shell ---
-echo "Creating a fresh test environment..."
-mkdir my-test-app
-cd my-test-app
-npm init -y > /dev/null
-git init > /dev/null
-git commit --allow-empty -m "Initial commit" > /dev/null
-
-# --- 3. Link and Initialize Your Tool ---
-echo "Linking to local cat-herder and initializing..."
-npm link @your-scope/cat-herder
-cat-herder init
-npm install
-
-echo "\n✅ Fresh test environment is ready!"
-```
-
-### Part 3: Testing the Web Dashboard
-
-To test the web dashboard UI without running a live task, you can use the built-in test environment, which uses a static set of mock data from the `test/e2e-data/` directory.
-
-```bash
-# In your cat-herder repository root
-npm run test:manual:web
-```
-
-This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes without needing to run a live AI task or having existing data in your `~/.cat-herder` directory.
-
-## How It Works
+This creates a fully autonomous, multi-task development workflow where the initial planning task drives the entire implementation sequence.
 
 ### Configurable Pipelines (`cat-herder.config.js`)
 
@@ -244,7 +483,9 @@ This tool is driven by a `pipelines` object in your `cat-herder.config.js` file.
 module.exports = {
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
-  logsPath: "~/.cat-herder/logs"
+  logsPath: "~/.cat-herder/logs",
+
+  interactionThreshold: 0, 
 
   /**
    * If true (default), the tool automatically creates a dedicated Git branch
@@ -323,7 +564,7 @@ module.exports = {
 };
 ```
 
-**Per-Step Model Selection:**
+#### Per-Step Model Selection
 
 You can specify which Claude model to use for individual pipeline steps by adding a `model` property. This allows you to optimize your workflow by using more powerful models for complex tasks and faster, more cost-effective models for simpler tasks:
 
@@ -346,7 +587,7 @@ You can specify which Claude model to use for individual pipeline steps by addin
 
 If no `model` is specified, the step will use your Claude CLI's default model configuration. Valid model names are validated by the `cat-herder validate` command.
 
-**Pipeline Selection:**
+#### Pipeline Selection
 
 The orchestrator selects a pipeline to run based on the following priority order:
 
@@ -382,10 +623,10 @@ module.exports = {
 
 4. **First Available:** If no default is specified, the first pipeline defined in the `pipelines` object is used.
 
-**Automatic Context Assembly:**
-The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition and any generated plans. No manual configuration of context providers is required.
+#### Automatic Context Assembly
+The orchestrator automatically assembles the necessary context for each step, ensuring the AI always has the information it needs to complete its task. This includes the overall pipeline structure, the current step's role, and relevant content such as the task definition, any generated plans, and the complete interaction history of human-AI questions and answers from previous steps in the task. This interaction history ensures that human guidance provided to earlier steps is automatically made available to all subsequent steps, maintaining consistency throughout the pipeline. No manual configuration of context providers is required.
 
-**Check Types:**
+#### Check Types
 ```javascript
 // Check that a file was created
 check: { type: "fileExists", path: "PLAN.md" }
@@ -400,7 +641,7 @@ check: { type: "shell", command: "npm test", expect: "fail" }
 check: { type: "none" }
 ```
 
-**Multiple Checks (Sequential Validation):**
+#### Multiple Checks (Sequential Validation)
 
 You can specify an array of checks for more granular validation. The orchestrator will execute each check in order, and if any single check fails, the entire step validation will fail immediately:
 
@@ -419,6 +660,7 @@ check: [
 ]
 ```
 
+##### Important Note on Shell Checks
 When using multiple checks:
 - Checks execute in the order specified
 - The first failing check immediately stops execution and fails the step
@@ -431,7 +673,7 @@ When using multiple checks:
 
 The `fileAccess` property allows you to control which files Claude can modify during each step of your pipeline. This provides fine-grained control over the development workflow and prevents accidental modifications to unintended files.
 
-**Basic Usage:**
+#### Basic Usage
 Add the `fileAccess` property to any pipeline step:
 
 ```javascript
@@ -445,13 +687,13 @@ Add the `fileAccess` property to any pipeline step:
 }
 ```
 
-**Key Features:**
+#### Key Features
 - **Glob Pattern Matching**: Uses standard glob patterns for flexible file matching (e.g., `src/**/*`, `*.md`, `test/**/*.spec.ts`)
 - **Step-Specific Control**: Each pipeline step can have different file access rules
 - **Optional Enforcement**: Omitting the `fileAccess` property allows unrestricted file access for that step
 - **Clear Error Messages**: When a file write is blocked, you'll receive a clear message indicating which patterns are allowed
 
-**Common Examples:**
+#### Common Examples
 ```javascript
 // Allow only test file modifications
 fileAccess: {
@@ -472,7 +714,7 @@ fileAccess: {
 // fileAccess: { allowWrite: ["**/*"] }
 ```
 
-**Error Handling:**
+#### Error Handling (Guardrails)
 When Claude attempts to modify a file that doesn't match the allowed patterns, the operation is blocked with a message like:
 ```
 Blocked: The current step 'implement' only allows file modifications matching ["src/**/*"]. Action on 'README.md' denied.
@@ -516,7 +758,7 @@ When you use the `retry` property on a step that has an array of checks, the ret
 
 This ensures that each retry attempt is focused on fixing the specific point of failure before re-validating the entire step from scratch.
 
-#### How It Works
+#### How It Works (Retries)
 
 1. **Normal Execution**: Claude runs the `implement` command and modifies files in `src/`
 2. **Check Validation**: The orchestrator runs `npm test` to validate the implementation
@@ -525,14 +767,14 @@ This ensures that each retry attempt is focused on fixing the specific point of 
    - Claude receives this feedback and attempts to fix the issues
    - The cycle repeats up to the specified number of retries until tests pass or retries are exhausted
 
-#### Key Features
+#### Key Features (Retries)
 
 - **Automatic Retry**: Failed steps automatically retry with context-aware feedback
 - **Error Context**: The actual error output is automatically included in the feedback
 - **Configurable Limits**: Set any number of retries with the `retry` property
 - **Zero Configuration**: No complex setup required—just add `retry: N` to any step
 
-#### Common Use Cases
+#### Common Use Cases (Retries)
 
 **Test Failures During Implementation:**
 ```javascript
@@ -556,7 +798,7 @@ This ensures that each retry attempt is focused on fixing the specific point of 
 }
 ```
 
-#### Error Handling
+#### Error Handling (Retries)
 
 - **Retry Exhaustion**: After the specified number of failed attempts, the step fails permanently
 - **Automatic Feedback**: The orchestrator generates clear, actionable feedback prompts automatically
@@ -598,10 +840,10 @@ With this setting, instead of failing, the tool will pause execution and log a w
 The orchestrator provides comprehensive logging to help you understand both what happened and why. For each pipeline step, three log files are created in the `~/.cat-herder/logs/` directory:
 
 - **`XX-step-name.log`**: Contains the final, clean output from the AI tool. This is the polished result you would normally see. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
-- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
+- **`XX-step-name.reasoning.log`**: Contains the AI's detailed reasoning process. This shows the step-by-step thinking that led to the final output, and also includes any user answers provided during interactive halting, creating a complete chronological transcript of the human-AI dialogue. This log file now includes a header with the pipeline name, model, and settings used for the step, as well as start and end timestamps.
 - **`XX-step-name.raw.json.log`**: Contains the raw, line-by-line JSON objects streamed from the LLM. This is useful for deep debugging of the tool's behavior, as it shows every event, including tool use attempts and content chunks.
 
-**When to use each log:**
+#### When to use each log
 - Use the standard `.log` file to see what the AI produced and any errors that occurred.
 - Use the `.reasoning.log` file to understand *why* the AI made specific decisions, especially when debugging unexpected outputs or behaviors.
 - Use the `.raw.json.log` file for in-depth analysis of the raw communication with the AI, especially when diagnosing complex tool interaction issues or understanding the exact sequence of LLM events.
@@ -616,14 +858,14 @@ The reasoning logs are particularly valuable when:
 
 The orchestrator uses state files to track the progress of tasks and sequences. These files are stored in the `~/.cat-herder/state` directory.
 
-**Task State File (`<task-id>.state.json`):**
+#### Task State File (`<task-id>.state.json`)
 This file contains the status of a single task. It includes the `startTime` of the task and a `stats` object with total duration and pause time metrics.
 
-**Sequence State File (`<sequence-id>.state.json`):**
+#### Sequence State File (`<sequence-id>.state.json`)
 This file contains the status of a sequence of tasks. It now includes the `startTime` of the sequence, and a `stats` object with the following fields:
 - `totalDuration`: The total duration of the sequence in seconds, including pauses.
 - `totalDurationExcludingPauses`: The total duration of the sequence in seconds, excluding pauses.
-- `totalPauseTime`: The total pause time in seconds.
+- `totalPauseTime`: The total pause time in seconds, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows.
 
 ### Cost and Usage Monitoring
 
@@ -728,7 +970,8 @@ By default (`manageGitBranch: true`), the orchestrator automatically manages Git
 
 This keeps your `main` branch clean and isolates all automated work, whether you are working locally or with a remote team.
 
-**Alternative Mode:** If you set `manageGitBranch: false` in your config, the tool will skip all branch management and run directly on your current branch. This is useful for advanced workflows where you want full control over Git operations, but you'll see a warning that the tool is operating on your current branch.
+#### Alternative Mode
+If you set `manageGitBranch: false` in your config, the tool will skip all branch management and run directly on your current branch. This is useful for advanced workflows where you want full control over Git operations, but you'll see a warning that the tool is operating on your current branch.
 
 ### Enabling Auto-Commits
 
@@ -797,7 +1040,7 @@ The validator ensures both your security settings and project configuration stay
 
 ## Interactive Web Dashboard
 
-`cat-herder` includes a powerful web-based dashboard for visual monitoring and real-time task and sequence tracking. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, and watch Claude's reasoning process in real-time with full lifecycle awareness for both individual tasks and multi-task sequences.
+`cat-herder` includes a powerful web-based dashboard for visual monitoring, real-time task and sequence tracking, and interactive collaboration with AI workflows. The dashboard provides an intuitive interface to monitor your automated workflows, view detailed task and sequence information, watch Claude's reasoning process in real-time, and answer AI questions directly from the browser when using Interactive Halting with full lifecycle awareness for both individual tasks and multi-task sequences.
 
 ### Getting Started
 
@@ -822,12 +1065,13 @@ All commands are available directly via the `cat-herder` executable.
 -   `cat-herder init`: Scaffolds the workflow in the current repository.
 -   `cat-herder run <path-to-task.md>`: Runs the full workflow for a specific task.
     -   `--pipeline <name>`: Specifies which pipeline to use, overriding config and task defaults.
--   `cat-herder run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder, executing them in alphabetical order and re-scanning for new tasks after each completion.
+-   `cat-herder run-sequence <taskFolderPath>`: Runs a dynamic sequence of tasks from a specified folder.
 -   `cat-herder validate`: Validates your `cat-herder.config.js` pipeline configuration.
 -   `cat-herder watch`: Watches the tasks directory and runs new tasks automatically.
 -   `cat-herder status`: Displays the status of the most recent task as JSON.
 -   `cat-herder tui`: Launches an interactive terminal UI to monitor task progress.
 -   `cat-herder web`: Starts the interactive web dashboard with real-time task monitoring and Live Activity streaming. See [Interactive Web Dashboard](#interactive-web-dashboard) for details.
+-   `cat-herder ask <question>`: **(INTERNAL USE ONLY)** Used by the AI to ask a clarifying question during interactive halting.
 
 ### NPM Scripts
 

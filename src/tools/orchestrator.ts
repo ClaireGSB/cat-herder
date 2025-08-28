@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
-import { updateStatus, readStatus, TaskStatus, logJournalEvent } from "./status.js";
+import { updateStatus, readStatus, logJournalEvent } from "./status.js";
+import { TaskStatus } from "../types.js";
 import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
 import { validatePipeline } from "./validator.js";
 import { taskPathToTaskId } from "../utils/id-generation.js";

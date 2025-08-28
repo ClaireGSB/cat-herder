@@ -2,67 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { getConfig, getProjectRoot, resolveDataPath } from "../config.js";
-
-export type Phase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
-
-export type TokenUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  cacheCreationInputTokens: number;
-  cacheReadInputTokens: number;
-};
-
-export type ModelTokenUsage = {
-  [modelName: string]: TokenUsage;
-};
-
-// Journal Event interface for run-journal.json
-export interface JournalEvent {
-  timestamp: string;
-  eventType: 'task_started' | 'task_finished' | 'sequence_started' | 'sequence_finished';
-  id: string; // taskId or sequenceId
-  parentId?: string; // The sequenceId if it's a task within a sequence
-  status?: 'done' | 'failed' | 'interrupted'; // Only for 'finished' events
-}
-export type TaskStatus = {
-  version: number;
-  taskId: string;
-  taskPath: string;
-  startTime: string;
-  branch: string;
-  pipeline?: string;
-  parentSequenceId?: string;
-  currentStep: string;
-  phase: Phase;
-  steps: Record<string, Phase>;
-  tokenUsage: ModelTokenUsage;
-  stats: {
-    totalDuration: number;
-    totalDurationExcludingPauses: number;
-    totalPauseTime: number;
-  } | null;
-  lastUpdate: string;
-  prUrl?: string;
-  lastCommit?: string;
-};
-
-export type SequencePhase = "pending" | "running" | "done" | "failed" | "interrupted" | "waiting_for_reset";
-export interface SequenceStatus {
-  version: number;
-  sequenceId: string;
-  startTime: string;
-  branch: string;
-  phase: SequencePhase;
-  currentTaskPath: string | null;
-  completedTasks: string[];
-  lastUpdate: string;
-  stats: {
-    totalDuration: number;
-    totalDurationExcludingPauses: number;
-    totalPauseTime: number;
-    totalTokenUsage: ModelTokenUsage;
-  } | null;
-}
+import type { TaskStatus, SequenceStatus, JournalEvent } from "../types.ts";
 
 // This function receives an absolute path, so it doesn't need to know the project root.
 function writeJsonAtomic(file: string, data: unknown) {
@@ -92,7 +32,8 @@ const defaultStatus: TaskStatus = {
     steps: {},
     tokenUsage: {},
     stats: null,
-    lastUpdate: new Date().toISOString()
+    lastUpdate: new Date().toISOString(),
+    interactionHistory: []
 };
 
 export function readStatus(file: string): TaskStatus {
@@ -153,7 +94,10 @@ export function updateSequenceStatus(file: string, mut: (s: SequenceStatus) => v
 // Journal utility functions for run-journal.json
 
 // Helper to get the journal file path
-async function getJournalPath(): Promise<string> {
+async function getJournalPath(overrideStateDir?: string): Promise<string> {
+    if (overrideStateDir) {
+        return path.join(overrideStateDir, 'run-journal.json');
+    }
     const projectRoot = getProjectRoot();
     const config = await getConfig();
     const resolvedStatePath = resolveDataPath(config.statePath, projectRoot);
@@ -161,8 +105,8 @@ async function getJournalPath(): Promise<string> {
 }
 
 // New function to read the journal
-export async function readJournal(): Promise<JournalEvent[]> {
-    const journalPath = await getJournalPath();
+export async function readJournal(stateDir?: string): Promise<JournalEvent[]> {
+    const journalPath = await getJournalPath(stateDir);
     if (!fs.existsSync(journalPath)) {
         return [];
     }
@@ -189,4 +133,30 @@ export async function logJournalEvent(event: Omit<JournalEvent, 'timestamp'>): P
     } catch (error: any) {
         console.error(pc.red(`Fatal: Could not write to run-journal.json. Error: ${error.message}`));
     }
+}
+
+// =================================================================
+// FILE-BASED IPC FUNCTIONS FOR UI-BASED INTERACTIVE HALTING
+// =================================================================
+
+// Helper to get the consistent path for an answer file
+function getAnswerFilePath(stateDir: string, taskId: string): string {
+  return path.join(stateDir, `${taskId}.answer`);
+}
+
+// Function for the web server to write the answer
+export async function writeAnswerToFile(stateDir: string, taskId: string, answer: string): Promise<void> {
+  const filePath = getAnswerFilePath(stateDir, taskId);
+  fs.writeFileSync(filePath, answer, 'utf-8');
+}
+
+// Function for the CLI orchestrator to read (and delete) the answer
+export async function readAndDeleteAnswerFile(stateDir: string, taskId: string): Promise<string | null> {
+  const filePath = getAnswerFilePath(stateDir, taskId);
+  if (fs.existsSync(filePath)) {
+    const answer = fs.readFileSync(filePath, 'utf-8');
+    fs.unlinkSync(filePath); // CRITICAL: Delete the file after reading
+    return answer;
+  }
+  return null;
 }

@@ -23,12 +23,21 @@
             <div class="card bg-light border-0 mb-3">
                 <div class="card-body">
                     <% if (isLive) { %>
-                        <p class="card-text text-primary mb-0">
-                            <strong>
-                                <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
-                                RUNNING STEP: <span id="running-step-name"><%= taskToShow.currentStep %></span>
-                            </strong>
-                        </p>
+                        <% if (taskToShow.phase === 'waiting_for_input') { %>
+                            <p class="card-text text-warning mb-0">
+                                <strong>
+                                    <i class="bi bi-pause-circle-fill me-1"></i>
+                                    WAITING FOR INPUT: <span id="running-step-name"><%= taskToShow.currentStep %></span>
+                                </strong>
+                            </p>
+                        <% } else { %>
+                            <p class="card-text text-primary mb-0">
+                                <strong>
+                                    <i class="bi bi-arrow-repeat spinner-border spinner-border-sm me-1" role="status"></i>
+                                    RUNNING STEP: <span id="running-step-name"><%= taskToShow.currentStep %></span>
+                                </strong>
+                            </p>
+                        <% } %>
                     <% } else { %>
                          <p class="card-text text-muted mb-0">
                             <strong>
@@ -63,6 +72,84 @@
             </div>
         <% } %>
 
+        <!-- Interactive Halting Question Card -->
+        <% if (taskToShow && taskToShow.phase === 'waiting_for_input' && taskToShow.pendingQuestion) { %>
+            <div class="card border-warning mb-3" id="pending-question-card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-question-circle-fill me-2"></i>
+                        AI is waiting for your input
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning d-flex align-items-start mb-3" role="alert">
+                        <i class="bi bi-robot me-2 mt-1" style="font-size: 1.25rem;"></i>
+                        <div>
+                            <strong class="d-block mb-1">QUESTION:</strong>
+                            <p class="mb-0"><%= taskToShow.pendingQuestion.question %></p>
+                        </div>
+                    </div>
+                    <div class="text-muted small">
+                        <i class="bi bi-clock me-1"></i>
+                        Asked at: <%= new Date(taskToShow.pendingQuestion.timestamp).toLocaleString() %>
+                    </div>
+                    <div class="mt-3">
+                        <form id="answer-form" data-task-id="<%= taskToShow.taskId %>">
+                            <div class="mb-2">
+                                <label for="human-answer" class="form-label"><strong>Your Answer:</strong></label>
+                                <textarea class="form-control" id="human-answer" name="answer" rows="3" required></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send me-1"></i> Submit Answer and Resume
+                            </button>
+                            <div id="form-status" class="mt-2"></div>
+                        </form>
+                        
+                        <div class="alert alert-info d-flex align-items-center mt-3" role="alert">
+                            <i class="bi bi-terminal me-2"></i>
+                            <div>
+                                <strong>Alternative:</strong> You can also answer via your command-line interface.
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        document.getElementById('answer-form').addEventListener('submit', async (e) => {
+                            e.preventDefault();
+                            const form = e.target;
+                            const taskId = form.dataset.taskId;
+                            const answer = form.elements.answer.value;
+                            const statusDiv = document.getElementById('form-status');
+                            const submitButton = form.querySelector('button[type="submit"]');
+
+                            submitButton.disabled = true;
+                            statusDiv.innerHTML = '<span class="text-info"><i class="bi bi-hourglass-split me-1"></i>Submitting...</span>';
+
+                            try {
+                                const response = await fetch(`/task/${taskId}/respond`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ answer })
+                                });
+
+                                if (response.ok) {
+                                    form.elements.answer.disabled = true;
+                                    statusDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Answer submitted successfully. Task is resuming in the CLI.</span>';
+                                } else {
+                                    const result = await response.json();
+                                    statusDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Error: ${result.error}</span>`;
+                                    submitButton.disabled = false;
+                                }
+                            } catch (error) {
+                                statusDiv.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Network error: ${error.message}</span>`;
+                                submitButton.disabled = false;
+                            }
+                        });
+                    </script>
+                </div>
+            </div>
+        <% } %>
+
         <!-- Log Viewer -->
         <%- include('partials/_live-log-viewer', { initialLogContent: initialLogContent, isLive: isLive, taskToShow: taskToShow }) %>
     </div>
@@ -71,31 +158,46 @@
 
 <!-- Pass data to the client-side script -->
 <script>
-    const taskToShowJSON = '<%- JSON.stringify(taskToShow || null) %>';
-    const parentSequenceJSON = '<%- JSON.stringify(parentSequence || null) %>';
-    const isLiveJSON = '<%- JSON.stringify(isLive) %>';
+    console.log("[EJS DEBUG] Starting script block in live-activity.ejs...");
     
+    // Use a different approach - pass data through script tags to avoid string literal issues
+    const taskData = <%- JSON.stringify(taskToShow || null) %>;
+    const parentSequenceData = <%- JSON.stringify(parentSequence || null) %>;
+    const isLiveData = <%- JSON.stringify(isLive) %>;
+    const initialLogContentData = <%- JSON.stringify(initialLogContent || null) %>;
+    
+    console.log("[EJS DEBUG] taskData:", taskData);
+    console.log("[EJS DEBUG] parentSequenceData:", parentSequenceData);
+    console.log("[EJS DEBUG] isLiveData:", isLiveData);
+    console.log("[EJS DEBUG] initialLogContentData:", initialLogContentData);
+
     // Unify the data for dashboard.js
     window.liveActivityData = {
-        runningTask: JSON.parse(taskToShowJSON), // dashboard.js expects 'runningTask'
-        lastFinishedTask: null, // No longer needed
-        parentSequence: JSON.parse(parentSequenceJSON),
-        isLive: JSON.parse(isLiveJSON)
+        runningTask: taskData,
+        lastFinishedTask: null,
+        parentSequence: parentSequenceData,
+        isLive: isLiveData
     };
+    console.log("[EJS DEBUG] window.liveActivityData successfully set:", window.liveActivityData);
 
     // Client-side script to colorize the pre-loaded log
     document.addEventListener('DOMContentLoaded', () => {
         const logContainer = document.getElementById('live-log-content');
-        const initialContent = `<%- JSON.stringify(initialLogContent || null) %>`;
-
-        if (logContainer && initialContent && initialContent !== 'null') {
-            const parsedContent = JSON.parse(initialContent);
+        
+        if (logContainer && initialLogContentData) {
             if (window.dashboard && typeof window.dashboard.colorizeLogLine === 'function') {
-                const lines = parsedContent.split('\\n'); // Note the escaped newline
+                const lines = String(initialLogContentData).split('\n');
                 logContainer.innerHTML = lines.map(line => window.dashboard.colorizeLogLine(line)).join('');
+                console.log("[EJS DEBUG] Logs colorized and set into viewer.");
+            } else {
+                logContainer.textContent = String(initialLogContentData);
+                console.log("[EJS DEBUG] Logs set as plain text (no colorizer function).");
             }
+        } else {
+            console.log("[EJS DEBUG] No initial log content or logContainer not found.");
         }
     });
+    console.log("[EJS DEBUG] Finished script block in live-activity.ejs.");
 </script>
 
 <%- include('partials/footer', { page: 'live-activity' }) %>

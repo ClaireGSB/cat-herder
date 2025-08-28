@@ -26,6 +26,8 @@ const badgeClasses = `badge status-${status} ${size} ${cssClass}`.trim();
             <i class="bi bi-pause-circle-fill me-1"></i>
         <% } else if (status === 'pending') { %>
             <i class="bi bi-clock me-1"></i>
+        <% } else if (status === 'waiting_for_input') { %>
+            <i class="bi bi-question-circle-fill me-1"></i>
         <% } else { %>
             <i class="bi bi-circle me-1"></i>
         <% } %>

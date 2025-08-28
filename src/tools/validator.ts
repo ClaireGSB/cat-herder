@@ -101,11 +101,11 @@ function loadProjectSettings(projectRoot: string, errors: string[]): { allowedPe
  */
 function validatePipelineStructure(config: CatHerderConfig, errors: string[]): { [key: string]: any[] } | null {
   let pipelines: { [key: string]: any[] };
-  
+
   if (config.pipelines && typeof config.pipelines === 'object' && Object.keys(config.pipelines).length > 0) {
     // New multi-pipeline format
     pipelines = config.pipelines;
-    
+
     // Validate defaultPipeline if specified
     if (config.defaultPipeline && !config.pipelines[config.defaultPipeline]) {
       errors.push(`The defaultPipeline "${config.defaultPipeline}" is not defined in the 'pipelines' object.`);
@@ -214,7 +214,7 @@ function validatePermissions(commandFilePath: string, stepId: string, allowedPer
   const commandContent = fs.readFileSync(commandFilePath, 'utf-8');
   const frontmatter = parseFrontmatter(commandContent);
   const toolsValue = frontmatter?.['allowed-tools'];
-  
+
   let requiredTools: string[] = [];
 
   if (typeof toolsValue === 'string') {
@@ -222,7 +222,7 @@ function validatePermissions(commandFilePath: string, stepId: string, allowedPer
   } else if (Array.isArray(toolsValue)) {
     requiredTools = toolsValue;
   }
-  
+
   for (const tool of requiredTools) {
     if (tool && !allowedPermissions.includes(tool)) {
       // Instead of just a generic error, we add to both arrays
@@ -237,13 +237,14 @@ function validatePermissions(commandFilePath: string, stepId: string, allowedPer
  * Validates a single step within a pipeline.
  */
 function validateStep(
-  step: any, 
-  stepIndex: number, 
-  pipelineName: string, 
-  userScripts: Record<string, string>, 
-  allowedPermissions: string[], 
+  step: any,
+  stepIndex: number,
+  pipelineName: string,
+  config: CatHerderConfig,
+  userScripts: Record<string, string>,
+  allowedPermissions: string[],
   projectRoot: string,
-  errors: string[], 
+  errors: string[],
   missingPermissions: string[]
 ): void {
   const stepId = `Pipeline '${pipelineName}', Step ${stepIndex + 1} ('${step.name || 'unnamed'}')`;
@@ -263,10 +264,10 @@ function validateStep(
 
   // Handle both single check and array of checks
   const checksToValidate = Array.isArray(step.check) ? step.check : [step.check];
-  
+
   for (const [checkIndex, singleCheck] of checksToValidate.entries()) {
-    const checkId = Array.isArray(step.check) 
-      ? `${stepId}, check #${checkIndex + 1}` 
+    const checkId = Array.isArray(step.check)
+      ? `${stepId}, check #${checkIndex + 1}`
       : stepId;
 
     validateCheckObject(singleCheck, checkId, userScripts, errors);
@@ -285,6 +286,8 @@ function validateStep(
 
   // FileAccess Validation
   validateFileAccess(step.fileAccess, stepId, errors);
+
+  // (Removed old askHuman validation - now handled at pipeline level)
 
   // Model Validation
   if (step.model !== undefined) {
@@ -327,15 +330,24 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
     }
 
     for (const [index, step] of pipeline.entries()) {
-      validateStep(step, index, pipelineName, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
+      validateStep(step, index, pipelineName, config, userScripts, allowedPermissions, projectRoot, errors, missingPermissions);
     }
+  }
+
+  // Interactive Halting: Check for required Bash permission when interactionThreshold > 0
+  const requiredAskPermission = "Bash(cat-herder ask:*)";
+  if (!allowedPermissions.includes(requiredAskPermission)) {
+    errors.push(
+      `The Interactive Halting feature requires the '${requiredAskPermission}' permission in .claude/settings.json. Run this command again and choose 'y' to add it automatically.`
+    );
+    missingPermissions.push(requiredAskPermission);
   }
 
   // Use a Set to remove duplicate missing permissions before returning
   const uniqueMissingPermissions = [...new Set(missingPermissions)];
 
-  return { 
-    isValid: errors.length === 0, 
+  return {
+    isValid: errors.length === 0,
     errors,
     missingPermissions: uniqueMissingPermissions,
   };

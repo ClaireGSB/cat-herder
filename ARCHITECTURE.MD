@@ -18,7 +18,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 1.  **Interface Layer (CLI & Web):** The user's entry point. This layer is responsible for parsing user input and presenting status information.
     *   **CLI (`src/index.ts`, `src/cli-actions.ts`):** Uses `commander` to define commands and options. It triggers the core orchestrator and handles process-level concerns like exit codes.
-    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
+    *   **Web Dashboard (`src/tools/web/`):** An optional monitoring and interaction layer that runs as a separate process and reads from the State Layer to provide a real-time view of the workflow. It enables interactive collaboration through form-based question answering during Interactive Halting workflows, using a file-based IPC system to communicate answers back to the CLI orchestrator. Its frontend is built using EJS, with larger pages composed from smaller, reusable partials (e.g., `_log-viewer.ejs`, `_task-steps.ejs`) to maintain a clean and component-based structure.
 
 2.  **Orchestration Layer (`src/tools/orchestration/`):** The heart of the application. This layer is responsible for executing the defined workflow.
     *   It reads the user's pipeline configuration (`cat-herder.config.js`).
@@ -26,16 +26,20 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It prepares the necessary context and prompts for each step.
     *   It invokes the AI Interaction Layer to execute a step.
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
+    *   **State-Based Signal Detection:** While the `claude` CLI is running, the parent Orchestration Layer simultaneously polls the task's state file. If the AI uses the `Bash` tool to run `cat-herder ask`, that command updates the state file's `phase` to `waiting_for_input`. The orchestrator detects this change, recognizes it as a pause signal, and gracefully terminates the `claude` CLI process before initiating the user prompt. The orchestrator also updates the parent sequence's state file to reflect the paused status for consistent workflow monitoring.
 
 3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
     *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
-    *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results.
+    *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results. The reasoning logs now contain the complete interaction transcript, including user answers provided during interactive halting workflows.
     *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
+    *   **Interactive Tool Detection:** Monitors the AI's tool usage, specifically detecting when the `askHuman` tool is invoked, triggering the interactive halting workflow by throwing a `HumanInterventionRequiredError`.
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
     *   This layer makes the entire workflow **resumable**. If a task is interrupted or fails, the orchestrator can read the last known state and continue from the last incomplete step.
     *   The state files also serve as the data source for the Web Dashboard, decoupling the UI from the core orchestration logic.
+    *   **Interactive Halting Support:** The state layer tracks the `waiting_for_input` phase when the AI pauses to ask for human clarification. It stores pending questions (`pendingQuestion`) and maintains a complete interaction history (`interactionHistory`) of all Q&A exchanges during task execution. Both task status objects and sequence status objects support the `waiting_for_input` phase, and individual step statuses within the `steps` object also track this state for consistent status propagation throughout the workflow hierarchy (step → task → sequence).
+    *   **Pause Time Tracking:** The state layer accurately tracks `totalPauseTime` statistics, including both API rate limit pauses and time spent waiting for human input during interactive halting workflows. Pause durations are calculated and added to both task and sequence statistics when resuming from a `waiting_for_input` state.
 
 ### B. Data Flow Diagram
 
@@ -55,7 +59,7 @@ graph TD
     end
 
     subgraph State & Config
-        State[State Files (.json)]
+        State[State Files (.json)<br/>incl. Interaction History]
         Config[cat-herder.config.js]
         Prompts[Command Prompts (.md)]
     end
@@ -76,6 +80,22 @@ graph TD
     ClaudeCLI -- Modifies --> UserFiles[User's Source Code]
     Orchestrator -- Uses --> CheckRunner
     CheckRunner -- Executes --> Shell[Shell Commands (npm test)]
+    
+    %% Interactive Halting Flow
+    ClaudeCLI -- Bash tool --> CLI_Ask[cat-herder ask]
+    CLI_Ask -- Updates state file --> State
+    Orchestrator -- Polls and detects change --> State
+    Orchestrator -- Kills --> ClaudeCLI
+    Orchestrator -- Prompts for input --> CLI
+    CLI -- User response --> Orchestrator
+    Orchestrator -- Updates interaction history --> State
+    State -- Provides interaction history for context --> Orchestrator
+    
+    %% Web UI Interactive Flow
+    User -- Submits answer --> Web
+    Web -- POST /task/:taskId/respond --> AnswerFile[Answer File (.answer)]
+    AnswerFile -- File polling --> Orchestrator
+    Orchestrator -- Deletes file after reading --> AnswerFile
 
     Web -- Reads --> State
     User -- Views --> Web
