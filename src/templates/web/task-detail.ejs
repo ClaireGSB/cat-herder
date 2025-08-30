@@ -152,10 +152,24 @@
                                 </div>
                             </div>
                             
-                            <!-- Timestamp -->
-                            <div class="text-muted small">
-                                <i class="bi bi-clock me-1"></i>
-                                <%= new Date(interaction.timestamp).toLocaleString() %>
+                            <!-- Timestamps and Duration -->
+                            <% 
+                                const questionDate = new Date(interaction.questionTimestamp || interaction.timestamp); // Fallback for old data
+                                const answerDate = new Date(interaction.answerTimestamp || interaction.timestamp); // Fallback for old data
+                                const durationSeconds = interaction.answerTimestamp ? (answerDate.getTime() - questionDate.getTime()) / 1000 : null;
+                                const formattedDuration = durationSeconds ? helpers.formatDuration(durationSeconds) : 'N/A';
+                            %>
+                            <div class="text-muted small d-flex justify-content-between">
+                                <span>
+                                    <i class="bi bi-box-arrow-in-right me-1" title="Question Time"></i>
+                                    Asked: <%= questionDate.toLocaleString() %>
+                                    <i class="bi bi-box-arrow-in-left me-1 ms-3" title="Answer Time"></i>
+                                    Answered: <%= answerDate.toLocaleString() %>
+                                </span>
+                                <strong title="Response Time">
+                                    <i class="bi bi-hourglass-split me-1"></i>
+                                    <%= formattedDuration %>
+                                </strong>
                             </div>
                         </div>
                     <% }); %>

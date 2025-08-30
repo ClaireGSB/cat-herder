@@ -24,6 +24,13 @@ export type ModelTokenUsage = {
   [modelName: string]: TokenUsage;
 };
 
+export interface Interaction {
+  question: string;
+  answer: string;
+  questionTimestamp: string;
+  answerTimestamp: string;
+}
+
 // Journal Event interface for run-journal.json
 export interface JournalEvent {
   timestamp: string;
@@ -56,11 +63,7 @@ export type TaskStatus = {
     question: string;
     timestamp: string;
   };
-  interactionHistory: {
-    question: string;
-    answer: string;
-    timestamp: string;
-  }[];
+  interactionHistory: Interaction[];
 };
 
 export interface SequenceStatus {

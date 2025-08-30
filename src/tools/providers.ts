@@ -25,7 +25,7 @@ export const contextProviders: Record<string, (config: CatHerderConfig, projectR
 
     let historyString = "--- HUMAN INTERACTION HISTORY ---\n";
     taskStatus.interactionHistory.forEach((interaction, index) => {
-      historyString += `\n**Interaction #${index + 1} (${new Date(interaction.timestamp).toLocaleString()})**\n`;
+      historyString += `\n**Interaction #${index + 1} (${new Date(interaction.questionTimestamp).toLocaleString()})**\n`;
       historyString += `**Q:** ${interaction.question}\n`;
       historyString += `**A:** ${interaction.answer}\n`;
     });
