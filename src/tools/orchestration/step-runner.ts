@@ -225,11 +225,15 @@ export async function executeStep(
 
             // 3. RESUME: Update task, step, AND sequence status, moving question to history and tracking pause time
             updateStatus(statusFile, s => {
-              s.interactionHistory.push({
-                question: error.question,
-                answer,
-                timestamp: new Date().toISOString()
-              });
+              const questionTimestamp = s.pendingQuestion?.timestamp;
+              if (questionTimestamp) {
+                s.interactionHistory.push({
+                  question: error.question,
+                  answer,
+                  questionTimestamp: questionTimestamp,
+                  answerTimestamp: new Date().toISOString()
+                });
+              }
               s.pendingQuestion = undefined;
               s.phase = 'running';
               s.steps[name] = 'running'; // Set the step back to running
