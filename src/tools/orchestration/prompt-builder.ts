@@ -73,13 +73,18 @@ export function assemblePrompt(
   currentStepName: string,
   context: Record<string, string>,
   commandInstructions: string,
-  interactionThreshold: number = 0
+  interactionThreshold: number = 0,
+  sequenceFolderPath?: string
 ): string {
   // 1. Explain that the task is part of a larger, multi-step process.
-  const intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
+  let intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
 
   // 2. Add interaction threshold instructions
   const interactionIntro = getInteractionIntro(interactionThreshold);
+
+  if (sequenceFolderPath) {
+    intro += `\n\nYou are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentionned, it is referring to the "${sequenceFolderPath}" folder.`;
+  }
 
   // 3. Provide the entire pipeline definition as a simple numbered list.
   const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
