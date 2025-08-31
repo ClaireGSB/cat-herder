@@ -1,6 +1,7 @@
 import express, { Request, Response, Router } from "express";
 import path from "node:path";
 import { readJournal, writeAnswerToFile } from "../status.js";
+import { Phase } from "../../types.js";
 import { 
   buildTaskHistoryFromJournal, 
   buildSequenceHistoryFromJournal,
@@ -59,6 +60,26 @@ export function createRouter(stateDir: string, logsDir: string, config: any): Ro
     // --- UNIFIED LOG-LOADING LOGIC ---
     // This block now runs AFTER taskToShow is determined, regardless of live status
     if (taskToShow) {
+        // Update task steps to show complete pipeline from config
+        if (taskToShow.pipeline && config.pipelines) {
+            const pipelineName = taskToShow.pipeline;
+            const pipelineSteps = config.pipelines[pipelineName]; // Array of step objects from config
+
+            if (pipelineSteps) {
+                const completeSteps: Record<string, Phase> = {};
+                // Iterate over the config to enforce order
+                for (const stepConfig of pipelineSteps) {
+                    const stepName = stepConfig.name;
+                    // Get existing status from the state file, or default to 'pending'
+                    const existingStatus = taskToShow.steps[stepName];
+                    completeSteps[stepName] = (existingStatus as Phase) || 'pending';
+                }
+                taskToShow.steps = completeSteps; // Replace the original unordered steps object
+            } else {
+                console.error(`Pipeline '${pipelineName}' not found in config for task ${taskToShow.taskId}`);
+            }
+        }
+
         // 1. Find the most relevant step (now correctly handles 'waiting_for_input')
         const lastStepName = findLastStepName(taskToShow);
         

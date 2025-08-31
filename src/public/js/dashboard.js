@@ -47,7 +47,27 @@ class CatHerderDashboard {
 
                 // Only perform reloads if we are currently on the /live page
                 if (window.location.pathname.endsWith('/live')) {
-                    // Scenario 1: Critical phase transition (running <-> waiting_for_input)
+                    // SCENARIO 1: Task has been resumed (BUG FIX)
+                    // This is the highest priority check - reload immediately when task resumes
+                    if ((oldTaskPhase === 'interrupted' || oldTaskPhase === 'failed') && newTaskPhase === 'running') {
+                        console.log(`[Dashboard.js] RESUME RELOAD: Task ${data.data.taskId} has resumed from '${oldTaskPhase}' to '${newTaskPhase}'. Triggering page reload.`);
+                        window.location.reload();
+                        return; // Exit to allow reload
+                    }
+
+                    // SCENARIO 2: Task in a sequence finished (DYNAMIC DISCOVERY)
+                    // Reload after a task completes to discover new dynamically generated tasks
+                    const currentSequence = window.liveActivityData?.parentSequence;
+                    const updatedTask = data.data;
+                    if (currentSequence && updatedTask.parentSequenceId === currentSequence.sequenceId &&
+                        ['done', 'failed', 'interrupted'].includes(newTaskPhase) && oldTaskPhase === 'running') {
+                        
+                        console.log(`[Dashboard.js] DYNAMIC DISCOVERY RELOAD: Task ${updatedTask.taskId} finished with '${newTaskPhase}'. Reloading sequence view in 1.2s.`);
+                        setTimeout(() => window.location.reload(), 1200); // Delay to ensure state is written
+                        return; // Exit to allow reload
+                    }
+
+                    // SCENARIO 3: Critical phase transition (running <-> waiting_for_input)
                     // This forces a full re-render for UI consistency
                     if ((oldTaskPhase === 'running' && newTaskPhase === 'waiting_for_input') ||
                         (oldTaskPhase === 'waiting_for_input' && newTaskPhase === 'running')) {
@@ -56,7 +76,7 @@ class CatHerderDashboard {
                         return; // Stop further processing to allow reload
                     }
 
-                    // Scenario 2: Current step has changed for an active task
+                    // SCENARIO 4: Current step has changed for an active task
                     // This handles cases where AI moves to a new step, or the page wasn't refreshed initially.
                     // We must ensure the currentTaskInView is defined and matches the updated task.
                     const currentTaskInView = window.liveActivityData?.runningTask;
@@ -68,7 +88,7 @@ class CatHerderDashboard {
                         return; // Stop further processing to allow reload
                     }
 
-                    // Scenario 3: Task has finished, failed, or interrupted (and was live)
+                    // SCENARIO 5: Task has finished, failed, or interrupted (and was live)
                     // This ensures the page refreshes to show the final state or redirects.
                     if (window.liveActivityData.isLive && newTaskPhase !== 'running' && newTaskPhase !== 'waiting_for_input') {
                         console.log(`[Dashboard.js] FINAL STATE RELOAD: Task phase changed to '${newTaskPhase}'. Triggering page reload for final state.`); 

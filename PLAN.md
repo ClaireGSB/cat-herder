@@ -19,11 +19,11 @@ The new behavior will be:
 
 ## Summary Checklist
 
--   [ ] **Backend:** Update the `getSequenceDetails` function to read all tasks from the filesystem.
--   [ ] **Backend:** Update the `/live` route handler to build a complete list of steps from the configuration.
--   [ ] **Frontend:** Update the `_live-task-steps.ejs` template to handle the new ordered step data.
--   [ ] **Client-Side:** Refactor the WebSocket logic in `dashboard.js` to handle all page reload scenarios, including task completion and task resumption.
--   [ ] **Documentation:** Update `ARCHITECTURE.MD` to reflect the new data-fetching and client-side strategies.
+-   [x] **Backend:** Update the `getSequenceDetails` function to read all tasks from the filesystem.
+-   [x] **Backend:** Update the `/live` route handler to build a complete list of steps from the configuration.
+-   [x] **Frontend:** Update the `_live-task-steps.ejs` template to handle the new ordered step data.
+-   [x] **Client-Side:** Refactor the WebSocket logic in `dashboard.js` to handle all page reload scenarios, including task completion and task resumption.
+-   [x] **Documentation:** Update `ARCHITECTURE.MD` to reflect the new data-fetching and client-side strategies.
 
 ## Detailed Implementation Steps
 
