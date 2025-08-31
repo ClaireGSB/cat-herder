@@ -119,7 +119,11 @@ export async function runTaskSequence(taskFolderPath: string): Promise<void> {
           s.phase = "running";
         });
 
-        await executePipelineForTask(nextTaskPath, { skipGitManagement: true, sequenceStatusFile: statusFile });
+        await executePipelineForTask(nextTaskPath, {
+          skipGitManagement: true,
+          sequenceStatusFile: statusFile,
+          sequenceFolderPath: taskFolderPath,
+        });
 
         // --- SUCCESS PATH ---
         try {

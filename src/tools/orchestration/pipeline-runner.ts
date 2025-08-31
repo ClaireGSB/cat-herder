@@ -18,7 +18,12 @@ import { executeStep } from "./step-runner.js";
  */
 export async function executePipelineForTask(
   taskPath: string,
-  options: { skipGitManagement?: boolean; pipelineOption?: string, sequenceStatusFile?: string } = {}
+  options: {
+    skipGitManagement?: boolean;
+    pipelineOption?: string;
+    sequenceStatusFile?: string;
+    sequenceFolderPath?: string;
+  } = {}
 ): Promise<void> {
   const config = await getConfig();
   if (!config) {
@@ -123,7 +128,14 @@ export async function executePipelineForTask(
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
     // Assemble the full prompt using the assemblePrompt function
-    const fullPrompt = assemblePrompt(selectedPipeline, name, context, commandInstructions, resolvedInteractionThreshold);
+    const fullPrompt = assemblePrompt(
+      selectedPipeline,
+      name,
+      context,
+      commandInstructions,
+      resolvedInteractionThreshold,
+      options.sequenceFolderPath
+    );
 
     const logFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.log`);
     const reasoningLogFile = path.join(logsDir, `${String(index + 1).padStart(2, '0')}-${name}.reasoning.log`);
