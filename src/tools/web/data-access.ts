@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { TaskStatus, SequenceStatus, Phase, JournalEvent, ALL_STATUS_PHASES } from "../../types.js";
+import { taskPathToTaskId } from "../../utils/id-generation.js";
 
 
 // TaskDetails extends the full TaskStatus and just adds the 'logs' property.
@@ -244,28 +245,61 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
       tasks: [] // Initialize tasks as an empty array, specific to SequenceDetails
     };
 
-    const allStateFiles = fs.readdirSync(stateDir).filter(f => f.endsWith('.state.json') && !f.startsWith('sequence-'));
-    for (const stateFileName of allStateFiles) {
-      try {
-        const taskStateContent = fs.readFileSync(path.join(stateDir, stateFileName), 'utf8');
-        const taskState = JSON.parse(taskStateContent);
-        if (taskState.parentSequenceId === sequenceId) {
-          const taskPhase: Phase = (taskState.phase && ALL_STATUS_PHASES.includes(taskState.phase as Phase)) ? taskState.phase : 'pending';
-          let taskStatus: Phase = taskPhase; // Directly use the validated taskPhase
+    // Extract folder name from sequenceId (e.g., "sequence-my-feature" -> "my-feature")
+    const folderName = sequenceId.replace('sequence-', '');
+    const taskFolderPath = path.join(config.taskFolder || 'cat-herder-tasks', folderName);
 
-          const taskPath = taskState.taskPath || 'unknown';
-          sequenceDetails.tasks.push({
-            taskId: taskState.taskId || stateFileName.replace('.state.json', ''),
-            taskPath: taskPath,
-            filename: path.basename(taskPath),
-            status: taskStatus,
-            phase: taskState.phase, // Keep original phase for display if it was 'unknown' or broader
-            lastUpdate: taskState.lastUpdate
-          });
-        }
-      } catch (e) { console.error(`Error reading task state ${stateFileName}:`, e); }
+    // Check if the task folder exists on the filesystem
+    if (!fs.existsSync(taskFolderPath)) {
+      console.warn(`Task folder not found for sequence ${sequenceId}: ${taskFolderPath}`);
+      return sequenceDetails; // Return empty tasks array
     }
-    sequenceDetails.tasks.sort((a, b) => a.taskPath.localeCompare(b.taskPath));
+
+    try {
+      // Get all .md files from the task folder, filter out files starting with underscore
+      const allTaskFiles = fs.readdirSync(taskFolderPath)
+        .filter(f => f.endsWith('.md') && !f.startsWith('_'))
+        .sort(); // Sort alphabetically to maintain execution order
+
+      // Build complete task list from filesystem
+      for (const filename of allTaskFiles) {
+        const taskPath = path.join(taskFolderPath, filename);
+        const taskId = taskPathToTaskId(taskPath, process.cwd());
+
+        // Check if a state file exists for this task
+        const taskStateFile = path.join(stateDir, `${taskId}.state.json`);
+        let taskStatus: Phase = 'pending';
+        let lastUpdate: string | undefined;
+
+        if (fs.existsSync(taskStateFile)) {
+          try {
+            const taskStateContent = fs.readFileSync(taskStateFile, 'utf8');
+            const taskState = JSON.parse(taskStateContent);
+            // Only include tasks that belong to this sequence
+            if (taskState.parentSequenceId === sequenceId) {
+              taskStatus = (taskState.phase && ALL_STATUS_PHASES.includes(taskState.phase as Phase)) 
+                ? taskState.phase 
+                : 'pending';
+              lastUpdate = taskState.lastUpdate;
+            }
+          } catch (e) {
+            console.error(`Error reading task state for ${taskId}:`, e);
+          }
+        }
+
+        sequenceDetails.tasks.push({
+          taskId,
+          taskPath,
+          filename,
+          status: taskStatus,
+          phase: taskStatus, // Keep consistent with status
+          lastUpdate
+        });
+      }
+    } catch (error) {
+      console.error(`Error reading task folder ${taskFolderPath}:`, error);
+    }
+
     return sequenceDetails;
   } catch (error) {
     console.error(`Error reading sequence details for ${sequenceId}:`, error);
