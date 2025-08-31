@@ -83,7 +83,7 @@ export function assemblePrompt(
   const interactionIntro = getInteractionIntro(interactionThreshold);
 
   if (sequenceFolderPath) {
-    intro += `\n\nYou are currently running a task from a folder in "${sequenceFolderPath}". In this prompt, when referring to the sequence folder, use this path.`;
+    intro += `\n\nYou are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentionned, it is referring to the "${sequenceFolderPath}" folder.`;
   }
 
   // 3. Provide the entire pipeline definition as a simple numbered list.
