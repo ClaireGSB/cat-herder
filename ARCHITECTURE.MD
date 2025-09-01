@@ -43,7 +43,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 
 ### B. Data Flow Diagram
 
-The following diagram illustrates the interaction between the core components when a user runs a task.
+The following diagram illustrates the interaction between the core components when a user runs a task. The orchestrator executes pipeline steps sequentially, regardless of whether the pipeline contains multiple steps or a single step using `command: "self"`.
 
 ```mermaid
 graph TD

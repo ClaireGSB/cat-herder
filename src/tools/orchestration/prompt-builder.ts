@@ -69,27 +69,50 @@ export function assemblePrompt(
   autonomyLevel: number = 0,
   sequenceFolderPath?: string
 ): string {
-  // 1. Explain that the task is part of a larger, multi-step process.
-  let intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
-
-  // 2. Add autonomy level instructions
+  const isSimpleTask = pipeline.length === 1 && pipeline[0].command === 'self';
   const interactionIntro = getInteractionIntro(autonomyLevel);
+  const intro = `You are an autonomous agent responsible for completing the following task.`;
 
-  if (sequenceFolderPath) {
-    intro += `\n\nYou are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentionned, it is referring to the "${sequenceFolderPath}" folder.`;
-  }
+  if (isSimpleTask) {
+    // Simplified Prompt for "Stepless" Pipelines
+    const historyContext = context.interactionHistory 
+      ? `--- HUMAN INTERACTION HISTORY ---\n${context.interactionHistory}` 
+      : "";
 
-  // 3. Provide the entire pipeline definition as a simple numbered list.
-  const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
-  const pipelineContext = `This is the full pipeline for your awareness:\n${pipelineStepsList}`;
+    let sequenceContext = "";
+    if (sequenceFolderPath) {
+      sequenceContext = `You are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentioned, it is referring to the "${sequenceFolderPath}" folder.`;
+    }
 
-  // 4. Clearly state which step Claude is responsible for right now.
-  const responsibility = `You are responsible for executing step "${currentStepName}".`;
+    return [
+      intro,
+      interactionIntro,
+      sequenceContext,
+      historyContext,
+      `--- YOUR TASK ---`,
+      commandInstructions, // This is the task's body
+    ].filter(Boolean).join("\n\n");
 
-  // 5. Assemble the specific context data required for this step.
-  let contextString = "";
-  for (const [title, content] of Object.entries(context)) {
-    contextString += `--- ${title.toUpperCase()} ---\n\
+  } else {
+    // Existing Multi-Step Prompt Logic
+    const multiStepIntro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
+
+    let sequenceContext = "";
+    if (sequenceFolderPath) {
+      sequenceContext = `You are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentioned, it is referring to the "${sequenceFolderPath}" folder.`;
+    }
+
+    // Provide the entire pipeline definition as a simple numbered list.
+    const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
+    const pipelineContext = `This is the full pipeline for your awareness:\n${pipelineStepsList}`;
+
+    // Clearly state which step Claude is responsible for right now.
+    const responsibility = `You are responsible for executing step "${currentStepName}".`;
+
+    // Assemble the specific context data required for this step.
+    let contextString = "";
+    for (const [title, content] of Object.entries(context)) {
+      contextString += `--- ${title.toUpperCase()} ---\n\
 \
 \
 ${content.trim()}\n\
@@ -98,23 +121,23 @@ ${content.trim()}\n\
 \
 \
 \n`;
+    }
+
+    if (contextString) { // Check if there's any context left to display
+      contextString = contextString.trim();
+    }
+
+    return [
+      multiStepIntro,
+      interactionIntro,
+      sequenceContext,
+      pipelineContext,
+      responsibility,
+      contextString,
+      `--- YOUR INSTRUCTIONS FOR THE "${currentStepName}" STEP ---`,
+      commandInstructions,
+    ]
+      .filter(Boolean) // Remove any empty strings
+      .join("\n\n");
   }
-
-  if (contextString) { // Check if there's any context left to display
-    contextString = contextString.trim();
-  }
-
-
-  // 6. Combine all parts into the final prompt.
-  return [
-    intro,
-    interactionIntro,
-    pipelineContext,
-    responsibility,
-    contextString,
-    `--- YOUR INSTRUCTIONS FOR THE "${currentStepName}" STEP ---`,
-    commandInstructions,
-  ]
-    .filter(Boolean) // Remove any empty strings
-    .join("\n\n");
 }

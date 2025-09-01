@@ -103,29 +103,35 @@ export async function executePipelineForTask(
     // Automatically assemble context based on step position in pipeline
     const context: Record<string, string> = {};
 
-    // Always include task definition 
-    context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
-
-    // Include plan content for any step after "plan" 
-    const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
-    if (planStepIndex !== -1 && index > planStepIndex) {
-      try {
-        context.planContent = contextProviders.planContent(config, projectRoot, currentTaskStatus, taskContent);
-      } catch (error) {
-        // If PLAN.md doesn't exist, skip including plan content
-        console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
-      }
-    }
-
-    // NEW: Include human interaction history for all steps
+    // Interaction history is always relevant for retries
     const interactionHistory = contextProviders.interactionHistory(config, projectRoot, currentTaskStatus, taskContent);
-    if (interactionHistory) { // Only add if there's actual history
+    if (interactionHistory) {
       context.interactionHistory = interactionHistory;
     }
 
-    // Read the specific command instructions for the current step
-    const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
-    const commandInstructions = readFileSync(commandFilePath, 'utf-8');
+    // Determine command instructions based on command type
+    let commandInstructions: string;
+    if (stepConfig.command === 'self') {
+      // If the command is 'self', the instructions ARE the task content
+      commandInstructions = taskContent;
+    } else {
+      // Otherwise, load from the command file and assemble the full context
+      context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
+
+      // Include plan content for any step after "plan" 
+      const planStepIndex = selectedPipeline.findIndex(step => step.name === 'plan');
+      if (planStepIndex !== -1 && index > planStepIndex) {
+        try {
+          context.planContent = contextProviders.planContent(config, projectRoot, currentTaskStatus, taskContent);
+        } catch (error) {
+          // If PLAN.md doesn't exist, skip including plan content
+          console.log(pc.yellow(`[Orchestrator] Warning: Could not load plan content for step '${name}'. PLAN.md may not exist yet.`));
+        }
+      }
+
+      const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
+      commandInstructions = readFileSync(commandFilePath, 'utf-8');
+    }
 
     // Assemble the full prompt using the assemblePrompt function
     const fullPrompt = assemblePrompt(

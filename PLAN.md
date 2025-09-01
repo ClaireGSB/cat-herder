@@ -1,5 +1,9 @@
 # PLAN: Implement Flexible Single-Step ("Stepless") Pipelines
 
+## ✅ **IMPLEMENTATION COMPLETE** 
+
+All tasks have been successfully completed, including the final documentation updates.
+
 ## Title & Goal
 
 **Title:** Implement Flexible Single-Step ('Stepless') Pipelines
@@ -13,11 +17,11 @@ This will allow users to define multiple single-step workflows, each with its ow
 
 ## Summary Checklist
 
--   [ ] **Update Configuration Model:** Modify `src/config.ts` to officially support `'self'` as a command type.
--   [ ] **Modify Orchestration Logic:** Update `src/tools/orchestration/pipeline-runner.ts` to handle the `'self'` command by using the task's content as its instructions.
--   [ ] **Simplify Prompt Generation:** Update `src/tools/orchestration/prompt-builder.ts` to generate a simplified, direct prompt for single-step pipelines.
--   [ ] **Enhance Validation:** Update `src/tools/validator.ts` to enforce that a pipeline using `'self'` can only have one step.
--   [ ] **Update Templates & Documentation:** Update `cat-herder.config.js` template, `README.md`, and `ARCHITECTURE.md` to reflect the new, unified feature.
+-   [x] **Update Configuration Model:** Modify `src/config.ts` to officially support `'self'` as a command type.
+-   [x] **Modify Orchestration Logic:** Update `src/tools/orchestration/pipeline-runner.ts` to handle the `'self'` command by using the task's content as its instructions.
+-   [x] **Simplify Prompt Generation:** Update `src/tools/orchestration/prompt-builder.ts` to generate a simplified, direct prompt for single-step pipelines.
+-   [x] **Enhance Validation:** Update `src/tools/validator.ts` to enforce that a pipeline using `'self'` can only have one step.
+-   [x] **Update Templates & Documentation:** Update `cat-herder.config.js` template, `README.md`, and `ARCHITECTURE.md` to reflect the new, unified feature. ✅ **COMPLETED** - All documentation tasks have been finished.
 
 ## Detailed Implementation Steps
 

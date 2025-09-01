@@ -274,8 +274,13 @@ function validateStep(
   }
 
   // Command File and Permission Validation
-  const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-  validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
+  // Skip command file validation for 'self' command
+  if (step.command === 'self') {
+    // This is valid, no external file to check permissions for
+  } else {
+    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+    validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
+  }
 
   // Retry Validation
   if (step.retry !== undefined) {
@@ -327,6 +332,13 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
   for (const [pipelineName, pipeline] of Object.entries(pipelines)) {
     if (!Array.isArray(pipeline)) {
       continue; // Error already added in validatePipelineStructure
+    }
+
+    // NEW RULE: A pipeline with a 'self' step must have exactly one step
+    const hasSelfStep = pipeline.some(step => step.command === 'self');
+    if (hasSelfStep && pipeline.length > 1) {
+      errors.push(`Pipeline '${pipelineName}': A pipeline using 'command: "self"' can only contain a single step.`);
+      continue; // Skip further validation for this broken pipeline
     }
 
     for (const [index, step] of pipeline.entries()) {

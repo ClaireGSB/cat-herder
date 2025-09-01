@@ -8,7 +8,7 @@ import { CheckConfig } from "./tools/check-runner.js";
 // Define the structure of a pipeline step
 export interface PipelineStep {
   name: string;
-  command: string;
+  command: string | 'self';
   model?: string;
   check: CheckConfig | CheckConfig[];
   fileAccess?: {
