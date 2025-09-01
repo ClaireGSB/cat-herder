@@ -1,212 +1,362 @@
-# PLAN: Implement Flexible Single-Step ("Stepless") Pipelines
 
-## ✅ **IMPLEMENTATION COMPLETE** 
-
-All tasks have been successfully completed, including the final documentation updates.
+# PLAN: Add Non-Brittle Tests for Stepless Pipeline Feature
 
 ## Title & Goal
 
-**Title:** Implement Flexible Single-Step ('Stepless') Pipelines
-**Goal:** To allow users to define simple, single-action workflows alongside complex multi-step ones using a single, unified configuration system.
+**Title:** Add Non-Brittle Tests for Stepless Pipeline Feature
+**Goal:** To ensure the new single-step pipeline feature is reliable and to prevent future regressions by adding comprehensive, non-brittle tests.
 
-## Description
+## Testing Strategy
 
-Currently, the tool is designed around multi-step pipelines, which is powerful but can be overly complex for simple tasks (e.g., "update this documentation file"). This change introduces a more flexible model where any pipeline can be "stepless" by containing a single step with the special keyword `command: "self"`.
+To ensure the feature works correctly from end-to-end, we will add tests at three key levels:
 
-This will allow users to define multiple single-step workflows, each with its own specific guardrails (`fileAccess`), validation (`check`), and retry logic, directly within the existing `pipelines` object. The prompt sent to the AI for these simple tasks will be streamlined, removing the multi-step boilerplate for a clearer, more direct instruction.
+1.  **Integration Test (Orchestrator):** We'll create a new test to verify that when the orchestrator is given a "stepless" task, it correctly processes it and calls the AI with the right simplified prompt. This confirms the main logic works as expected.
+2.  **Unit Test (Validator):** We'll add a new test suite to verify that our configuration validator correctly accepts valid "stepless" pipelines and rejects invalid ones (e.g., a stepless pipeline with more than one step).
+3.  **Unit Test (Prompt Builder):** We'll refactor the existing prompt builder tests to be more robust. We will create two distinct test suites: one that confirms the detailed prompt is still generated for multi-step pipelines, and a new one that confirms the simplified prompt is generated for single-step pipelines.
+
+This approach ensures our tests are fast, reliable, and not "brittle" (meaning they won't break easily with minor, unrelated code changes).
 
 ## Summary Checklist
 
--   [x] **Update Configuration Model:** Modify `src/config.ts` to officially support `'self'` as a command type.
--   [x] **Modify Orchestration Logic:** Update `src/tools/orchestration/pipeline-runner.ts` to handle the `'self'` command by using the task's content as its instructions.
--   [x] **Simplify Prompt Generation:** Update `src/tools/orchestration/prompt-builder.ts` to generate a simplified, direct prompt for single-step pipelines.
--   [x] **Enhance Validation:** Update `src/tools/validator.ts` to enforce that a pipeline using `'self'` can only have one step.
--   [x] **Update Templates & Documentation:** Update `cat-herder.config.js` template, `README.md`, and `ARCHITECTURE.md` to reflect the new, unified feature. ✅ **COMPLETED** - All documentation tasks have been finished.
+-   [ ] **Step 1:** Create the new orchestrator integration test file.
+-   [ ] **Step 2:** Add the new unit test suite to the validator test file.
+-   [ ] **Step 3:** Refactor and update the prompt builder test file.
+-   [ ] **Step 4:** Run all tests to confirm everything passes.
 
 ## Detailed Implementation Steps
 
-### 1. Update Configuration Model and Types
+### Step 1: Create the Orchestrator Integration Test
 
--   **Objective:** Formally allow `command: "self"` in our internal type definitions.
--   **Task:** In `src/config.ts`, modify the `PipelineStep` interface.
+-   **Objective:** Verify the entire end-to-end logic for a stepless pipeline, from configuration to the final prompt sent to the AI.
+-   **Task:** Create a new file named `test/orchestrator-stepless.test.ts`. Copy and paste the entire code block below into this new file.
 
--   **Code Snippet (`src/config.ts`):**
+-   **Code for `test/orchestrator-stepless.test.ts`:**
     ```typescript
-    export interface PipelineStep {
-      name: string;
-      // Change 'string' to a union type to include 'self'
-      command: string | 'self';
-      model?: string;
-      check: CheckConfig | CheckConfig[];
-      fileAccess?: {
-        allowWrite?: string[];
-      };
-      retry?: number;
-    }
+    import { describe, it, expect, vi, beforeEach } from 'vitest';
+    import { readFileSync, mkdirSync } from 'node:fs';
 
-    ```
+    // Mock dependencies
+    vi.mock('node:fs');
+    vi.mock('../src/tools/proc.js');
+    vi.mock('../src/tools/status.js');
+    vi.mock('../src/config.js');
+    vi.mock('../src/tools/check-runner.js');
 
-### 2. Modify the Pipeline Runner Logic
+    // Import functions after mocking
+    const { runStreaming } = await import('../src/tools/proc.js');
+    const { updateStatus, readStatus } = await import('../src/tools/status.js');
+    const { getProjectRoot, getConfig } = await import('../src/config.js');
+    const { runCheck } = await import('../src/tools/check-runner.js');
+    const { executePipelineForTask } = await import('../src/tools/orchestration/pipeline-runner.js');
 
--   **Objective:** Teach the orchestrator how to handle a `'self'` command differently from a standard command.
--   **Task:** In `src/tools/orchestration/pipeline-runner.ts`, inside the `executePipelineForTask` function's main loop, add conditional logic to determine the source of instructions.
+    describe('Orchestrator - Stepless Pipeline Execution', () => {
+      const MOCK_TASK_CONTENT = '# A Simple Documentation Task\n\nPlease update the README.md file to include a section on the new stepless pipeline feature.';
+      
+      beforeEach(() => {
+        vi.clearAllMocks();
 
--   **Code Snippet (`src/tools/orchestration/pipeline-runner.ts`):**
-    ```typescript
-    // Inside the `for` loop of `executePipelineForTask`
-    
-    let commandInstructions: string;
-    const context: Record<string, string> = {};
+        // Setup default mocks for a successful run
+        vi.mocked(getProjectRoot).mockReturnValue('/test/project');
+        vi.mocked(readStatus).mockReturnValue({ taskId: 'test-task', steps: {}, interactionHistory: [] } as any);
+        vi.mocked(updateStatus).mockImplementation(() => {});
+        vi.mocked(mkdirSync).mockImplementation(() => undefined);
+        vi.mocked(runCheck).mockResolvedValue({ success: true });
+        vi.mocked(runStreaming).mockResolvedValue({ code: 0, output: 'Done.' });
 
-    // Interaction history is always relevant for retries
-    const interactionHistory = contextProviders.interactionHistory(config, projectRoot, currentTaskStatus, taskContent);
-    if (interactionHistory) {
-      context.interactionHistory = interactionHistory;
-    }
+        // Mock reading the task file content
+        vi.mocked(readFileSync).mockImplementation((path: any) => {
+          if (path.toString().endsWith('.md') && !path.toString().includes('commands')) {
+            return MOCK_TASK_CONTENT;
+          }
+          // For interaction-intro.md template
+          return 'Interaction instructions';
+        });
+      });
 
-    // If the command is 'self', the instructions ARE the task content.
-    if (stepConfig.command === 'self') {
-        commandInstructions = taskContent;
-    } else {
-        // Otherwise, load from the command file and assemble the full context.
-        context.taskDefinition = contextProviders.taskDefinition(config, projectRoot, currentTaskStatus, taskContent);
-        // ... (add planContent if applicable)
+      it('should execute a stepless pipeline with a simplified prompt', async () => {
+        // ARRANGE: Set up a config with a stepless pipeline
+        const mockConfig = {
+          statePath: '.cat-herder/state',
+          logsPath: '.cat-herder/logs',
+          pipelines: {
+            'docs-only': [
+              {
+                name: 'update_docs',
+                command: 'self',
+                check: { type: 'none' },
+              },
+            ],
+          },
+        };
+        vi.mocked(getConfig).mockResolvedValue(mockConfig as any);
         
-        const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${stepConfig.command}.md`);
-        commandInstructions = readFileSync(commandFilePath, 'utf-8');
-    }
+        // ARRANGE: Mock the task file to use this pipeline
+        const taskFileContentWithFrontmatter = `---
+    pipeline: docs-only
+    ---
+    ${MOCK_TASK_CONTENT}`;
+        vi.mocked(readFileSync).mockReturnValue(taskFileContentWithFrontmatter);
 
-    // The assemblePrompt function will now receive the correct instructions.
-    const fullPrompt = assemblePrompt(
-      selectedPipeline,
-      stepConfig.name,
-      context,
-      commandInstructions,
-      resolvedInteractionThreshold
-    );
-    
-    // ... rest of the loop
+        // ACT: Run the pipeline for the task
+        await executePipelineForTask('/test/project/tasks/update-readme.md', { pipelineOption: 'docs-only' });
+        
+        // ASSERT
+        // 1. Verify that runStreaming was called.
+        expect(runStreaming).toHaveBeenCalledOnce();
+
+        // 2. Capture the prompt (`stdinData`) passed to runStreaming. This is the key assertion.
+        const capturedPrompt = vi.mocked(runStreaming).mock.calls[0][5];
+        
+        // 3. Assert that the prompt is the *simplified* version.
+        expect(capturedPrompt).toContain('--- YOUR TASK ---');
+        expect(capturedPrompt).toContain(MOCK_TASK_CONTENT);
+        
+        // 4. Assert that the prompt does NOT contain the multi-step boilerplate.
+        expect(capturedPrompt).not.toContain('This is the full pipeline for your awareness');
+        expect(capturedPrompt).not.toContain('You are responsible for executing step');
+      });
+
+      it('should not load any command files for a stepless pipeline', async () => {
+         const mockConfig = {
+          statePath: '.cat-herder/state',
+          logsPath: '.cat-herder/logs',
+          pipelines: {
+            'just-do-it': [{ name: 'execute', command: 'self', check: { type: 'none' }}],
+          },
+        };
+        vi.mocked(getConfig).mockResolvedValue(mockConfig as any);
+        
+        const readFileSyncSpy = vi.spyOn(fs, 'readFileSync');
+        
+        await executePipelineForTask('/test/project/tasks/some-task.md', { pipelineOption: 'just-do-it' });
+        
+        // Assert that readFileSync was NOT called on any path inside '.claude/commands/'
+        const commandFileReadCall = readFileSyncSpy.mock.calls.find(call => 
+          call[0].toString().includes('.claude/commands/')
+        );
+        expect(commandFileReadCall).toBeUndefined();
+      });
+    });
     ```
 
-### 3. Simplify Prompt Assembly
+### Step 2: Add Validator Unit Tests
 
--   **Objective:** Generate a lean, direct prompt for single-step pipelines, removing the multi-step context.
--   **Task:** In `src/tools/orchestration/prompt-builder.ts`, modify `assemblePrompt` to detect this case and return a different prompt structure.
+-   **Objective:** To confirm that the configuration validator correctly enforces the new rule that a pipeline with `command: "self"` must contain only one step.
+-   **Task:** Open the existing file `test/validator.test.ts`. At the very end of the file, paste the new `describe` block provided below.
 
--   **Code Snippet (`src/tools/orchestration/prompt-builder.ts`):**
+-   **Code to add to `test/validator.test.ts`:**
     ```typescript
-    export function assemblePrompt(
-      pipeline: PipelineStep[],
-      currentStepName: string,
-      context: Record<string, string>,
-      commandInstructions: string,
-      interactionThreshold: number = 0
-    ): string {
-      const isSimpleTask = pipeline.length === 1 && pipeline[0].command === 'self';
-      const interactionIntro = getInteractionIntro(interactionThreshold);
-      const intro = `You are an autonomous agent responsible for completing the following task.`;
+    describe('Validator - Stepless Pipeline ("self" command) Validation', () => {
+      const mockProjectRoot = '/test/project';
 
-      if (isSimpleTask) {
-        // Simplified Prompt for "Stepless" Pipelines
-        const historyContext = context.interactionHistory 
-          ? `--- HUMAN INTERACTION HISTORY ---\n${context.interactionHistory}` 
-          : "";
+      beforeEach(() => {
+        vi.clearAllMocks();
+        // Mock basic file existence so the validator can run
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike) => {
+          if (filePath.toString().includes('settings.json')) {
+            return JSON.stringify({ permissions: { allow: ['Bash(cat-herder ask:*)'] } });
+          }
+          if (filePath.toString().includes('package.json')) {
+            return JSON.stringify({ scripts: {} });
+          }
+          return '';
+        });
+      });
 
-        return [
-          intro,
-          interactionIntro,
-          historyContext,
-          `--- YOUR TASK ---`,
-          commandInstructions, // This is the task's body
-        ].filter(Boolean).join("\n\n");
+      it('should accept a valid stepless pipeline with a single "self" command step', () => {
+        const config = createBaseConfig({
+          pipelines: {
+            'just-do-it': [
+              {
+                name: 'execute',
+                command: 'self',
+                check: { type: 'none' },
+              },
+            ],
+          },
+        });
 
-      } else {
-        // Existing Multi-Step Prompt Logic (can be slightly refactored)
-        const multiStepIntro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
-        const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
-        const pipelineContext = `This is the full pipeline for your awareness:\n${pipelineStepsList}`;
-        const responsibility = `You are responsible for executing step "${currentStepName}".`;
+        const result = validatePipeline(config, mockProjectRoot);
+        expect(result.isValid).toBe(true);
+        expect(result.errors).toHaveLength(0);
+      });
 
-        // ... existing logic to build contextString ...
+      it('should reject a pipeline with a "self" command and other steps', () => {
+        const config = createBaseConfig({
+          pipelines: {
+            'invalid-pipeline': [
+              {
+                name: 'execute',
+                command: 'self',
+                check: { type: 'none' },
+              },
+              {
+                name: 'another-step',
+                command: 'another-command',
+                check: { type: 'none' },
+              },
+            ],
+          },
+        });
 
-        return [
-          multiStepIntro,
-          interactionIntro,
-          pipelineContext,
-          // ... rest of the multi-step prompt assembly
-        ].filter(Boolean).join("\n\n");
-      }
-    }
+        const result = validatePipeline(config, mockProjectRoot);
+        expect(result.isValid).toBe(false);
+        expect(result.errors).toContain(
+          `Pipeline 'invalid-pipeline': A pipeline using 'command: "self"' can only contain a single step.`
+        );
+      });
+
+      it('should still validate other properties on a valid stepless pipeline', () => {
+        const config = createBaseConfig({
+          pipelines: {
+            'stepless-with-error': [
+              {
+                name: 'execute',
+                command: 'self',
+                check: { type: 'shell' }, // Invalid: missing 'command'
+                retry: 'bad' as any, // Invalid: should be a number
+              },
+            ],
+          },
+        });
+
+        const result = validatePipeline(config, mockProjectRoot);
+        expect(result.isValid).toBe(false);
+        expect(result.errors).toContain(
+          "Pipeline 'stepless-with-error', Step 1 ('execute'): Check type 'shell' requires a non-empty 'command' string property."
+        );
+        expect(result.errors).toContain(
+          "Pipeline 'stepless-with-error', Step 1 ('execute'): The 'retry' property must be a non-negative integer, but found 'bad'."
+        );
+      });
+
+      it('should correctly identify a normal pipeline as valid', () => {
+        const config = createBaseConfig({
+          pipelines: {
+            default: [
+              { name: 'plan', command: 'plan-task', check: { type: 'none' } },
+              { name: 'implement', command: 'implement', check: { type: 'none' } },
+            ],
+          },
+        });
+         // Mock command files as existing
+        vi.mocked(fs.existsSync).mockImplementation((p) => p.toString().includes('.md'));
+
+        const result = validatePipeline(config, mockProjectRoot);
+        expect(result.isValid).toBe(true);
+      });
+    });
     ```
 
-### 4. Update the Pipeline Validator
+### Step 3: Refactor and Update Prompt Builder Tests
 
--   **Objective:** Add a rule to prevent invalid pipeline configurations and ensure the validator understands `'self'`.
--   **Task:** In `src/tools/validator.ts`, update the `validatePipeline` function.
+-   **Objective:** To update the existing tests to be more robust and to add new tests that verify the simplified prompt generation for stepless tasks.
+-   **Task:** Open the file `test/prompt-builder.test.ts`. **Replace the entire content of the file** with the code block below. This will safely restructure the old tests and add the new ones.
 
--   **Code Snippet (`src/tools/validator.ts`):**
+-   **Code for `test/prompt-builder.test.ts` (replace all):**
     ```typescript
-    // Inside the main loop of `validatePipeline`
-    for (const [pipelineName, pipeline] of Object.entries(pipelines)) {
-        if (!Array.isArray(pipeline)) continue;
+    import { describe, it, expect, vi, beforeEach } from 'vitest';
+    import fs from 'node:fs';
+    import { assemblePrompt, parseTaskFrontmatter } from '../src/tools/orchestration/prompt-builder.js';
+    import { PipelineStep } from '../src/config.js';
+    import { getPromptTemplatePath } from '../src/config.js';
 
-        // NEW RULE: A pipeline with a 'self' step must have exactly one step.
-        const hasSelfStep = pipeline.some(step => step.command === 'self');
-        if (hasSelfStep && pipeline.length > 1) {
-          errors.push(`Pipeline '${pipelineName}': A pipeline using 'command: "self"' can only contain a single step.`);
-          continue; // Skip further validation for this broken pipeline
-        }
+    vi.mock('node:fs', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:fs')>();
+      return { ...actual, default: { ...actual, readFileSync: vi.fn() } };
+    });
 
-        for (const [index, step] of pipeline.entries()) {
-            const stepId = `Pipeline '${pipelineName}', Step ${index + 1} ('${step.name || 'unnamed'}')`;
-            
-            // ... (existing step validation)
+    vi.mock('../src/config.js', async (importOriginal) => {
+      const original = await importOriginal<typeof import('../src/config.js')>();
+      return { ...original, getPromptTemplatePath: vi.fn() };
+    });
 
-            // MODIFIED LOGIC: Don't check for a command file if command is 'self'
-            if (step.command === 'self') {
-              // This is valid, no external file to check permissions for.
-            } else if (step.command) {
-              const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-              validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
-            } else {
-              errors.push(`${stepId}: is missing the 'command' property.`);
-            }
-        }
-    }
+    describe('Prompt Builder', () => {
+      const MOCK_PROMPT_TEMPLATE = 'Interaction instructions for level %%INTERACTION_THRESHOLD%%.';
+
+      beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(getPromptTemplatePath).mockReturnValue('mocked/path/interaction-intro.md');
+        vi.mocked(fs.readFileSync).mockReturnValue(MOCK_PROMPT_TEMPLATE);
+      });
+
+      describe('Multi-Step Pipelines', () => {
+        const mockPipeline: PipelineStep[] = [
+          { name: 'plan', command: 'plan', check: { type: 'none' } },
+          { name: 'implement', command: 'implement', check: { type: 'none' } },
+        ];
+        const mockContext = { 'Task Definition': 'Do the thing.' };
+        const mockCommandInstructions = 'Your instructions here.';
+
+        it('should assemble all parts of the detailed prompt in the correct order', () => {
+          const result = assemblePrompt(mockPipeline, 'implement', mockContext, mockCommandInstructions, 3);
+
+          expect(result).toContain('Here is a task that has been broken down into several steps');
+          expect(result).toContain('This is the full pipeline for your awareness');
+          expect(result).toContain('You are responsible for executing step "implement"');
+          expect(result).toContain('--- TASK DEFINITION ---');
+          
+          const introIndex = result.indexOf('Here is a task');
+          const pipelineIndex = result.indexOf('This is the full pipeline');
+          const responsibilityIndex = result.indexOf('You are responsible for executing step');
+          expect(pipelineIndex).toBeGreaterThan(introIndex);
+          expect(responsibilityIndex).toBeGreaterThan(pipelineIndex);
+        });
+      });
+
+      describe('Single-Step ("Stepless") Pipelines', () => {
+        it('should generate a simplified prompt', () => {
+          const steplessPipeline: PipelineStep[] = [
+            { name: 'execute', command: 'self', check: { type: 'none' } },
+          ];
+          const taskContent = '# My Simple Task\n\nJust do this one thing.';
+          const context = {};
+
+          const result = assemblePrompt(steplessPipeline, 'execute', context, taskContent, 0);
+
+          expect(result).toContain('--- YOUR TASK ---');
+          expect(result).toContain(taskContent);
+          expect(result).not.toContain('This is the full pipeline for your awareness');
+          expect(result).not.toContain('You are responsible for executing step');
+        });
+
+         it('should include interaction history in a simplified prompt if it exists', () => {
+          const steplessPipeline: PipelineStep[] = [
+            { name: 'execute', command: 'self', check: { type: 'none' } },
+          ];
+          const taskContent = 'My task content.';
+          const context = { interactionHistory: 'Q: What?\nA: That.' };
+
+          const result = assemblePrompt(steplessPipeline, 'execute', context, taskContent, 0);
+
+          expect(result).toContain('--- HUMAN INTERACTION HISTORY ---');
+          expect(result).toContain('--- YOUR TASK ---');
+        });
+      });
+      
+      describe('parseTaskFrontmatter', () => {
+        it('should parse autonomy level and pipeline from YAML frontmatter', () => {
+          const taskContent = `---
+    pipeline: default
+    interactionThreshold: 4
+    ---
+    # Test Task`;
+          const result = parseTaskFrontmatter(taskContent);
+          expect(result.interactionThreshold).toBe(4);
+          expect(result.pipeline).toBe('default');
+        });
+      });
+    });
     ```
 
-## Error Handling & Warnings
+### Step 4: Final Verification
 
--   **User Misconfiguration:** If a user defines a pipeline with `command: "self"` and other steps, the `cat-herder validate` command must fail and output a clear error message:
-    > `✖ Pipeline configuration is invalid:`
-    > `- Pipeline 'my-pipeline': A pipeline using 'command: "self"' can only contain a single step.`
--   **Invalid Command:** If a user specifies a `command: "self"` pipeline but the task markdown file is empty, the process should proceed, sending an empty prompt to the AI, which will likely result in an error or no action. This is acceptable behavior as the user is responsible for the task content.
+-   **Objective:** To ensure that all new tests pass and that no existing tests were broken by the changes.
+-   **Task:** Run the entire test suite from your terminal.
 
-## Documentation Changes
-
--   **Objective:** Ensure all user-facing documentation clearly explains the new, unified pipeline model.
--   **Tasks:**
-    1.  **Update `src/templates/cat-herder.config.js`:**
-        -   Add comments explaining `command: "self"`.
-        -   Include examples of both a multi-step pipeline (`default`) and at least two single-step pipelines (`just-do-it`, `docs-task`) to showcase different checks and guardrails.
-
-    2.  **Update `README.md`:**
-        - update the diagram in the "**Conceptual Flow:**" section to keep some pipelines with steps and some without.
-        -   Rework the "Configurable Pipelines" section into "Flexible Pipelines: Multi-Step and Single-Step Workflows".
-        -   Clearly explain that `command: "self"` is the key to creating single-step tasks.
-        -   Provide an example of a task file using `pipeline: docs-task` in its frontmatter.
-
-    3.  **Update `ARCHITECTURE.md`:**
-        -   In section `2.A.2 Orchestration Layer`, update the description to reflect that the orchestrator simply executes the steps of the selected pipeline, regardless of count.
-        -   Remove any diagrams or text that imply separate "modes".
-        -   Update the Mermaid diagram to show a simple, linear flow from Orchestrator to a "Loop Pipeline Steps" block, as it no longer needs a decision diamond. The new diagram should look like this:
-            ```mermaid
-            graph TD
-                User[User] --> CLI[CLI: cat-herder run]
-                CLI --> Orchestrator[Orchestrator]
-                Orchestrator -- Reads --> Config[cat-herder.config.js]
-                Orchestrator -- Loops through steps --> StepRunner[Execute Single Step]
-                StepRunner -- Calls --> Proc[Process Runner (proc.ts)]
-                Proc -- Spawns --> ClaudeCLI[Claude CLI]
-                Orchestrator -- Reads/Writes --> State[State Files]
-            ```
+-   **Command:**
+    ```bash
+    npm test
+    ```
+-   **Expected Result:** All tests should pass. If any tests fail, carefully review the error messages. They will likely point to a small typo or an issue in the implementation steps.
