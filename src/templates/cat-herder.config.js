@@ -53,6 +53,11 @@ module.exports = {
   /**
    * Multiple named pipelines for different types of tasks.
    * Each pipeline defines a sequence of steps to execute.
+   * 
+   * For simple, single-action tasks, you can use 'command: "self"' which
+   * uses the task's markdown content directly as instructions instead of
+   * loading from a separate command file. These "stepless" pipelines must
+   * contain exactly one step.
    */
   pipelines: {
     default: [
@@ -114,6 +119,42 @@ module.exports = {
         fileAccess: {
           allowWrite: ["README.md", "docs/**/*", "*.md"]
         }
+      }
+    ],
+
+    // Example single-step ("stepless") pipelines using 'command: "self"'
+    "just-do-it": [
+      {
+        name: "execute",
+        command: "self", // Uses the task's markdown content as instructions
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["src/**/*", "test/**/*"]
+        },
+        retry: 2
+      }
+    ],
+
+    "simple-docs": [
+      {
+        name: "update",
+        command: "self", // Task content becomes the prompt directly
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["README.md", "docs/**/*", "*.md"]
+        }
+      }
+    ],
+
+    "quick-fix": [
+      {
+        name: "fix",
+        command: "self",
+        check: { type: "shell", command: "npm test", expect: "pass" },
+        fileAccess: {
+          allowWrite: ["src/**/*"]
+        },
+        retry: 3
       }
     ]
   },

@@ -29,7 +29,7 @@ A command-line tool that helps guide LLM agents (currently only supporting Claud
     * [Task Ordering and Naming](#task-ordering-and-naming)
     * [Ignoring Files for Comments and Planning](#ignoring-files-for-comments-and-planning)
     * [Example: Dynamic Task Generation from a PRD](#example-dynamic-task-generation-from-a-prd)
-  * [Configurable Pipelines (`cat-herder.config.js`)](#configurable-pipelines-cat-herderconfigjs)
+  * [Flexible Pipelines: Multi-Step and Single-Step Workflows (`cat-herder.config.js`)](#flexible-pipelines-multi-step-and-single-step-workflows-cat-herderconfigjs)
     * [Per-Step Model Selection](#per-step-model-selection)
     * [Pipeline Selection](#pipeline-selection)
     * [Automatic Context Assembly](#automatic-context-assembly)
@@ -93,51 +93,47 @@ To effectively use `cat-herder`, it's important to understand its three core hie
 
 ```markdown
 /your-project-root
-├── cat-herder.config.js             # Defines pipelines (ordered lists of steps)
+├── cat-herder.config.js             # Defines pipelines (multi-step and single-step)
 └── cat-herder-tasks/                # Main directory for all tasks and sequences
-    ├── update-readme.md             # Standalone Task (e.g., "Update Readme")
-    │   └── Uses Pipeline 'docs-only'
-    │       ├── Step 1: Docs Update
-    │       └── ...
+    ├── quick-bug-fix.md             # Simple Task using Single-Step Pipeline
+    │   └── Uses Pipeline 'quick-fix' (command: "self")
+    │       └── Single Step: Task content used directly as instructions
     │
-    ├── fix-bug-critical.md          # Standalone Task (e.g., "Fix Critical Bug")
+    ├── update-readme.md             # Simple Task using Single-Step Pipeline  
+    │   └── Uses Pipeline 'simple-docs' (command: "self")
+    │       └── Single Step: Task content becomes the prompt
+    │
+    ├── complex-feature.md           # Complex Task using Multi-Step Pipeline
     │   └── Uses Pipeline 'default'
     │       ├── Step 1: Plan
-    │       ├── Step 2: Implement
-    │       └── ... (any additional steps you have defined in this pipeline)
+    │       ├── Step 2: Write Tests
+    │       ├── Step 3: Implement
+    │       └── Step 4: Review
     │
     ├── my-feature-sequence/         # Sequence Folder (Tasks pre-created)
-    │   ├── _NOTES.md                # Context file (will not be interpreted as a task due to the underscore.)
+    │   ├── _NOTES.md                # Context file (ignored due to underscore)
     │   │
-    │   ├── 01-initial-feature-plan.md     # Task 1
-    │   │   └── Uses Pipeline 'TDD'
-    │   │       ├── Step 1: Plan
-    │   │       ├── Step 2: Write Tests
-    │   │       └── ...
+    │   ├── 01-quick-setup.md        # Task 1: Single-Step
+    │   │   └── Uses Pipeline 'just-do-it' (command: "self")
+    │   │       └── Single Step: Direct instructions
     │   │
-    │   ├── 02-implement-api.md            # Task 2
+    │   ├── 02-implement-core.md     # Task 2: Multi-Step
     │   │   └── Uses Pipeline 'default'
     │   │       ├── Step 1: Plan
-    │   │       ├── Step 2: Implement
-    │   │       └── ...
+    │   │       ├── Step 2: Write Tests
+    │   │       ├── Step 3: Implement
+    │   │       └── Step 4: Review
     │   │
-    │   └── 03-update-documentation.md     # Task 3
-    │       └── Uses Pipeline 'docs-only'
-    │           ├── Step 1: Docs Update
-    │           └── ...
+    │   └── 03-update-docs.md        # Task 3: Single-Step
+    │       └── Uses Pipeline 'simple-docs' (command: "self")
+    │           └── Single Step: Task content as instructions
     │
-    └── new-feature-dynamic-build/   # Sequence Folder (Tasks created dynamically by AI)
-        ├── _INITIAL_REQUIREMENTS.md # Context file (will not be interpreted as a task due to the underscore.)
+    └── dynamic-feature-sequence/    # Sequence Folder (Tasks created dynamically)
+        ├── _REQUIREMENTS.md         # Context file (ignored due to underscore)
         │
-        └── 01-break-down-feature.md # Initial Task for dynamic generation (the task is for the AI to read _INITIAL_REQUIREMENTS.md and create subsequent tasks)
-            └── Uses Pipeline 'create-tasks'
-                ├── Step 1: Analyze & Generate Tasks
-                └── (This step will dynamically create subsequent tasks like:)
-                    ├── 02-design-module.md
-                    │   └── Uses Pipeline 'default' (...)
-                    ├── 03-implement-service.md
-                    │   └── Uses Pipeline 'default' (...)
-                    └── (and so on...)
+        └── 01-break-down-prd.md     # Initial planning task
+            └── Uses Pipeline 'default'
+                └── (Creates subsequent tasks dynamically with mixed pipeline types)
 ```
 
 ### Key Capabilities and Workflows
@@ -496,14 +492,22 @@ This example demonstrates how an initial task can read a Product Requirements Do
 
 This creates a fully autonomous, multi-task development workflow where the initial planning task drives the entire implementation sequence.
 
-### Configurable Pipelines (`cat-herder.config.js`)
+### Flexible Pipelines: Multi-Step and Single-Step Workflows (`cat-herder.config.js`)
 
-This tool is driven by a `pipelines` object in your `cat-herder.config.js` file. You can define multiple workflows for different kinds of tasks. Each pipeline is an array of steps, and each step is an object with these key properties:
+This tool supports both complex multi-step workflows and simple single-action tasks through a unified `pipelines` configuration system. You can define multiple workflows for different kinds of tasks, each with their own guardrails, validation, and retry logic.
+
+#### Multi-Step Pipelines
+
+Traditional pipelines are arrays of steps, where each step is an object with these key properties:
 
 -   `name`: A unique identifier for the step.
 -   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
 -   `model`: (Optional) The Claude model to use for this specific step.
 -   `check`: A validation object to confirm the step was successful.
+
+#### Single-Step ("Stepless") Pipelines
+
+For simple tasks, you can create streamlined pipelines using `command: "self"`. This uses the task's markdown content directly as instructions instead of loading from a separate command file. These pipelines must contain exactly one step, but can still have their own validation, file access controls, and retry logic.
 
 ```javascript
 // cat-herder.config.js
@@ -534,9 +538,11 @@ module.exports = {
 
   /**
    * Define multiple named pipelines for different workflows.
-   * The orchestrator will execute the selected pipeline's steps in order.
+   * Multi-step pipelines execute steps in sequence, while single-step
+   * pipelines using 'command: "self"' use the task content as instructions.
    */
   pipelines: {
+    // Multi-step pipeline example
     default: [
       {
         name: "plan",
@@ -563,28 +569,45 @@ module.exports = {
         }
       },
       {
-        name: "docs",
-        command: "docs-update",
-        check: { type: "none" },
-        fileAccess: {
-          allowWrite: ["README.md", "docs/**/*", "*.md"]
-        }
-      },
-      {
         name: "review",
         command: "self-review",
         check: { type: "none" },
-        // No fileAccess restriction for review step - allows any necessary fixes
       },
     ],
-    "docs-only": [
+    
+    // Single-step pipeline examples using 'command: "self"'
+    "quick-fix": [
       {
-        name: "docs",
-        command: "docs-update",
+        name: "fix",
+        command: "self", // Uses task content as instructions
+        check: { type: "shell", command: "npm test", expect: "pass" },
+        fileAccess: {
+          allowWrite: ["src/**/*"]
+        },
+        retry: 3
+      }
+    ],
+    
+    "simple-docs": [
+      {
+        name: "update",
+        command: "self", // Task content becomes the prompt directly
         check: { type: "none" },
         fileAccess: {
           allowWrite: ["README.md", "docs/**/*", "*.md"]
         }
+      }
+    ],
+    
+    "just-do-it": [
+      {
+        name: "execute",
+        command: "self",
+        check: { type: "none" },
+        fileAccess: {
+          allowWrite: ["src/**/*", "test/**/*"]
+        },
+        retry: 2
       }
     ]
   },
@@ -628,14 +651,23 @@ npm run cat-herder:run -- cat-herder-tasks/my-task.md --pipeline docs-only
 ```
 
 2. **Task Frontmatter:** Add a `pipeline` key to your task's YAML frontmatter:
+
 ```markdown
 ---
-pipeline: docs-only
+pipeline: simple-docs
 ---
-# My Documentation Task
+# Update API Documentation
 
-Update the API documentation to reflect recent changes.
+Please update the API documentation in docs/api.md to reflect the following recent changes:
+
+- Added new user authentication endpoints
+- Deprecated the old /login endpoint 
+- Updated rate limiting from 100 to 200 requests per minute
+
+Ensure the examples are clear and include proper error handling.
 ```
+
+For single-step pipelines using `command: "self"`, the task's markdown content (everything below the frontmatter) becomes the direct instructions for Claude.
 
 3. **Configuration Default:** The `defaultPipeline` property in your `cat-herder.config.js`:
 ```javascript
