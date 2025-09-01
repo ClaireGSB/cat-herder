@@ -218,7 +218,9 @@ cat-herder supports multiple AI providers. By default it uses the Claude CLI, bu
   - Ensure `codex` is available on your PATH before running cat-herder
   - Feature support:
     - `autonomyLevel` (interactive halting) is supported via real-time monitoring of Codex session logs.
-    - `fileAccess` guardrails are not supported and will be ignored.
+    - `fileAccess` guardrails are not supported and will be ignored (they rely on Claude's hooks which OpenAI doesn't support (?)).
+    - **Token Usage tracking is not available** as the Codex CLI does not provide this data.
+    - **Automatic Rate Limit handling is not supported for now** and tasks will fail immediately if you hit your API limit.
   - Logs are monitored and assembled from Codex JSONL session files in `~/.codex/sessions/` during each step.
 
 ## Running Task Sequences

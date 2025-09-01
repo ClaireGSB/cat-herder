@@ -6,6 +6,18 @@ import readline from "node:readline";
 import { handleExistingSettings } from "./init/settings-handler.js";
 
 async function askProvider(): Promise<'claude' | 'codex'> {
+  // 1) Env override for non-interactive/test environments
+  const envChoice = (process.env.CAT_HERDER_AI_PROVIDER || '').trim().toLowerCase();
+  if (envChoice === 'claude' || envChoice === 'codex') {
+    return envChoice as 'claude' | 'codex';
+  }
+  // 2) Default to claude if not running in a TTY (e.g., tests/CI)
+  const isTTY = process.stdin.isTTY;
+  if (!isTTY || process.env.CI) {
+    console.log(pc.gray("No TTY detected; defaulting aiProvider to 'claude'. Set CAT_HERDER_AI_PROVIDER to override."));
+    return 'claude';
+  }
+  // 3) Interactive prompt
   return await new Promise((resolve) => {
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question("Which AI provider do you want to use? (claude/codex) [claude]: ", (answer) => {
