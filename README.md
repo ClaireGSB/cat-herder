@@ -216,10 +216,10 @@ cat-herder supports multiple AI providers. By default it uses the Claude CLI, bu
 - If you select `codex`:
   - Install and authenticate the Codex CLI yourself: `npm install -g @openai/codex`
   - Ensure `codex` is available on your PATH before running cat-herder
-  - Some features are not supported and will be ignored:
-    - `autonomyLevel` (interactive halting)
-    - `fileAccess` guardrails
-  - Logs are assembled from Codex JSONL session files in `~/.codex/sessions/` after each step completes.
+  - Feature support:
+    - `autonomyLevel` (interactive halting) is supported via real-time monitoring of Codex session logs.
+    - `fileAccess` guardrails are not supported and will be ignored.
+  - Logs are monitored and assembled from Codex JSONL session files in `~/.codex/sessions/` during each step.
 
 ## Running Task Sequences
 

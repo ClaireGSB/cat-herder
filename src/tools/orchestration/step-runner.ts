@@ -104,9 +104,6 @@ export async function executeStep(
 
   // Feature divergence notices for Codex provider
   if (providerName === 'codex') {
-    if (config.autonomyLevel && config.autonomyLevel > 0) {
-      console.log(pc.yellow("[Orchestrator] Warning: 'autonomyLevel' is not supported by the 'codex' provider and will be ignored."));
-    }
     if (stepConfig.fileAccess) {
       console.log(pc.yellow("[Orchestrator] Warning: 'fileAccess' restrictions are not enforced with the 'codex' provider and will be ignored for this step."));
     }

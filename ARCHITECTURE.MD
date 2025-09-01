@@ -31,7 +31,7 @@ The architecture is split into distinct layers, each with a clear responsibility
 3.  **AI Provider Layer (`src/tools/ai/`):** Bridges to concrete AI CLIs.
     *   The orchestrator depends on an `AIProvider` interface and selects a provider based on `aiProvider` in `cat-herder.config.js`.
     *   **ClaudeProvider** delegates to `src/tools/proc.ts` to spawn the `claude` CLI and stream JSON events in real time for logs and results.
-    *   **CodexProvider** runs `codex exec` and assembles logs after completion by parsing the latest JSONL session file in `~/.codex/sessions/`.
+    *   **CodexProvider** runs `codex exec` and monitors the active JSONL session file in `~/.codex/sessions/` in real time, enabling interactive halting (autonomy) by detecting pause signals and coordinating with the orchestrator.
     *   Provider implementations handle CLI-specific details (streaming, logs, token usage), keeping the orchestrator focused on control flow and state.
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.

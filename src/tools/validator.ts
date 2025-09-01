@@ -363,11 +363,6 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
       );
       missingPermissions.push(requiredAskPermission);
     }
-  } else {
-    // Warn about unsupported features under Codex
-    if (config.autonomyLevel && config.autonomyLevel > 0) {
-      console.warn("Warning: 'autonomyLevel' is not supported by the 'codex' provider and will be ignored.");
-    }
   }
 
   // Use a Set to remove duplicate missing permissions before returning
