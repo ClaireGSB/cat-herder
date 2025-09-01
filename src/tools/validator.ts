@@ -334,7 +334,7 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
     }
   }
 
-  // Interactive Halting: Check for required Bash permission when interactionThreshold > 0
+  // Interactive Halting: Check for required Bash permission when autonomyLevel > 0
   const requiredAskPermission = "Bash(cat-herder ask:*)";
   if (!allowedPermissions.includes(requiredAskPermission)) {
     errors.push(

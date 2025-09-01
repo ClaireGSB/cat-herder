@@ -5,9 +5,9 @@
 Let's build a new plan using `autonomyLevel`. We'll adapt your colleague's excellent structure with our improved terminology and philosophy.
 
 #### 0. Implementation checklist
-- [ ] Update `interaction-intro.md` with the new prompt structure and language.
-- [ ] Refactor all instances of `interactionThreshold` to `autonomyLevel` in the codebase.
-- [ ] Update documentation to reflect the new terminology and concepts.
+- [x] Update `interaction-intro.md` with the new prompt structure and language.
+- [x] Refactor all instances of `interactionThreshold` to `autonomyLevel` in the codebase.
+- [x] Update documentation to reflect the new terminology and concepts.
 
 #### 1. The New and Improved Prompt for `interaction-intro.md`
 

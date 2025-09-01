@@ -29,7 +29,7 @@ describe('Prompt Builder', () => {
   const mockCommandInstructions = 'Implement the user authentication feature as described in the task definition.';
 
   describe('assemblePrompt', () => {
-    it('should include interaction threshold instructions when threshold > 0', () => {
+    it('should include autonomy level instructions when autonomyLevel > 0', () => {
       const result = assemblePrompt(
         mockPipeline,
         'implement',
@@ -38,12 +38,12 @@ describe('Prompt Builder', () => {
         3
       );
 
-      expect(result).toContain('Your "Interaction Threshold" is set to 3/5');
-      expect(result).toContain('This is a MEDIUM interaction level');
+      expect(result).toContain('Your Autonomy Level is set to 3');
+      expect(result).toContain('Balanced Autonomy');
       expect(result).toContain('When you need to ask a clarifying question, you MUST use the Bash tool');
     });
 
-    it('should include interaction threshold instructions when threshold is 0', () => {
+    it('should include autonomy level instructions when autonomyLevel is 0', () => {
       const result = assemblePrompt(
         mockPipeline,
         'implement',
@@ -52,12 +52,12 @@ describe('Prompt Builder', () => {
         0
       );
 
-      // For threshold 0, no interaction instructions should be included
-      expect(result).not.toContain('Interaction Threshold');
+      // For autonomyLevel 0, no autonomy instructions should be included
+      expect(result).not.toContain('Autonomy Level');
       expect(result).not.toContain('ask a clarifying question');
     });
 
-    it('should include interaction threshold instructions when threshold is maximum (5)', () => {
+    it('should include autonomy level instructions when threshold is maximum (5)', () => {
       const result = assemblePrompt(
         mockPipeline,
         'implement',
@@ -66,8 +66,8 @@ describe('Prompt Builder', () => {
         5
       );
 
-      expect(result).toContain('Your "Interaction Threshold" is set to 5/5');
-      expect(result).toContain('This is a HIGH interaction level');
+      expect(result).toContain('Your Autonomy Level is set to 5');
+      expect(result).toContain('Guided Execution');
       expect(result).toContain('Ask questions to clarify any ambiguity, no matter how small');
     });
 
@@ -81,7 +81,7 @@ describe('Prompt Builder', () => {
       );
 
       // For threshold 0, no interaction instructions should be included
-      expect(result).not.toContain('Interaction Threshold');
+      expect(result).not.toContain('Autonomy Level');
     });
 
     it('should include all required prompt sections', () => {
@@ -106,7 +106,7 @@ describe('Prompt Builder', () => {
       expect(result).toContain(mockCommandInstructions);
     });
 
-    it('should properly structure the interaction threshold instructions', () => {
+    it('should properly structure the autonomy level instructions', () => {
       const result = assemblePrompt(
         mockPipeline,
         'implement',
@@ -118,7 +118,7 @@ describe('Prompt Builder', () => {
       // The interaction intro should come after the main intro but before pipeline context
       const lines = result.split('\n\n');
       const introIndex = lines.findIndex(line => line.includes('Here is a task that has been broken down'));
-      const interactionIndex = lines.findIndex(line => line.includes('Your "Interaction Threshold" is set to'));
+      const interactionIndex = lines.findIndex(line => line.includes('Your Autonomy Level is set to'));
       const pipelineIndex = lines.findIndex(line => line.includes('This is the full pipeline'));
 
       expect(introIndex).toBeLessThan(interactionIndex);
@@ -138,44 +138,44 @@ describe('Prompt Builder', () => {
         );
 
         if (threshold === 0) {
-          expect(result).not.toContain('Interaction Threshold');
+          expect(result).not.toContain('Autonomy Level');
         } else {
-          expect(result).toContain(`Your "Interaction Threshold" is set to ${threshold}/5`);
+          expect(result).toContain(`Your Autonomy Level is set to ${threshold}`);
         }
       });
     });
   });
 
   describe('parseTaskFrontmatter', () => {
-    it('should parse interaction threshold from YAML frontmatter', () => {
+    it('should parse autonomy level from YAML frontmatter', () => {
       const taskContent = `---
 pipeline: default
-interactionThreshold: 4
+autonomyLevel: 4
 ---
 # Test Task
 
-This is a test task with interaction threshold.`;
+This is a test task with autonomy level.`;
 
       const result = parseTaskFrontmatter(taskContent);
 
       expect(result.pipeline).toBe('default');
-      expect(result.interactionThreshold).toBe(4);
-      expect(result.body).toBe('# Test Task\n\nThis is a test task with interaction threshold.');
+      expect(result.autonomyLevel).toBe(4);
+      expect(result.body).toBe('# Test Task\n\nThis is a test task with autonomy level.');
     });
 
-    it('should handle missing interaction threshold in frontmatter', () => {
+    it('should handle missing autonomy level in frontmatter', () => {
       const taskContent = `---
 pipeline: custom
 ---
 # Test Task
 
-This task has no interaction threshold specified.`;
+This task has no autonomy level specified.`;
 
       const result = parseTaskFrontmatter(taskContent);
 
       expect(result.pipeline).toBe('custom');
-      expect(result.interactionThreshold).toBeUndefined();
-      expect(result.body).toBe('# Test Task\n\nThis task has no interaction threshold specified.');
+      expect(result.autonomyLevel).toBeUndefined();
+      expect(result.body).toBe('# Test Task\n\nThis task has no autonomy level specified.');
     });
 
     it('should handle tasks with no frontmatter', () => {
@@ -186,23 +186,23 @@ This task has no YAML frontmatter.`;
       const result = parseTaskFrontmatter(taskContent);
 
       expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBeUndefined();
+      expect(result.autonomyLevel).toBeUndefined();
       expect(result.body).toBe(taskContent);
     });
 
-    it('should handle interaction threshold as the only frontmatter property', () => {
+    it('should handle autonomy level as the only frontmatter property', () => {
       const taskContent = `---
-interactionThreshold: 2
+autonomyLevel: 2
 ---
 # Threshold Only Task
 
-This task only specifies an interaction threshold.`;
+This task only specifies an autonomy level.`;
 
       const result = parseTaskFrontmatter(taskContent);
 
       expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBe(2);
-      expect(result.body).toBe('# Threshold Only Task\n\nThis task only specifies an interaction threshold.');
+      expect(result.autonomyLevel).toBe(2);
+      expect(result.body).toBe('# Threshold Only Task\n\nThis task only specifies an autonomy level.');
     });
 
     it('should handle invalid YAML frontmatter gracefully', () => {
@@ -217,7 +217,7 @@ This should still work.`;
       const result = parseTaskFrontmatter(taskContent);
 
       expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBeUndefined();
+      expect(result.autonomyLevel).toBeUndefined();
       expect(result.body).toBe(taskContent);
     });
   });

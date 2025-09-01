@@ -27,7 +27,7 @@ export interface CatHerderConfig {
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
-  interactionThreshold?: number;
+  autonomyLevel?: number;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
   // Backward compatibility - will be removed in future versions
@@ -42,7 +42,7 @@ const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pi
   manageGitBranch: true,
   autoCommit: false,
   waitForRateLimitReset: false,
-  interactionThreshold: 0,
+  autonomyLevel: 0,
 };
 
 let loadedConfig: CatHerderConfig | null = null;
@@ -62,6 +62,13 @@ export async function getConfig(): Promise<CatHerderConfig> {
 
   projectRoot = path.dirname(result.filepath);
   const userConfig = result.config as any;
+  
+  // Handle backward compatibility for deprecated interactionThreshold
+  if (userConfig.interactionThreshold !== undefined) {
+    console.log("⚠️  Warning: 'interactionThreshold' is deprecated. Please rename it to 'autonomyLevel' in your cat-herder.config.js.");
+    userConfig.autonomyLevel = userConfig.interactionThreshold;
+    delete userConfig.interactionThreshold;
+  }
 
   let pipelines: PipelinesMap = userConfig.pipelines || {};
 

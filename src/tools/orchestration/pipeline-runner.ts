@@ -33,7 +33,7 @@ export async function executePipelineForTask(
 
   // Parse the task file to extract frontmatter
   const rawTaskContent = readFileSync(taskPath, 'utf-8');
-  const { pipeline: taskPipelineName, interactionThreshold: taskInteractionThreshold, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
+  const { pipeline: taskPipelineName, autonomyLevel: taskAutonomyLevel, body: taskContent } = parseTaskFrontmatter(rawTaskContent);
 
   // Determine task ID and status file path
   const taskId = taskPathToTaskId(taskPath, projectRoot);
@@ -66,7 +66,7 @@ export async function executePipelineForTask(
   }
 
   // Resolve interaction threshold (priority: task frontmatter > config > default 0)
-  const resolvedInteractionThreshold = taskInteractionThreshold ?? config.interactionThreshold ?? 0;
+  const resolvedAutonomyLevel = taskAutonomyLevel ?? config.autonomyLevel ?? 0;
 
   // Extract sequence ID if this task is part of a sequence
   const sequenceId = options.sequenceStatusFile
@@ -133,7 +133,7 @@ export async function executePipelineForTask(
       name,
       context,
       commandInstructions,
-      resolvedInteractionThreshold,
+      resolvedAutonomyLevel,
       options.sequenceFolderPath
     );
 
