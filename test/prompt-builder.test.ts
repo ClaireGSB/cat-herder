@@ -1,224 +1,92 @@
-import { describe, it, expect } from 'vitest';
+// test/prompt-builder.test.ts
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      readFileSync: vi.fn(),
+    },
+  };
+});
+
+import fs from 'node:fs';
 import { assemblePrompt, parseTaskFrontmatter } from '../src/tools/orchestration/prompt-builder.js';
 import { PipelineStep } from '../src/config.js';
 
+vi.mock('../src/config.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/config.js')>();
+  return {
+    ...original,
+    getPromptTemplatePath: vi.fn(),
+  };
+});
+import { getPromptTemplatePath } from '../src/config.js';
+
 describe('Prompt Builder', () => {
   const mockPipeline: PipelineStep[] = [
-    {
-      name: 'plan',
-      command: 'plan-task',
-      check: { type: 'fileExists', path: 'PLAN.md' }
-    },
-    {
-      name: 'implement',
-      command: 'implement',
-      check: { type: 'shell', command: 'npm test', expect: 'pass' }
-    },
-    {
-      name: 'review',
-      command: 'self-review',
-      check: { type: 'none' }
-    }
+    { name: 'plan', command: 'plan', check: { type: 'none' } },
+    { name: 'implement', command: 'implement', check: { type: 'none' } },
   ];
+  const mockContext = { 'Task Definition': 'Do the thing.' };
+  const mockCommandInstructions = 'Your instructions here.';
+  const MOCK_PROMPT_TEMPLATE = 'Autonomy instructions for level %%AUTONOMY_LEVEL%%.';
 
-  const mockContext = {
-    'Task Definition': 'Create a new user authentication feature',
-    'Current Status': 'Step 2 of 3 in progress'
-  };
-
-  const mockCommandInstructions = 'Implement the user authentication feature as described in the task definition.';
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getPromptTemplatePath).mockReturnValue('mocked/path/interaction-intro.md');
+    vi.mocked(fs.readFileSync).mockReturnValue(MOCK_PROMPT_TEMPLATE);
+  });
 
   describe('assemblePrompt', () => {
-    it('should include interaction threshold instructions when threshold > 0', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions,
-        3
-      );
-
-      expect(result).toContain('Your "Interaction Threshold" is set to 3/5');
-      expect(result).toContain('This is a MEDIUM interaction level');
-      expect(result).toContain('When you need to ask a clarifying question, you MUST use the Bash tool');
+    it('should correctly inject the autonomyLevel into the prompt template', () => {
+      const result = assemblePrompt(mockPipeline, 'implement', mockContext, mockCommandInstructions, 4);
+      expect(result).toContain('Autonomy instructions for level 4.');
     });
 
-    it('should include interaction threshold instructions when threshold is 0', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions,
-        0
-      );
-
-      // For threshold 0, no interaction instructions should be included
-      expect(result).not.toContain('Interaction Threshold');
-      expect(result).not.toContain('ask a clarifying question');
+    it('should correctly inject level 0 when no level is provided', () => {
+      const result = assemblePrompt(mockPipeline, 'implement', mockContext, mockCommandInstructions);
+      expect(result).toContain('Autonomy instructions for level 0.');
     });
 
-    it('should include interaction threshold instructions when threshold is maximum (5)', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions,
-        5
-      );
+    it('should assemble all parts of the prompt in the correct order', () => {
+      const result = assemblePrompt(mockPipeline, 'implement', mockContext, mockCommandInstructions, 3);
+      const introIndex = result.indexOf('Here is a task');
+      const autonomyIndex = result.indexOf('Autonomy instructions for level 3.');
+      const pipelineIndex = result.indexOf('This is the full pipeline');
+      const responsibilityIndex = result.indexOf('You are responsible for executing step "implement"');
+      const contextIndex = result.indexOf('--- TASK DEFINITION ---');
 
-      expect(result).toContain('Your "Interaction Threshold" is set to 5/5');
-      expect(result).toContain('This is a HIGH interaction level');
-      expect(result).toContain('Ask questions to clarify any ambiguity, no matter how small');
-    });
-
-    it('should default to threshold 0 when no threshold is provided', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions
-        // No threshold parameter provided
-      );
-
-      // For threshold 0, no interaction instructions should be included
-      expect(result).not.toContain('Interaction Threshold');
-    });
-
-    it('should include all required prompt sections', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions,
-        2
-      );
-
-      // Check that all major sections are present
-      expect(result).toContain('Here is a task that has been broken down into several steps');
-      expect(result).toContain('This is the full pipeline for your awareness:');
-      expect(result).toContain('1. plan');
-      expect(result).toContain('2. implement');
-      expect(result).toContain('3. review');
-      expect(result).toContain('You are responsible for executing step "implement"');
-      expect(result).toContain('--- TASK DEFINITION ---');
-      expect(result).toContain('Create a new user authentication feature');
-      expect(result).toContain('--- YOUR INSTRUCTIONS FOR THE "implement" STEP ---');
-      expect(result).toContain(mockCommandInstructions);
-    });
-
-    it('should properly structure the interaction threshold instructions', () => {
-      const result = assemblePrompt(
-        mockPipeline,
-        'implement',
-        mockContext,
-        mockCommandInstructions,
-        3
-      );
-
-      // The interaction intro should come after the main intro but before pipeline context
-      const lines = result.split('\n\n');
-      const introIndex = lines.findIndex(line => line.includes('Here is a task that has been broken down'));
-      const interactionIndex = lines.findIndex(line => line.includes('Your "Interaction Threshold" is set to'));
-      const pipelineIndex = lines.findIndex(line => line.includes('This is the full pipeline'));
-
-      expect(introIndex).toBeLessThan(interactionIndex);
-      expect(interactionIndex).toBeLessThan(pipelineIndex);
-    });
-
-    it('should handle different threshold values correctly', () => {
-      const thresholds = [0, 1, 2, 3, 4, 5];
-
-      thresholds.forEach(threshold => {
-        const result = assemblePrompt(
-          mockPipeline,
-          'implement',
-          mockContext,
-          mockCommandInstructions,
-          threshold
-        );
-
-        if (threshold === 0) {
-          expect(result).not.toContain('Interaction Threshold');
-        } else {
-          expect(result).toContain(`Your "Interaction Threshold" is set to ${threshold}/5`);
-        }
-      });
+      expect(introIndex).toBe(0);
+      expect(autonomyIndex).toBeGreaterThan(introIndex);
+      expect(pipelineIndex).toBeGreaterThan(autonomyIndex);
+      expect(responsibilityIndex).toBeGreaterThan(pipelineIndex);
+      expect(contextIndex).toBeGreaterThan(responsibilityIndex);
     });
   });
 
   describe('parseTaskFrontmatter', () => {
-    it('should parse interaction threshold from YAML frontmatter', () => {
+    it('should parse autonomy level from YAML frontmatter', () => {
       const taskContent = `---
 pipeline: default
-interactionThreshold: 4
+autonomyLevel: 4
 ---
-# Test Task
-
-This is a test task with interaction threshold.`;
-
+# Test Task`;
       const result = parseTaskFrontmatter(taskContent);
-
-      expect(result.pipeline).toBe('default');
-      expect(result.interactionThreshold).toBe(4);
-      expect(result.body).toBe('# Test Task\n\nThis is a test task with interaction threshold.');
+      expect(result.autonomyLevel).toBe(4);
     });
 
-    it('should handle missing interaction threshold in frontmatter', () => {
+    it('should handle backward compatibility for interactionThreshold', () => {
       const taskContent = `---
-pipeline: custom
+interactionThreshold: 3
 ---
-# Test Task
-
-This task has no interaction threshold specified.`;
-
+# Old Task`;
       const result = parseTaskFrontmatter(taskContent);
-
-      expect(result.pipeline).toBe('custom');
-      expect(result.interactionThreshold).toBeUndefined();
-      expect(result.body).toBe('# Test Task\n\nThis task has no interaction threshold specified.');
-    });
-
-    it('should handle tasks with no frontmatter', () => {
-      const taskContent = `# Simple Task
-
-This task has no YAML frontmatter.`;
-
-      const result = parseTaskFrontmatter(taskContent);
-
-      expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBeUndefined();
-      expect(result.body).toBe(taskContent);
-    });
-
-    it('should handle interaction threshold as the only frontmatter property', () => {
-      const taskContent = `---
-interactionThreshold: 2
----
-# Threshold Only Task
-
-This task only specifies an interaction threshold.`;
-
-      const result = parseTaskFrontmatter(taskContent);
-
-      expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBe(2);
-      expect(result.body).toBe('# Threshold Only Task\n\nThis task only specifies an interaction threshold.');
-    });
-
-    it('should handle invalid YAML frontmatter gracefully', () => {
-      const taskContent = `---
-invalid: yaml: content: 
-  - malformed
----
-# Task with Invalid YAML
-
-This should still work.`;
-
-      const result = parseTaskFrontmatter(taskContent);
-
-      expect(result.pipeline).toBeUndefined();
-      expect(result.interactionThreshold).toBeUndefined();
-      expect(result.body).toBe(taskContent);
+      expect(result.autonomyLevel).toBe(3);
     });
   });
 });

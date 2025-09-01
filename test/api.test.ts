@@ -17,7 +17,7 @@ describe('API Routes - Interactive Halting', () => {
   let app: express.Application;
   const mockStateDir = '/test/state';
   const mockLogsDir = '/test/logs';
-  const mockConfig = { interactionThreshold: 0 };
+  const mockConfig = { autonomyLevel: 0 };
 
   beforeEach(() => {
     vi.clearAllMocks();

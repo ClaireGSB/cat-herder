@@ -5,17 +5,24 @@ import { PipelineStep, getPromptTemplatePath } from "../../config.js";
 /**
  * Parses YAML frontmatter from a task file to extract pipeline configuration.
  * @param content The raw content of the task file.
- * @returns An object containing the pipeline name and interaction threshold (if specified) and the task body without frontmatter.
+ * @returns An object containing the pipeline name and autonomy level (if specified) and the task body without frontmatter.
  */
-export function parseTaskFrontmatter(content: string): { pipeline?: string; interactionThreshold?: number; body: string } {
+export function parseTaskFrontmatter(content: string): { pipeline?: string; autonomyLevel?: number; body: string } {
   const match = content.match(/^---\s*([\s\S]+?)\s*---/);
   if (match) {
     try {
       const frontmatter = yaml.load(match[1]) as Record<string, any> | undefined;
       const body = content.substring(match[0].length).trim();
+      
+      let autonomyLevel = frontmatter?.autonomyLevel;
+      if (frontmatter?.interactionThreshold !== undefined) {
+        console.log("⚠️  Warning: 'interactionThreshold' in task frontmatter is deprecated. Please rename it to 'autonomyLevel'.");
+        autonomyLevel = frontmatter.interactionThreshold;
+      }
+      
       return { 
         pipeline: frontmatter?.pipeline, 
-        interactionThreshold: frontmatter?.interactionThreshold,
+        autonomyLevel,
         body 
       };
     } catch {
@@ -26,35 +33,21 @@ export function parseTaskFrontmatter(content: string): { pipeline?: string; inte
 }
 
 /**
- * Gets the appropriate interaction instructions based on the threshold level.
- * @param threshold The interaction threshold (0-5)
- * @returns The formatted interaction instructions or empty string if threshold is 0
+ * Reads the interaction-intro.md template and injects the current autonomy level.
+ * @param autonomyLevel The autonomy level (0-5)
+ * @returns The formatted autonomy instructions.
  */
-function getInteractionIntro(threshold: number): string {
-  if (threshold === 0) return '';
+function getInteractionIntro(autonomyLevel: number): string {
+  // Handle invalid levels gracefully.
+  if (autonomyLevel < 0 || autonomyLevel > 5) {
+    return '';
+  }
 
   const templatePath = getPromptTemplatePath('interaction-intro.md');
   const templateContent = fs.readFileSync(templatePath, 'utf-8');
   
-  let instructions = '';
-  if (threshold <= 2) { // Low
-    const match = templateContent.match(/<!-- INTERACTION_LEVEL_LOW -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  } else if (threshold <= 4) { // Medium
-    const match = templateContent.match(/<!-- INTERACTION_LEVEL_MEDIUM -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  } else { // High
-    const match = templateContent.match(/<!-- INTERACTION_LEVEL_HIGH -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  }
-  
-  const commonMatch = templateContent.match(/<!-- COMMON_INSTRUCTIONS -->(.*)/s);
-  const commonInstructions = commonMatch ? commonMatch[1].trim() : '';
-  
-  let intro = (instructions + '\n\n' + commonInstructions).trim();
-  intro = intro.replace(/%%INTERACTION_THRESHOLD%%/g, String(threshold));
-  
-  return intro;
+  // The logic is now just one simple, robust replacement.
+  return templateContent.replace(/%%AUTONOMY_LEVEL%%/g, String(autonomyLevel));
 }
 
 /**
@@ -65,7 +58,7 @@ function getInteractionIntro(threshold: number): string {
  * @param currentStepName - The `name` of the step Claude is currently executing.
  * @param context - A record of contextual information (e.g., task definition, plan content).
  * @param commandInstructions - The specific instructions loaded from the command markdown file.
- * @param interactionThreshold - The interaction threshold (0-5) that controls when AI should ask for human input.
+ * @param autonomyLevel - The autonomy level (0-5) that controls when AI should ask for human input.
  * @returns The fully assembled prompt string to be sent to Claude.
  */
 export function assemblePrompt(
@@ -73,14 +66,14 @@ export function assemblePrompt(
   currentStepName: string,
   context: Record<string, string>,
   commandInstructions: string,
-  interactionThreshold: number = 0,
+  autonomyLevel: number = 0,
   sequenceFolderPath?: string
 ): string {
   // 1. Explain that the task is part of a larger, multi-step process.
   let intro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
 
-  // 2. Add interaction threshold instructions
-  const interactionIntro = getInteractionIntro(interactionThreshold);
+  // 2. Add autonomy level instructions
+  const interactionIntro = getInteractionIntro(autonomyLevel);
 
   if (sequenceFolderPath) {
     intro += `\n\nYou are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentionned, it is referring to the "${sequenceFolderPath}" folder.`;

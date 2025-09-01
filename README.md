@@ -16,8 +16,8 @@ A command-line tool that helps guide LLM agents (currently only supporting Claud
   * [Part 1: Initial One-Time Setup (`npm link`)](#part-1-initial-one-time-setup-npm-link)
   * [Part 2: The Re-Testing Workflow (Every Time You Change Code)](#part-2-the-re-testing-workflow-every-time-you-change-code)
   * [Part 3: Testing the Web Dashboard](#part-3-testing-the-web-dashboard)
-* [Interactive Halting (Interaction Threshold)](#interactive-halting-interaction-threshold)
-  * [The Interaction Threshold Scale](#the-interaction-threshold-scale)
+* [Interactive Halting (Autonomy Level)](#interactive-halting-autonomy-level)
+  * [The Autonomy Level Scale](#the-autonomy-level-scale)
   * [Configuration](#configuration)
     * [Global Configuration (`cat-herder.config.js`)](#global-configuration-cat-herderconfigjs)
     * [Task-Level Override (Frontmatter)](#task-level-override-frontmatter)
@@ -144,7 +144,7 @@ To effectively use `cat-herder`, it's important to understand its three core hie
 
 *   **Automated Development Pipelines**: Define multi-step workflows (pipelines) in `cat-herder.config.js` to systematically guide the AI through stages like planning, coding, testing, and documentation.
 *   **Dynamic Task Sequences**: Orchestrate a series of related tasks from a folder, where early tasks can dynamically create subsequent tasks for a fully autonomous feature implementation.
-*   **Interactive Human Collaboration**: Set an "Interaction Threshold" to allow the AI to pause and ask for human clarification, balancing automation with oversight.
+*   **Interactive Human Collaboration**: Set an "Autonomy Level" to allow the AI to pause and ask for human clarification, balancing automation with oversight.
 *   **Robust Error Handling**: Automatic retries for failed steps and graceful handling of API rate limits ensure your workflows are resilient.
 *   **Comprehensive Logging & Monitoring**: Detailed logs, state files, and a real-time web dashboard provide full visibility into the AI's reasoning, progress, and resource usage.
 *   **Version Control Integration**: Isolates AI work on dedicated Git branches, automatically committing progress and keeping your `main` branch clean.
@@ -326,34 +326,36 @@ npm run test:manual:web
 
 This will start the web server on `http://localhost:5177` populated with consistent data, allowing you to safely verify UI changes without needing to run a live AI task or having existing data in your `~/.cat-herder` directory.
 
-## Interactive Halting (Interaction Threshold)
+## Interactive Halting (Autonomy Level)
 
-The `cat-herder` tool includes a powerful feature that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Interaction Threshold**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
+The `cat-herder` tool includes a powerful feature that transforms the AI from a fully autonomous agent into a collaborative partner. By setting an **Autonomy Level**, you can control when the AI should pause its work to ask for human clarification, balancing speed with safety for different types of tasks.
 
-### The Interaction Threshold Scale
+### The Autonomy Level Scale
 
-The `interactionThreshold` is configured in your `cat-herder.config.js` or a task's frontmatter as an integer from `0` to `5`. This number determines how cautious the AI will be.
+The `autonomyLevel` is a number from 0 to 5 that defines how independently the agent should operate. Each level has a distinct trigger for when the agent will pause to seek human guidance.
 
--   **`0` - Fully Autonomous (Default):** The AI will never ask questions. It makes its best assumptions and proceeds without interruption.
--   **`1-2` - Low Interruption:** The AI will only pause if it is completely blocked by a contradiction in the requirements or is about to perform a potentially destructive action (like deleting a file).
--   **`3-4` - Medium Interruption:** The AI will ask for clarification when faced with significant architectural or technical decisions that aren't clearly specified (e.g., "Should I add this to API v1 or create a new v2?").
--   **`5` - High Interruption:** The AI will be very cautious. It will ask to clarify any ambiguity, no matter how small, and may present you with options before proceeding with a complex implementation.
+*   **Level 0: Absolute Autonomy** - The agent will only ask if a requirement is physically or logically impossible to fulfill.
+*   **Level 1: High Autonomy** - The agent will only ask if a requirement is unsafe, unethical, or directly contradicts a core project principle.
+*   **Level 2: Default Autonomy** - The agent will ask when a foundational architectural strategy for a major component is missing.
+*   **Level 3: Collaborative Autonomy** - The agent will ask to resolve ambiguity in significant design patterns or data models.
+*   **Level 4: Guided Execution** - The agent will ask to confirm its understanding of complex business logic *before* implementation.
+*   **Level 5: Strict Oversight** - The agent will present all valid, non-trivial technical options to the human for a final decision.
 
 ### Configuration
 
-You can set the threshold globally or per-task.
+You can set the autonomy level globally or per-task.
 
 #### Global Configuration (`cat-herder.config.js`)
 
-Set a default threshold for all tasks in your project.
+Set a default autonomy level for all tasks in your project.
 
 ```javascript
 // cat-herder.config.js
 module.exports = {
   // ... other configuration
   
-  // Set the default interaction threshold (0-5)
-  interactionThreshold: 0, // Default is 0 for backward compatibility
+  // Set the default autonomy level (0-5)
+  autonomyLevel: 0, // Default is 0 for backward compatibility
 };```
 
 #### Task-Level Override (Frontmatter)
@@ -363,14 +365,14 @@ For specific tasks that require more or less caution, override the global settin
 ```markdown
 ---
 pipeline: default
-interactionThreshold: 5
+autonomyLevel: 5
 ---
 # Complex Refactoring Task
 This task involves major architectural changes. Be cautious and ask questions when uncertain.```
 
 ### How to Enable and Use Interactive Halting
 
-1.  **Set the Threshold:** Choose a value greater than `0` in your config or task frontmatter.
+1.  **Set the Level:** Choose a value greater than `0` in your config or task frontmatter.
 
 2.  **Grant Permission:** For this feature to work, the AI needs permission to use the `cat-herder ask` command. You **must** add the `Bash(cat-herder ask:*)` permission to your `.claude/settings.json` file. The `cat-herder validate` command will detect if this is missing and offer to add it for you.
 
@@ -455,13 +457,13 @@ This example demonstrates how an initial task can read a Product Requirements Do
 2.  **Create the Initial "Break Down PRD" Task:**
     Create a task file, `01-break-down-prd.md`, in the same folder. This task will instruct the AI to read the `_PRD.md` and then use the `Write` tool to generate the subsequent implementation tasks.
 
-    **Remember:** When creating any task file, you need to define its YAML frontmatter, choosing the correct `pipeline` and `interactionThreshold` based on your project's `cat-herder.config.js` and the task's complexity.
+    **Remember:** When creating any task file, you need to define its YAML frontmatter, choosing the correct `pipeline` and `autonomyLevel` based on your project's `cat-herder.config.js` and the task's complexity.
 
     `cat-herder-tasks/new-feature-implementation/01-break-down-prd.md`:
     ```markdown
     ---
     pipeline: default
-    interactionThreshold: 3 # Set a medium threshold for this planning task
+    autonomyLevel: 3 # Set a medium threshold for this planning task
     ---
     # Break Down PRD
 
@@ -471,7 +473,7 @@ This example demonstrates how an initial task can read a Product Requirements Do
     For each major step, use the `Write` tool to create a new markdown task file (e.g., `02-setup-database-schema.md`, `03-implement-api-endpoints.md`, `04-create-frontend-components.md`, `05-write-integration-tests.md`). Ensure these task files are named alphabetically (e.g., `02-`, `03-`, etc.) to maintain execution order within the sequence.
 
     Each generated task file should:
-    - Have appropriate YAML frontmatter (e.g., `pipeline: default`, `interactionThreshold`).
+    - Have appropriate YAML frontmatter (e.g., `pipeline: default`, `autonomyLevel`).
     - Clearly define the goal for that specific implementation step.
     - Include all necessary context from the `_PRD.md` in its body, or reference the `_PRD.md` as context if it's too large.
 
@@ -510,7 +512,7 @@ module.exports = {
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
 
-  interactionThreshold: 0, 
+  autonomyLevel: 0, 
 
   /**
    * If true (default), the tool automatically creates a dedicated Git branch

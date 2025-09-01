@@ -49,7 +49,7 @@ describe('Interactive Step Runner', () => {
   const mockConfig = {
     defaultPipeline: 'default',
     pipelines: { default: [] },
-    interactionThreshold: 0
+    autonomyLevel: 0
   };
 
   beforeEach(() => {
@@ -968,7 +968,7 @@ Let me check the existing patterns in the codebase.
           manageGitBranch: false,
           autoCommit: false,
           waitForRateLimitReset: false,
-          interactionThreshold: 3,
+          autonomyLevel: 3,
           pipelines: { default: [] },
           defaultPipeline: 'default'
         };
@@ -1020,7 +1020,7 @@ Let me check the existing patterns in the codebase.
             {
               question: 'What is the preferred coding style?',
               answer: 'Follow the existing TypeScript guidelines.',
-              timestamp: '2025-08-28T15:30:45.123Z'
+              questionTimestamp: '2025-08-28T15:30:45.123Z'
             }
           ],
           tokenUsage: {},

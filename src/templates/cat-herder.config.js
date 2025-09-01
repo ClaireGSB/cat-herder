@@ -29,16 +29,21 @@ module.exports = {
   waitForRateLimitReset: false,
 
   /**
-   * Controls how often the AI agent should pause to ask for human clarification.
-   * Scale: 0-5 where:
-   * - 0 (default): Fully autonomous, never asks questions
-   * - 1-2: Low interruption, only asks when fundamentally blocked
-   * - 3: Balanced, asks for clarification on ambiguous requirements
-   * - 4-5: High interaction, very cautious, asks before most decisions
-   * 
-   * Can be overridden per-task in YAML frontmatter with 'interactionThreshold: X'
+   * Defines the agent's level of operational independence on a scale of 0-5.
+   * This setting controls how frequently the agent will pause to ask for human
+   * clarification when it encounters ambiguity. See the project README for a
+   * full breakdown of each level.
+   *
+   * 0: Absolute Autonomy (asks only if impossible to proceed)
+   * 1: High Autonomy (asks only about unsafe/contradictory requirements)
+   * 2: Default Autonomy (asks about major architectural gaps)
+   * 3: Collaborative Autonomy (asks about ambiguous designs)
+   * 4: Guided Execution (asks to confirm complex logic)
+   * 5: Strict Oversight (presents all non-trivial options for a decision)
+   *
+   * Can be overridden per-task in YAML frontmatter with 'autonomyLevel: X'
    */
-  interactionThreshold: 0,
+  autonomyLevel: 0,
 
   /**
    * Default pipeline to use when none is specified.
