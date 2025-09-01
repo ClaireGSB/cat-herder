@@ -2,33 +2,22 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// --- START: THE FIX ---
-// This is the robust, officially recommended way to mock a built-in module.
-// It imports the *actual* fs module and then overrides only the parts we need.
 vi.mock('node:fs', async (importOriginal) => {
-  // Get the original, real 'fs' module
   const actual = await importOriginal<typeof import('node:fs')>();
   
-  // Return an object that has all the real properties of 'fs'...
   return {
     ...actual,
-    // ...and also provides a 'default' export which is what `import fs from 'fs'` expects.
-    // The default export should also contain all the real properties...
     default: {
       ...actual,
-      // ...except for the one function we want to mock.
       readFileSync: vi.fn(),
     },
   };
 });
-// --- END: THE FIX ---
 
-// Now that the mocks are correctly in place, we can import everything.
 import fs from 'node:fs';
 import { assemblePrompt, parseTaskFrontmatter } from '../src/tools/orchestration/prompt-builder.js';
 import { PipelineStep } from '../src/config.js';
 
-// This mock for config.js remains the same and is correct.
 vi.mock('../src/config.js', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/config.js')>();
   return {
@@ -50,8 +39,6 @@ describe('Prompt Builder', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getPromptTemplatePath).mockReturnValue('mocked/path/interaction-intro.md');
-    // This line will now work perfectly because our mock factory provides
-    // a default export with a mockable `readFileSync` function.
     vi.mocked(fs.readFileSync).mockReturnValue(MOCK_PROMPT_TEMPLATE);
   });
 
