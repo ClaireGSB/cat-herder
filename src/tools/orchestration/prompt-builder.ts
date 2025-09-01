@@ -73,16 +73,16 @@ export function assemblePrompt(
   const interactionIntro = getInteractionIntro(autonomyLevel);
   const intro = `You are an autonomous agent responsible for completing the following task.`;
 
+  let sequenceContext = "";
+  if (sequenceFolderPath) {
+    sequenceContext = `You are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentioned, it is referring to the "${sequenceFolderPath}" folder.`;
+  }
+
   if (isSimpleTask) {
     // Simplified Prompt for "Stepless" Pipelines
     const historyContext = context.interactionHistory 
       ? `--- HUMAN INTERACTION HISTORY ---\n${context.interactionHistory}` 
       : "";
-
-    let sequenceContext = "";
-    if (sequenceFolderPath) {
-      sequenceContext = `You are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentioned, it is referring to the "${sequenceFolderPath}" folder.`;
-    }
 
     return [
       intro,
@@ -96,11 +96,6 @@ export function assemblePrompt(
   } else {
     // Existing Multi-Step Prompt Logic
     const multiStepIntro = `Here is a task that has been broken down into several steps. You are an autonomous agent responsible for completing one step at a time.`;
-
-    let sequenceContext = "";
-    if (sequenceFolderPath) {
-      sequenceContext = `You are currently running a task from a folder in "${sequenceFolderPath}". In this task, whenever the "sequence folder" or "sequence directory" is mentioned, it is referring to the "${sequenceFolderPath}" folder.`;
-    }
 
     // Provide the entire pipeline definition as a simple numbered list.
     const pipelineStepsList = pipeline.map((step, index) => `${index + 1}. ${step.name}`).join('\n');
