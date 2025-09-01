@@ -107,8 +107,8 @@ graph TD
     *   **`src/tools/`**: Contains the core logic for orchestration, web UI, validation, and status management. This is the engine of the application.
     *   **`src/templates/`**: EJS templates for the web dashboard and default configuration files (`cat-herder.config.js`).
     *   **`src/init/`**: Logic related to the `cat-herder init` command.
-*   **`.claude/` (in user's project)**: The user-facing configuration directory.
-    *   **`commands/`**: User-customizable markdown prompts for each pipeline step.
+*   **`.cat-herder/steps/` (in user's project)**: User-customizable markdown prompts for each pipeline step (provider-neutral).
+*   **`.claude/` (in user's project)**: Claude-specific settings directory.
     *   **`settings.json`**: Permissions and hooks for the `claude` CLI tool.
 *   **`~/.cat-herder/` (in user's home directory)**: Application data directory.
     *   **`state/`**: Contains the JSON state files that track the progress of tasks and sequences. **This directory should be in `.gitignore`**.
@@ -128,7 +128,7 @@ This section documents key design choices and their rationale, providing context
     *   **Rationale:** This makes the entire workflow resumable with zero external dependencies (like a database). The state is human-readable, which is invaluable for debugging failed runs. The use of atomic writes (writing to a `.tmp` file then renaming) mitigates race conditions. By placing these files in the user's home directory rather than the project directory, we avoid conflicts with existing project files and ensure the data persists across different projects.
     *   **Trade-off:** The system is not designed for high-concurrency parallelism on a single repository. This is acceptable as the primary use case is a single, sequential workflow per user action.
 
-*   **Decision: Expose AI prompts as user-editable `.md` files in `.claude/commands/`.**
+*   **Decision: Expose AI prompts as user-editable `.md` files in `.cat-herder/steps/`.**
     *   **Rationale:** The core value of an AI orchestration tool is the ability to customize the AI's behavior. By externalizing prompts, we give users maximum control over their workflows without needing to modify the tool's source code.
     *   **Trade-off:** The tool's performance is directly tied to the quality of the user's prompts. We provide sensible defaults, but the user is ultimately responsible for effective prompt engineering.
 

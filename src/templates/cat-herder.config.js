@@ -4,6 +4,9 @@ module.exports = {
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
+  
+  // Use 'claude' (default) or 'codex'
+  // aiProvider: 'claude',
 
   /**
    * If true (default), the orchestrator will automatically create and manage a
@@ -44,6 +47,23 @@ module.exports = {
    * Can be overridden per-task in YAML frontmatter with 'autonomyLevel: X'
    */
   autonomyLevel: 0,
+
+  // Optional: Codex-specific runtime configuration
+  // These values are passed to `codex exec` via --config flags so you don't
+  // need to modify ~/.codex/config.toml for cat-herder runs.
+  //
+  // codex: {
+  //   sandboxMode: 'workspace-write', // 'read-only' | 'workspace-write' | 'danger-full-access'
+  //   networkAccess: false,           // applies when sandboxMode === 'workspace-write'
+  //   profile: undefined,             // name of a profile in ~/.codex/config.toml (optional)
+  //   envPolicy: {
+  //     inherit: 'core',              // 'all' | 'core' | 'none'
+  //     ignoreDefaultExcludes: false, // keep default KEY/SECRET/TOKEN filtering
+  //     includeOnly: [ 'PATH', 'HOME', 'USER' ],
+  //     // exclude: [ 'AWS_*' ],
+  //     // set: { CI: '1' }
+  //   }
+  // },
 
   /**
    * Default pipeline to use when none is specified.

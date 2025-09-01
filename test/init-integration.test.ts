@@ -114,14 +114,12 @@ describe('Init Integration Tests', () => {
     // Verify main config file
     expect(await fs.pathExists(path.join(tempDir, 'cat-herder.config.js'))).toBe(true);
     
-    // Verify .claude directory structure
-    expect(await fs.pathExists(path.join(tempDir, '.claude'))).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, '.claude', 'settings.json'))).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, '.claude', 'commands'))).toBe(true);
+    // Verify .cat-herder steps directory structure
+    expect(await fs.pathExists(path.join(tempDir, '.cat-herder', 'steps'))).toBe(true);
     
-    // Verify some command files exist
-    expect(await fs.pathExists(path.join(tempDir, '.claude', 'commands', 'plan-task.md'))).toBe(true);
-    expect(await fs.pathExists(path.join(tempDir, '.claude', 'commands', 'implement.md'))).toBe(true);
+    // Verify some step files exist
+    expect(await fs.pathExists(path.join(tempDir, '.cat-herder', 'steps', 'plan-task.md'))).toBe(true);
+    expect(await fs.pathExists(path.join(tempDir, '.cat-herder', 'steps', 'implement.md'))).toBe(true);
     
     // Verify task directory and sample
     expect(await fs.pathExists(path.join(tempDir, 'cat-herder-tasks'))).toBe(true);

@@ -1,4 +1,4 @@
-import { readFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import { updateStatus, readStatus } from "../status.js";
@@ -124,7 +124,11 @@ export async function executePipelineForTask(
     }
 
     // Read the specific command instructions for the current step
-    const commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
+    // Resolve command prompt: prefer new neutral location, fallback to legacy path
+    let commandFilePath = path.resolve(projectRoot, '.cat-herder', 'steps', `${command}.md`);
+    if (!existsSync(commandFilePath)) {
+      commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
+    }
     const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
     // Assemble the full prompt using the assemblePrompt function

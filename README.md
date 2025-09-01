@@ -303,7 +303,7 @@ This is the loop you will follow every time you make changes to `cat-herder` and
     rm -f PLAN.md && rm -rf .cat-herder/ && git clean -fd src/ test/
     ```
 
-    **Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts in `.claude/commands/` are preserved.
+    **Note:** This removes the `.cat-herder/` directory which contains the application's state and log files. Your command prompts now live in `.cat-herder/steps/`.
 
 3.  **Run the Task:** You can now immediately run a fresh test. There is no need to re-initialize or reinstall dependencies.
 
@@ -525,7 +525,7 @@ This creates a fully autonomous, multi-task development workflow where the initi
 This tool is driven by a `pipelines` object in your `cat-herder.config.js` file. You can define multiple workflows for different kinds of tasks. Each pipeline is an array of steps, and each step is an object with these key properties:
 
 -   `name`: A unique identifier for the step.
--   `command`: The name of the corresponding `.md` file in `.claude/commands/`.
+-   `command`: The name of the corresponding `.md` file in `.cat-herder/steps/`.
 -   `model`: (Optional) The Claude model to use for this specific step.
 -   `check`: A validation object to confirm the step was successful.
 
@@ -1047,7 +1047,7 @@ With auto-commits disabled (the default), you can instruct Claude to make commit
 
 **Example: Adding a commit instruction to the implement step**
 
-Modify your `.claude/commands/implement.md` file to include a commit instruction:
+Modify your `.cat-herder/steps/implement.md` file to include a commit instruction:
 
 ```markdown
 ---

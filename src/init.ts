@@ -56,22 +56,26 @@ export async function init(targetRoot: string) {
     }
   }
   
-  // 2. Copy the .claude command templates (Claude only)
+  // 2. Create neutral steps directory from templates
+  const stepsTemplatePath = path.resolve(new URL("./templates/steps", import.meta.url).pathname);
+  const targetStepsPath = path.join(targetRoot, ".cat-herder", "steps");
+  await fs.copy(stepsTemplatePath, targetStepsPath, { overwrite: false, errorOnExist: false });
+  console.log(pc.green("Created .cat-herder/steps directory with default prompts."));
+
+  // 3. Copy the .claude settings (Claude only)
   if (chosenProvider === 'claude') {
     const dotClaudeTemplatePath = path.resolve(new URL("./dot-claude", import.meta.url).pathname);
     const targetDotClaudePath = path.join(targetRoot, ".claude");
-    await fs.copy(dotClaudeTemplatePath, targetDotClaudePath, {
-        overwrite: false,
-        errorOnExist: false,
-    });
-    // Handle existing settings and permissions
+    await fs.ensureDir(targetDotClaudePath);
+    // Only copy settings.json (commands are now in .cat-herder/steps)
+    await fs.copy(path.join(dotClaudeTemplatePath, 'settings.json'), path.join(targetDotClaudePath, 'settings.json'), { overwrite: false, errorOnExist: false });
     await handleExistingSettings(targetDotClaudePath, dotClaudeTemplatePath);
-    console.log(pc.green("Created .claude/ directory with default commands and settings."));
+    console.log(pc.green("Created .claude/settings.json with default permissions and hooks."));
   } else {
-    console.log(pc.yellow("Skipping .claude/ setup because provider is 'codex'."));
+    console.log(pc.yellow("Skipping .claude settings setup because provider is 'codex'."));
   }
 
-  // 3. Create a sample task and folder
+  // 4. Create a sample task and folder
   const taskFolder = "cat-herder-tasks";
   await fs.ensureDir(path.join(targetRoot, taskFolder));
   const sampleTaskTemplatePath = path.resolve(new URL("./tasks/sample.md", import.meta.url).pathname);

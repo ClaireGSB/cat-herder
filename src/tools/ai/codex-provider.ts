@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import chokidar from 'chokidar';
+import type { FSWatcher } from 'chokidar';
 import { AIProvider } from './ai-provider.js';
 import type { RunStreamingOptions, StreamResult } from '../proc.js';
 import { HumanInterventionRequiredError } from '../orchestration/errors.js';
@@ -75,6 +76,45 @@ export class CodexProvider implements AIProvider {
     const args: string[] = ['exec'];
     if (model) args.push('--model', model);
 
+    // Map cat-herder Codex config to --config flags
+    const cfg = options?.settings?.codex;
+    const addConfig = (key: string, valueToml: string | boolean | number | string[]) => {
+      let v: string;
+      if (Array.isArray(valueToml)) {
+        v = `[${valueToml.map((s) => JSON.stringify(s)).join(', ')}]`;
+      } else if (typeof valueToml === 'string') {
+        v = JSON.stringify(valueToml);
+      } else if (typeof valueToml === 'boolean' || typeof valueToml === 'number') {
+        v = String(valueToml);
+      } else {
+        return; // ignore
+      }
+      args.push('--config', `${key}=${v}`);
+    };
+
+    if (cfg?.profile) {
+      args.push('--profile', cfg.profile);
+    }
+
+    if (cfg?.sandboxMode) {
+      addConfig('sandbox_mode', cfg.sandboxMode);
+      if (cfg.sandboxMode === 'workspace-write' && typeof cfg.networkAccess === 'boolean') {
+        addConfig('sandbox_workspace_write.network_access', cfg.networkAccess);
+      }
+    }
+
+    const ep = cfg?.envPolicy;
+    if (ep) {
+      if (ep.inherit) addConfig('shell_environment_policy.inherit', ep.inherit);
+      if (typeof ep.ignoreDefaultExcludes === 'boolean') addConfig('shell_environment_policy.ignore_default_excludes', ep.ignoreDefaultExcludes);
+      if (ep.exclude && ep.exclude.length) addConfig('shell_environment_policy.exclude', ep.exclude);
+      if (ep.includeOnly && ep.includeOnly.length) addConfig('shell_environment_policy.include_only', ep.includeOnly);
+      if (ep.set && Object.keys(ep.set).length) {
+        const entries = Object.entries(ep.set).map(([k, v]) => `${JSON.stringify(k)} = ${JSON.stringify(v)}`);
+        args.push('--config', `shell_environment_policy.set = { ${entries.join(', ')} }`);
+      }
+    }
+
     let child: ChildProcess | null = null;
     let completed = false;
     let activeLogPath: string | null = null;
@@ -141,7 +181,7 @@ export class CodexProvider implements AIProvider {
         await new Promise<void>((resolve) => {
           stream.on('data', (c) => { data += c; });
           stream.on('end', resolve);
-          stream.on('error', resolve);
+          stream.on('error', () => resolve());
         });
         lastRead = stat.size;
         return parseChunk(data);
@@ -200,7 +240,7 @@ export class CodexProvider implements AIProvider {
         return activeLogPath;
       })();
 
-      let fileWatcher: chokidar.FSWatcher | null = null;
+      let fileWatcher: FSWatcher | null = null;
       let killing = false;
 
       watcherReady.then((filePath) => {

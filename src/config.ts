@@ -19,6 +19,20 @@ export interface PipelineStep {
 
 type PipelinesMap = { [key: string]: PipelineStep[] };
 
+// Optional Codex provider configuration passed via --config flags
+export interface CodexProviderConfig {
+  sandboxMode?: 'read-only' | 'workspace-write' | 'danger-full-access';
+  networkAccess?: boolean; // applies to sandbox_workspace_write.network_access
+  profile?: string;
+  envPolicy?: {
+    inherit?: 'all' | 'core' | 'none';
+    ignoreDefaultExcludes?: boolean;
+    exclude?: string[];
+    includeOnly?: string[];
+    set?: Record<string, string>;
+  };
+}
+
 // This is the type definition for the user's cat-herder.config.js file
 export interface CatHerderConfig {
   taskFolder: string;
@@ -32,6 +46,8 @@ export interface CatHerderConfig {
   autonomyLevel?: number;
   pipelines?: PipelinesMap;
   defaultPipeline?: string;
+  // Provider-specific options
+  codex?: CodexProviderConfig;
   // Backward compatibility - will be removed in future versions
   pipeline?: PipelineStep[];
 }
@@ -164,7 +180,7 @@ function ensureCatHerderDirectory(fullPath: string): void {
 
 // Utility to get a path to a command template inside the global package
 export function getCommandTemplatePath(commandName: string): string {
-    return path.resolve(new URL(`./dot-claude/commands/${commandName}`, import.meta.url).pathname);
+    return path.resolve(new URL(`./templates/steps/${commandName}`, import.meta.url).pathname);
 }
 
 // Utility to get a path to a prompt template inside the global package

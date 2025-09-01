@@ -274,9 +274,15 @@ function validateStep(
     validateCheckObject(singleCheck, checkId, userScripts, errors);
   }
 
-  // Command File and Permission Validation
+  // Command File and Permission Validation (Claude only)
   if (config.aiProvider !== 'codex') {
-    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+    // Prefer new neutral location
+    let commandFilePath = path.join(projectRoot, ".cat-herder", "steps", `${step.command}.md`);
+    if (!fs.existsSync(commandFilePath)) {
+      // Fallback to legacy path to support existing setups and tests
+      const legacyPath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+      commandFilePath = legacyPath;
+    }
     validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
   }
 
