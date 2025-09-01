@@ -1890,3 +1890,112 @@ describe('Validator - Top-Level Config Validation', () => {
     );
   });
 });
+
+describe('Validator - Stepless Pipeline ("self" command) Validation', () => {
+  const mockProjectRoot = '/test/project';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Mock basic file existence so the validator can run
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockImplementation((filePath: fs.PathLike) => {
+      if (filePath.toString().includes('settings.json')) {
+        return JSON.stringify({ permissions: { allow: ['Bash(cat-herder ask:*)'] } });
+      }
+      if (filePath.toString().includes('package.json')) {
+        return JSON.stringify({ scripts: {} });
+      }
+      return '';
+    });
+  });
+
+  it('should accept a valid stepless pipeline with a single "self" command step', () => {
+    const config = createBaseConfig({
+      pipelines: {
+        'just-do-it': [
+          {
+            name: 'execute',
+            command: 'self',
+            check: { type: 'none' },
+          },
+        ],
+      },
+    });
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should reject a pipeline with a "self" command and other steps', () => {
+    const config = createBaseConfig({
+      pipelines: {
+        'invalid-pipeline': [
+          {
+            name: 'execute',
+            command: 'self',
+            check: { type: 'none' },
+          },
+          {
+            name: 'another-step',
+            command: 'another-command',
+            check: { type: 'none' },
+          },
+        ],
+      },
+    });
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      `Pipeline 'invalid-pipeline': A pipeline using 'command: \"self\"' can only contain a single step.`
+    );
+  });
+
+  it('should still validate other properties on a valid stepless pipeline', () => {
+    const config = createBaseConfig({
+      pipelines: {
+        'stepless-with-error': [
+          {
+            name: 'execute',
+            command: 'self',
+            check: { type: 'shell' }, // Invalid: missing 'command'
+            retry: 'bad' as any, // Invalid: should be a number
+          },
+        ],
+      },
+    });
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(false);
+    expect(result.errors).toContain(
+      "Pipeline 'stepless-with-error', Step 1 ('execute'): Check type 'shell' requires a non-empty 'command' string property."
+    );
+    expect(result.errors).toContain(
+      "Pipeline 'stepless-with-error', Step 1 ('execute'): The 'retry' property must be a non-negative integer, but found 'bad'."
+    );
+  });
+
+  it('should correctly identify a normal pipeline as valid', () => {
+    const config = createBaseConfig({
+      pipelines: {
+        default: [
+          { name: 'plan', command: 'plan-task', check: { type: 'none' } },
+          { name: 'implement', command: 'implement', check: { type: 'none' } },
+        ],
+      },
+    });
+    
+    // Mock command files as existing for this specific test
+    vi.mocked(fs.existsSync).mockImplementation((filePath: fs.PathLike) => {
+      const pathStr = filePath.toString();
+      if (pathStr.includes('settings.json')) return true;
+      if (pathStr.includes('package.json')) return true;
+      if (pathStr.includes('commands') && pathStr.includes('.md')) return true; // Mock command files exist
+      return false;
+    });
+
+    const result = validatePipeline(config, mockProjectRoot);
+    expect(result.isValid).toBe(true);
+  });
+});
