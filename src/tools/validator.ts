@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 import { CatHerderConfig } from "../config.js";
+import { execSync } from "node:child_process";
 import { contextProviders } from "./providers.js";
 
 // Valid Claude model names for validation
@@ -274,8 +275,10 @@ function validateStep(
   }
 
   // Command File and Permission Validation
-  const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
-  validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
+  if (config.aiProvider !== 'codex') {
+    const commandFilePath = path.join(projectRoot, ".claude", "commands", `${step.command}.md`);
+    validatePermissions(commandFilePath, stepId, allowedPermissions, errors, missingPermissions);
+  }
 
   // Retry Validation
   if (step.retry !== undefined) {
@@ -286,11 +289,14 @@ function validateStep(
 
   // FileAccess Validation
   validateFileAccess(step.fileAccess, stepId, errors);
+  if (config.aiProvider === 'codex' && step.fileAccess) {
+    console.warn("Warning: 'fileAccess' is not supported by the 'codex' provider and will be ignored.");
+  }
 
   // (Removed old askHuman validation - now handled at pipeline level)
 
-  // Model Validation
-  if (step.model !== undefined) {
+  // Model Validation (Claude only)
+  if (config.aiProvider !== 'codex' && step.model !== undefined) {
     if (typeof step.model !== 'string') {
       errors.push(`${stepId}: The 'model' property must be a string.`);
     } else if (!VALID_CLAUDE_MODELS.includes(step.model)) {
@@ -310,12 +316,26 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
   // Top-Level Config Validation
   validateTopLevelConfig(config, errors);
 
-  // Load project settings and scripts
-  const settings = loadProjectSettings(projectRoot, errors);
-  if (!settings) {
-    return { isValid: false, errors, missingPermissions: [] };
+  const usingCodex = (config.aiProvider === 'codex');
+
+  // Load project settings and scripts (Claude only)
+  let allowedPermissions: string[] = [];
+  let userScripts: Record<string, string> = {};
+  if (!usingCodex) {
+    const settings = loadProjectSettings(projectRoot, errors);
+    if (!settings) {
+      return { isValid: false, errors, missingPermissions: [] };
+    }
+    ({ allowedPermissions, userScripts } = settings);
+  } else {
+    // For Codex, verify the CLI exists
+    try {
+      execSync(process.platform === 'win32' ? 'where codex' : 'which codex', { stdio: 'ignore' });
+    } catch {
+      errors.push("Error: 'codex' command not found. Please install the OpenAI Codex CLI globally: npm install -g @openai/codex");
+      return { isValid: false, errors, missingPermissions: [] };
+    }
   }
-  const { allowedPermissions, userScripts } = settings;
 
   // Validate pipelines structure
   const pipelines = validatePipelineStructure(config, errors);
@@ -334,13 +354,20 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
     }
   }
 
-  // Interactive Halting: Check for required Bash permission when autonomyLevel > 0
-  const requiredAskPermission = "Bash(cat-herder ask:*)";
-  if (!allowedPermissions.includes(requiredAskPermission)) {
-    errors.push(
-      `The Interactive Halting feature requires the '${requiredAskPermission}' permission in .claude/settings.json. Run this command again and choose 'y' to add it automatically.`
-    );
-    missingPermissions.push(requiredAskPermission);
+  // Interactive Halting: Only relevant for Claude
+  if (!usingCodex) {
+    const requiredAskPermission = "Bash(cat-herder ask:*)";
+    if (!allowedPermissions.includes(requiredAskPermission)) {
+      errors.push(
+        `The Interactive Halting feature requires the '${requiredAskPermission}' permission in .claude/settings.json. Run this command again and choose 'y' to add it automatically.`
+      );
+      missingPermissions.push(requiredAskPermission);
+    }
+  } else {
+    // Warn about unsupported features under Codex
+    if (config.autonomyLevel && config.autonomyLevel > 0) {
+      console.warn("Warning: 'autonomyLevel' is not supported by the 'codex' provider and will be ignored.");
+    }
   }
 
   // Use a Set to remove duplicate missing permissions before returning

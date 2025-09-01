@@ -4,7 +4,7 @@
 
 This document outlines the architecture of the `@your-scope/cat-herder` tool. Its purpose is to provide a high-level understanding of the system's components, their interactions, and the guiding principles for future development and refactoring.
 
-The project is a command-line tool that orchestrates an AI-driven, step-gated development workflow. It uses a user-defined pipeline configuration to execute a series of steps (e.g., planning, testing, implementing) for a given task, using the Claude CLI as its engine for AI-powered actions.
+The project is a command-line tool that orchestrates an AI-driven, step-gated development workflow. It uses a user-defined pipeline configuration to execute a series of steps (e.g., planning, testing, implementing) for a given task, using a pluggable AI Provider (Claude CLI by default, Codex CLI optionally) as its engine for AI-powered actions.
 
 ---
 
@@ -28,11 +28,11 @@ The architecture is split into distinct layers, each with a clear responsibility
     *   It runs validation checks (`check-runner.ts`) to verify the outcome of each step.
     *   **State-Based Signal Detection:** While the `claude` CLI is running, the parent Orchestration Layer simultaneously polls the task's state file. If the AI uses the `Bash` tool to run `cat-herder ask`, that command updates the state file's `phase` to `waiting_for_input`. The orchestrator detects this change, recognizes it as a pause signal, and gracefully terminates the `claude` CLI process before initiating the user prompt. The orchestrator also updates the parent sequence's state file to reflect the paused status for consistent workflow monitoring.
 
-3.  **AI Interaction Layer (`src/tools/proc.ts`):** The bridge to the Claude AI.
-    *   This layer's sole responsibility is to spawn and manage the `claude` CLI tool as a child process.
-    *   It streams the JSON output from the `claude` tool, parsing events for logging, reasoning, and final results. The reasoning logs now contain the complete interaction transcript, including user answers provided during interactive halting workflows.
-    *   It handles process lifecycle events, including graceful shutdown on interruption (`SIGINT`).
-    *   **Interactive Tool Detection:** Monitors the AI's tool usage, specifically detecting when the `askHuman` tool is invoked, triggering the interactive halting workflow by throwing a `HumanInterventionRequiredError`.
+3.  **AI Provider Layer (`src/tools/ai/`):** Bridges to concrete AI CLIs.
+    *   The orchestrator depends on an `AIProvider` interface and selects a provider based on `aiProvider` in `cat-herder.config.js`.
+    *   **ClaudeProvider** delegates to `src/tools/proc.ts` to spawn the `claude` CLI and stream JSON events in real time for logs and results.
+    *   **CodexProvider** runs `codex exec` and assembles logs after completion by parsing the latest JSONL session file in `~/.codex/sessions/`.
+    *   Provider implementations handle CLI-specific details (streaming, logs, token usage), keeping the orchestrator focused on control flow and state.
 
 4.  **State Layer (`src/tools/status.ts`):** The system's source of truth and memory.
     *   It manages reading and writing status files (e.g., `<task-id>.state.json`) in the `~/.cat-herder/state` directory (located in the user's home directory).
@@ -76,8 +76,8 @@ graph TD
     Orchestrator -- Reads/Writes --> State
     Orchestrator -- Reads --> Prompts
     Orchestrator -- Calls --> Proc
-    Proc -- Spawns --> ClaudeCLI
-    ClaudeCLI -- Modifies --> UserFiles[User's Source Code]
+    Proc/Providers -- Spawns --> ClaudeCLI/CodexCLI
+    ClaudeCLI/CodexCLI -- Modifies --> UserFiles[User's Source Code]
     Orchestrator -- Uses --> CheckRunner
     CheckRunner -- Executes --> Shell[Shell Commands (npm test)]
     

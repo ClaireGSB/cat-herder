@@ -71,6 +71,7 @@ A command-line tool that helps guide LLM agents (currently only supporting Claud
   * [CLI Commands](#cli-commands)
   * [NPM Scripts](#npm-scripts)
 * [System Requirements](#system-requirements)
+* [AI Providers](#ai-providers)
 
 ---
 
@@ -198,6 +199,27 @@ Follow these steps to integrate `cat-herder` into your existing TypeScript proje
     ```
 
     The orchestrator will now take over, running each step of the pipeline and committing its progress along the way.
+
+## AI Providers
+
+cat-herder supports multiple AI providers. By default it uses the Claude CLI, but you can switch to the OpenAI Codex CLI.
+
+- Configure the provider in `cat-herder.config.js`:
+
+  ```js
+  module.exports = {
+    aiProvider: 'claude', // or 'codex'
+    // ...rest of your config
+  }
+  ```
+
+- If you select `codex`:
+  - Install and authenticate the Codex CLI yourself: `npm install -g @openai/codex`
+  - Ensure `codex` is available on your PATH before running cat-herder
+  - Some features are not supported and will be ignored:
+    - `autonomyLevel` (interactive halting)
+    - `fileAccess` guardrails
+  - Logs are assembled from Codex JSONL session files in `~/.codex/sessions/` after each step completes.
 
 ## Running Task Sequences
 

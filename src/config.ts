@@ -24,6 +24,8 @@ export interface CatHerderConfig {
   taskFolder: string;
   statePath: string;
   logsPath: string;
+  // Select which AI provider to use
+  aiProvider?: 'claude' | 'codex';
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;
@@ -39,6 +41,7 @@ const defaultConfig: Omit<CatHerderConfig, "pipelines" | "defaultPipeline" | "pi
   taskFolder: "cat-herder-tasks",
   statePath: "~/.cat-herder/state",
   logsPath: "~/.cat-herder/logs",
+  aiProvider: 'claude',
   manageGitBranch: true,
   autoCommit: false,
   waitForRateLimitReset: false,

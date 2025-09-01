@@ -2,12 +2,15 @@ import fs, { readFileSync } from "node:fs";
 import path from "node:path";
 import pc from "picocolors";
 import readline from "node:readline";
-import { runStreaming, killActiveProcess } from "../proc.js";
+import { killActiveProcess } from "../proc.js";
 import { updateStatus, readStatus, updateSequenceStatus, readAndDeleteAnswerFile } from "../status.js";
 import { getConfig, getProjectRoot, PipelineStep } from "../../config.js";
 import { runCheck } from "../check-runner.js";
 import { InterruptedError, HumanInterventionRequiredError } from "./errors.js";
 import { execSync } from "node:child_process";
+import { ClaudeProvider } from "../ai/claude-provider.js";
+import { CodexProvider } from "../ai/codex-provider.js";
+import type { AIProvider } from "../ai/ai-provider.js";
 
 
 // Global state for graceful shutdown handling
@@ -84,6 +87,30 @@ export async function executeStep(
   const config = await getConfig();
   const maxRetries = retry ?? 0;
   let feedbackForNextRun: string | null = null;
+
+  // Select provider (Phase 1: only Claude is implemented)
+  let provider: AIProvider;
+  const providerName = (config.aiProvider || 'claude');
+  switch (providerName) {
+    case 'claude':
+      provider = new ClaudeProvider();
+      break;
+    case 'codex':
+      provider = new CodexProvider();
+      break;
+    default:
+      provider = new ClaudeProvider();
+  }
+
+  // Feature divergence notices for Codex provider
+  if (providerName === 'codex') {
+    if (config.autonomyLevel && config.autonomyLevel > 0) {
+      console.log(pc.yellow("[Orchestrator] Warning: 'autonomyLevel' is not supported by the 'codex' provider and will be ignored."));
+    }
+    if (stepConfig.fileAccess) {
+      console.log(pc.yellow("[Orchestrator] Warning: 'fileAccess' restrictions are not enforced with the 'codex' provider and will be ignored for this step."));
+    }
+  }
 
   console.log(pc.cyan(`
 [Orchestrator] Starting step: ${name}`));
@@ -165,7 +192,10 @@ export async function executeStep(
 
         // Use Promise.race to monitor both the AI process and state changes
         const stateDir = path.dirname(statusFile);
-        const runningPromise = runStreaming("claude", [`/project:${command}`], logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, taskId);
+        const isCodex = providerName === 'codex';
+        const cliName = isCodex ? 'codex' : 'claude';
+        const cliArgs = isCodex ? [] : [`/project:${command}`];
+        const runningPromise = provider.runStreaming(cliName, cliArgs, logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, taskId);
 
         let pollInterval: NodeJS.Timeout | null = null;
 
