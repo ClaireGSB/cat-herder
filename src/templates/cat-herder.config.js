@@ -29,13 +29,18 @@ module.exports = {
   waitForRateLimitReset: false,
 
   /**
-   * Controls the AI agent's level of autonomy and when it seeks human guidance.
-   * Scale: 0-5 where:
-   * - 0 (default): Maximum autonomy, operates independently without interruption
-   * - 1-2: Balanced autonomy, only seeks guidance when fundamentally blocked
-   * - 3: Guided autonomy, asks for clarification on ambiguous requirements
-   * - 4-5: Low autonomy, very cautious, seeks guidance before most decisions
-   * 
+   * Defines the agent's level of operational independence on a scale of 0-5.
+   * This setting controls how frequently the agent will pause to ask for human
+   * clarification when it encounters ambiguity. See the project README for a
+   * full breakdown of each level.
+   *
+   * 0: Absolute Autonomy (asks only if impossible to proceed)
+   * 1: High Autonomy (asks only about unsafe/contradictory requirements)
+   * 2: Default Autonomy (asks about major architectural gaps)
+   * 3: Collaborative Autonomy (asks about ambiguous designs)
+   * 4: Guided Execution (asks to confirm complex logic)
+   * 5: Strict Oversight (presents all non-trivial options for a decision)
+   *
    * Can be overridden per-task in YAML frontmatter with 'autonomyLevel: X'
    */
   autonomyLevel: 0,

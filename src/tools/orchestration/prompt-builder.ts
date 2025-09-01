@@ -33,35 +33,21 @@ export function parseTaskFrontmatter(content: string): { pipeline?: string; auto
 }
 
 /**
- * Gets the appropriate autonomy instructions based on the autonomy level.
+ * Reads the interaction-intro.md template and injects the current autonomy level.
  * @param autonomyLevel The autonomy level (0-5)
- * @returns The formatted autonomy instructions or empty string if autonomyLevel is 0
+ * @returns The formatted autonomy instructions.
  */
 function getInteractionIntro(autonomyLevel: number): string {
-  if (autonomyLevel === 0) return '';
+  // Handle invalid levels gracefully.
+  if (autonomyLevel < 0 || autonomyLevel > 5) {
+    return '';
+  }
 
   const templatePath = getPromptTemplatePath('interaction-intro.md');
   const templateContent = fs.readFileSync(templatePath, 'utf-8');
   
-  let instructions = '';
-  if (autonomyLevel <= 2) { // Maximum/Balanced autonomy
-    const match = templateContent.match(/<!-- AUTONOMY_LEVEL_MAXIMUM -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  } else if (autonomyLevel <= 4) { // Balanced autonomy
-    const match = templateContent.match(/<!-- AUTONOMY_LEVEL_BALANCED -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  } else { // Guided/Low autonomy
-    const match = templateContent.match(/<!-- AUTONOMY_LEVEL_GUIDED -->(.*?)<!--/s);
-    instructions = match ? match[1].trim() : '';
-  }
-  
-  const commonMatch = templateContent.match(/<!-- COMMON_INSTRUCTIONS -->(.*)/s);
-  const commonInstructions = commonMatch ? commonMatch[1].trim() : '';
-  
-  let intro = (instructions + '\n\n' + commonInstructions).trim();
-  intro = intro.replace(/%%AUTONOMY_LEVEL%%/g, String(autonomyLevel));
-  
-  return intro;
+  // The logic is now just one simple, robust replacement.
+  return templateContent.replace(/%%AUTONOMY_LEVEL%%/g, String(autonomyLevel));
 }
 
 /**

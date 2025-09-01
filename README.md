@@ -332,12 +332,14 @@ The `cat-herder` tool includes a powerful feature that transforms the AI from a 
 
 ### The Autonomy Level Scale
 
-The `autonomyLevel` is configured in your `cat-herder.config.js` or a task's frontmatter as an integer from `0` to `5`. This number determines how cautious the AI will be.
+The `autonomyLevel` is a number from 0 to 5 that defines how independently the agent should operate. Each level has a distinct trigger for when the agent will pause to seek human guidance.
 
--   **`0` - Maximum Autonomy (Default):** The AI operates with maximum independence, never asking questions. It makes its best assumptions and proceeds without interruption.
--   **`1-2` - Balanced Autonomy:** The AI operates independently on most tasks but will pause only if completely blocked by a contradiction or about to perform a potentially destructive action.
--   **`3-4` - Guided Autonomy:** The AI will ask for clarification when faced with significant architectural or technical decisions that aren't clearly specified (e.g., "Should I add this to API v1 or create a new v2?").
--   **`5` - Low Autonomy (Guided Execution):** The AI operates with frequent human oversight, asking to clarify any ambiguity, no matter how small, and presenting options before proceeding with complex implementations.
+*   **Level 0: Absolute Autonomy** - The agent will only ask if a requirement is physically or logically impossible to fulfill.
+*   **Level 1: High Autonomy** - The agent will only ask if a requirement is unsafe, unethical, or directly contradicts a core project principle.
+*   **Level 2: Default Autonomy** - The agent will ask when a foundational architectural strategy for a major component is missing.
+*   **Level 3: Collaborative Autonomy** - The agent will ask to resolve ambiguity in significant design patterns or data models.
+*   **Level 4: Guided Execution** - The agent will ask to confirm its understanding of complex business logic *before* implementation.
+*   **Level 5: Strict Oversight** - The agent will present all valid, non-trivial technical options to the human for a final decision.
 
 ### Configuration
 
