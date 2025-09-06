@@ -124,6 +124,7 @@ export class CodexProvider implements AIProvider {
     let detectedModel: string | undefined = model;
 
     const writeReasoning = (line: string) => {
+      if (!line || !line.trim()) return;
       fs.appendFileSync(reasoningLogPath, line);
     };
 
@@ -142,6 +143,60 @@ export class CodexProvider implements AIProvider {
       if (rawJsonLogPath) fs.appendFileSync(rawJsonLogPath, footer);
     };
 
+    // --- Helpers for mapping Codex JSONL to readable log lines ---
+    const truncate = (s: string, max = 2000) => (typeof s === 'string' && s.length > max ? s.slice(0, max) + '… [truncated]' : s);
+    const asString = (v: any) => {
+      if (typeof v === 'string') return v;
+      try { return JSON.stringify(v); } catch { return String(v); }
+    };
+
+    const formatMessageContent = (content: any): string => {
+      if (typeof content === 'string') return content;
+      if (Array.isArray(content)) {
+        const parts: string[] = [];
+        for (const item of content) {
+          if (typeof (item as any)?.text === 'string') parts.push((item as any).text);
+          else if (typeof (item as any)?.content === 'string') parts.push((item as any).content);
+        }
+        return parts.join('\n');
+      }
+      return '';
+    };
+
+    const eventToLog = (obj: any): { tag?: string, text?: string, resultText?: string } => {
+      if (obj?.record_type === 'state') return {};
+      if (typeof obj?.output_text === 'string') return { tag: 'RESULT', text: obj.output_text, resultText: obj.output_text };
+      if (typeof obj?.result === 'string') return { tag: 'RESULT', text: obj.result, resultText: obj.result };
+
+      if (obj?.type === 'reasoning') {
+        if (Array.isArray(obj.summary) && obj.summary.length > 0) return { tag: 'REASONING', text: obj.summary.join(' ') };
+        return { tag: 'REASONING', text: '(hidden)' };
+      }
+
+      if (obj?.type === 'message') {
+        const role: string = obj.role || '';
+        const msg = formatMessageContent(obj.content);
+        if (!msg || !msg.trim()) return {};
+        if (role === 'user') return { tag: 'USER', text: msg };
+        if (role === 'assistant') return { tag: 'ASSISTANT', text: msg };
+        return { tag: 'MESSAGE', text: msg };
+      }
+
+      if (obj?.type === 'function_call') {
+        const name = obj.name || 'function';
+        const args = typeof obj.arguments === 'string' ? obj.arguments : asString(obj.arguments);
+        return { tag: 'FUNCTION_CALL', text: `${name}(${truncate(args || '')})` };
+      }
+      if (obj?.type === 'function_call_output') {
+        const out = typeof obj.output === 'string' ? obj.output : asString(obj.output);
+        return { tag: 'FUNCTION_CALL_OUTPUT', text: truncate(out || '') };
+      }
+
+      if (typeof obj?.message === 'string') return { tag: 'MESSAGE', text: obj.message };
+      if (typeof obj?.text === 'string') return { tag: 'MESSAGE', text: obj.text };
+      return {};
+    };
+
     const parseChunk = (chunk: string): { ask?: { question?: string } } => {
       buffer += chunk;
       const lines = buffer.split('\n');
@@ -152,17 +207,17 @@ export class CodexProvider implements AIProvider {
           const obj = JSON.parse(line);
           writeRawJson(obj);
           if (!detectedModel && (obj.model || obj.message?.model)) detectedModel = obj.model || obj.message?.model;
-          const ts = new Date().toISOString().replace('T', ' ').slice(0, -5);
-          const type = (obj.type || obj.event || 'data').toString().toUpperCase();
-          const content = obj.reasoning || obj.message?.content || obj.output_text || obj.result || '';
-          writeReasoning(`[${ts}] [${type}] ${typeof content === 'string' ? content : JSON.stringify(content)}\n`);
           const ask = CodexProvider.detectAskSignal(obj, line);
           if (ask) return { ask };
-          if (typeof obj.output_text === 'string') finalOutput += obj.output_text;
-          else if (typeof obj.result === 'string') finalOutput += obj.result;
+          const mapped = eventToLog(obj);
+          if (mapped.resultText) finalOutput += mapped.resultText;
+          if (mapped.tag && mapped.text) {
+            const ts = new Date().toISOString().replace('T', ' ').slice(0, -5);
+            const text = truncate(String(mapped.text));
+            if (text && text.trim()) writeReasoning(`[${ts}] [${mapped.tag}] ${text}\n`);
+          }
         } catch {
-          // Non-JSON lines: still mirror to reasoning
-          writeReasoning(line + '\n');
+          // Non-JSON lines: ignore unless it contains an ask signal
           if (line.toLowerCase().includes('cat-herder ask')) {
             const m = /cat-herder\s+ask[^\"\n]*\"([^\"]+)\"/i.exec(line);
             return { ask: { question: m ? m[1] : undefined } };

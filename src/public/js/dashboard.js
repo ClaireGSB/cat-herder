@@ -249,8 +249,8 @@ class CatHerderDashboard {
 
     colorizeLogLine(line) {
         // This regex captures all the patterns we want to style, in a single pass.
-        // Added Codex-oriented tokens: [FUNCTION_CALL], [FUNCTION_CALL_OUTPUT], [STDERR], [ERROR], [RESULT]
-        const tokenizer = /(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]|\`.*?\`|(?<!\w)'.*?'|".*?"|\[ASSISTANT\]|\[USER\]|\[SYSTEM\]|\[TEXT\]|\[INIT\]|\[TOOL_USE\]|\[TOOL_RESULT\]|\[FUNCTION_CALL\]|\[FUNCTION_CALL_OUTPUT\]|\[STDERR\]|\[ERROR\]|\[RESULT\])/g;
+        // Added Codex-oriented tokens: [FUNCTION_CALL], [FUNCTION_CALL_OUTPUT], [STDERR], [ERROR], [RESULT], [REASONING]
+        const tokenizer = /(\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]|\`.*?\`|(?<!\w)'.*?'|".*?"|\[ASSISTANT\]|\[USER\]|\[SYSTEM\]|\[TEXT\]|\[INIT\]|\[TOOL_USE\]|\[TOOL_RESULT\]|\[FUNCTION_CALL\]|\[FUNCTION_CALL_OUTPUT\]|\[STDERR\]|\[ERROR\]|\[RESULT\]|\[REASONING\])/g;
 
         const escapeHtml = (unsafe) =>
             unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -267,7 +267,7 @@ class CatHerderDashboard {
             if (part === '[ASSISTANT]') return `<span class="log-assistant">${escapeHtml(part)}</span>`;
             if (part === '[USER]') return `<span class="log-user">${escapeHtml(part)}</span>`;
             if (part === '[SYSTEM]') return `<span class="log-system">${escapeHtml(part)}</span>`;
-            if (part === '[TEXT]' || part === '[INIT]' || part === '[RESULT]') return `<span class="log-info">${escapeHtml(part)}</span>`;
+            if (part === '[TEXT]' || part === '[INIT]' || part === '[RESULT]' || part === '[REASONING]') return `<span class="log-info">${escapeHtml(part)}</span>`;
             if (part === '[TOOL_USE]' || part === '[TOOL_RESULT]' || part === '[FUNCTION_CALL]' || part === '[FUNCTION_CALL_OUTPUT]') return `<span class="log-tool">${escapeHtml(part)}</span>`;
             if (part === '[STDERR]' || part === '[ERROR]') return `<span class="log-error">${escapeHtml(part)}</span>`;
 
