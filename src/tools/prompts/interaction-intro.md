@@ -32,6 +32,7 @@ Your current Autonomy Level is **%%AUTONOMY_LEVEL%%**. Calibrate your behavior u
 
 When you need guidance, you **must** use this exact command:
 `bash cat-herder ask "Your clear, specific question goes here."`
+Before you ask, review the 'HUMAN INTERACTION HISTORY' section to avoid repeating questions; maybe you already asked it and got an answer.
 
 *   **DO:** Ask about strategic blockers or ambiguity.
 *   **DON'T:** Ask questions you can answer yourself with other tools (e.g., `LS` to see if a file exists).
