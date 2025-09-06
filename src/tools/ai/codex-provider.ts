@@ -18,30 +18,74 @@ export class CodexProvider implements AIProvider {
   static detectAskSignal(payload: unknown, rawLine?: string): { question?: string } | null {
     try {
       const obj: any = payload && typeof payload === 'object' ? payload : {};
-      // Check common structured shapes
-      const textCandidates: string[] = [];
-      if (typeof obj?.output_text === 'string') textCandidates.push(obj.output_text);
-      if (typeof obj?.result === 'string') textCandidates.push(obj.result);
-      if (typeof obj?.message?.content === 'string') textCandidates.push(obj.message.content);
-      if (typeof obj?.content === 'string') textCandidates.push(obj.content);
-      if (typeof obj?.arguments === 'string') textCandidates.push(obj.arguments);
-      if (typeof obj?.input === 'string') textCandidates.push(obj.input);
+      // Only react to actual function_call events (not reasoning/messages)
+      if (obj?.type !== 'function_call') return null;
 
-      const joined = textCandidates.join('\n');
-      const haystack = (joined + '\n' + (rawLine || '')).toLowerCase();
-      if (haystack.includes('cat-herder ask')) {
-        // Try to extract a quoted question
-        const m = /cat-herder\s+ask[^\"\n]*\"([^\"]+)\"/i.exec(rawLine || joined);
-        return m ? { question: m[1] } : { question: undefined };
+      const extractFromCommandString = (s: string): string | null => {
+        // Support both double and single quoted question
+        const m1 = /cat-herder\s+ask\s+\"([^\"]+)\"/i.exec(s);
+        if (m1) return m1[1];
+        const m2 = /cat-herder\s+ask\s+\'([^\']+)\'/i.exec(s);
+        if (m2) return m2[1];
+        return null;
+      };
+
+      const buildFallback = (ctx: string): { question: string } => {
+        const snippet = ctx && ctx.length > 160 ? ctx.slice(0, 160) + '…' : ctx;
+        return { question: `The AI requested input but no explicit question was detected. Context: ${snippet}` };
+      };
+
+      const tryFromParsedObj = (argObj: any): { question?: string } | null => {
+        if (!argObj || typeof argObj !== 'object') return null;
+        const candidates: any[] = [];
+        if (Array.isArray(argObj.command)) candidates.push(...argObj.command);
+        if (Array.isArray(argObj.args)) candidates.push(...argObj.args);
+        if (typeof argObj.commandLine === 'string') {
+          const q = extractFromCommandString(argObj.commandLine);
+          if (q) return { question: q };
+          if (argObj.commandLine.toLowerCase().includes('cat-herder ask')) return buildFallback(argObj.commandLine);
+        }
+        // Look through arrays for a string containing the ask
+        for (const item of candidates) {
+          if (typeof item === 'string') {
+            const q = extractFromCommandString(item);
+            if (q) return { question: q };
+            if (item.toLowerCase().includes('cat-herder ask')) return buildFallback(item);
+          }
+        }
+        return null;
+      };
+
+      // Primary source: obj.arguments
+      const a = obj?.arguments;
+      if (typeof a === 'string') {
+        // Many Codex function_call.arguments are JSON-encoded strings
+        try {
+          const parsed = JSON.parse(a);
+          const fromParsed = tryFromParsedObj(parsed);
+          if (fromParsed) return fromParsed;
+        } catch {
+          // Not JSON, treat as shell string
+          const q = extractFromCommandString(a);
+          if (q) return { question: q };
+          if (a.toLowerCase().includes('cat-herder ask')) return buildFallback(a);
+        }
+      } else if (Array.isArray(a)) {
+        for (const item of a) {
+          if (typeof item === 'string') {
+            const q = extractFromCommandString(item);
+            if (q) return { question: q };
+            if (item.toLowerCase().includes('cat-herder ask')) return buildFallback(item);
+          }
+        }
+      } else if (typeof a === 'object' && a !== null) {
+        const fromObj = tryFromParsedObj(a);
+        if (fromObj) return fromObj;
       }
 
-      // Check function/tool call shapes for shell commands including cat-herder ask
-      const possibleArgs = [obj?.function_call?.arguments, obj?.tool_call?.arguments, obj?.call?.arguments, obj?.args];
-      for (const a of possibleArgs) {
-        if (typeof a === 'string' && a.toLowerCase().includes('cat-herder ask')) {
-          const m = /cat-herder\s+ask[^\"\n]*\"([^\"]+)\"/i.exec(a);
-          return m ? { question: m[1] } : { question: undefined };
-        }
+      // As a last resort, look at rawLine for context only (do not rely on it to trigger)
+      if (typeof rawLine === 'string' && rawLine.toLowerCase().includes('cat-herder ask')) {
+        return buildFallback(rawLine);
       }
     } catch {}
     return null;
