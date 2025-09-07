@@ -213,7 +213,16 @@ export class CodexProvider implements AIProvider {
       if (typeof obj?.result === 'string') return { tag: 'RESULT', text: obj.result, resultText: obj.result };
 
       if (obj?.type === 'reasoning') {
-        if (Array.isArray(obj.summary) && obj.summary.length > 0) return { tag: 'REASONING', text: obj.summary.join(' ') };
+        // Extract human-readable reasoning summary from JSONL events
+        const items = Array.isArray(obj.summary) ? obj.summary : [];
+        const parts: string[] = [];
+        for (const it of items) {
+          const t = typeof (it as any)?.text === 'string' ? (it as any).text
+            : typeof (it as any)?.content === 'string' ? (it as any).content
+            : undefined;
+          if (t && t.trim()) parts.push(t);
+        }
+        if (parts.length > 0) return { tag: 'REASONING', text: parts.join('\n\n') };
         return { tag: 'REASONING', text: '(hidden)' };
       }
 
