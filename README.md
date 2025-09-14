@@ -685,6 +685,11 @@ Notes:
 - Codex maps `gpt-5[:<effort>]` to `--model gpt-5 --config model_reasoning_effort=<effort>`.
 - Legacy forms like `gpt-5-reason-medium` are accepted with a warning and mapped to `gpt-5:medium`.
 
+General note on model validation:
+- Model catalogs evolve. If you need to use an unlisted/unsupported model format, set `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1` to bypass strict validation.
+- For Claude, we validate against a curated list in `src/tools/validator.ts`.
+- For Codex, we validate the `gpt-5[:effort]` format. Future formats can be allowed with the env var above or by updating the validator.
+
 #### Pipeline Selection
 
 The orchestrator selects a pipeline to run based on the following priority order:
