@@ -102,13 +102,26 @@ export class CodexProvider implements AIProvider {
     options?: RunStreamingOptions,
     _taskId?: string
   ): Promise<StreamResult> {
+    // Normalize model string to base gpt-5 + reasoning effort
+    const normalize = (m?: string): { base: 'gpt-5', effort: 'minimal'|'low'|'medium'|'high', note?: string } => {
+      const toEffort = (s: string) => s.toLowerCase() as 'minimal'|'low'|'medium'|'high';
+      if (!m || m === 'gpt-5') return { base: 'gpt-5', effort: 'medium' };
+      const m1 = /^gpt-5:(minimal|low|medium|high)$/i.exec(m);
+      if (m1) return { base: 'gpt-5', effort: toEffort(m1[1]) };
+      const legacy = /^gpt-5-reason-(minimal|low|medium|high)$/i.exec(m);
+      if (legacy) return { base: 'gpt-5', effort: toEffort(legacy[1]), note: `Deprecated model '${m}' mapped to 'gpt-5:${legacy[1].toLowerCase()}'.` };
+      // Anything else: treat as invalid; fall back to medium but mark note
+      return { base: 'gpt-5', effort: 'medium', note: `Unsupported Codex model '${m}'. Using 'gpt-5:medium'.` };
+    };
+    const norm = normalize(model);
+
     // Ensure log directories exist
     fs.mkdirSync(path.dirname(logPath), { recursive: true });
     fs.mkdirSync(path.dirname(reasoningLogPath), { recursive: true });
     if (rawJsonLogPath) fs.mkdirSync(path.dirname(rawJsonLogPath), { recursive: true });
 
     const start = new Date();
-    const header = `\n=================================================\n  Codex Run Started at: ${start.toISOString()}\n  Command: codex exec\n  Model: ${model || 'default'}\n  CWD: ${cwd}\n=================================================\n`;
+    const header = `\n=================================================\n  Codex Run Started at: ${start.toISOString()}\n  Command: codex exec\n  Model: ${norm.base}:${norm.effort}${norm.note ? ` (note: ${norm.note})` : ''}\n  CWD: ${cwd}\n=================================================\n`;
     fs.appendFileSync(logPath, header);
     fs.appendFileSync(reasoningLogPath, header + `--- This file contains Codex reasoning (real-time assembled) ---\n`);
     if (stdinData) {
@@ -118,7 +131,9 @@ export class CodexProvider implements AIProvider {
     const preExisting = this.listJsonlFilesSafe(sessionsDir);
 
     const args: string[] = ['exec'];
-    if (model) args.push('--model', model);
+    // Only support gpt-5; pass reasoning effort through --config
+    args.push('--model', norm.base);
+    args.push('--config', `model_reasoning_effort=${norm.effort}`);
 
     // Map cat-herder Codex config to --config flags
     const cfg = options?.settings?.codex;

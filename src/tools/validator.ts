@@ -14,31 +14,16 @@ const VALID_CLAUDE_MODELS = [
   "claude-3-5-haiku-20241022",
 ];
 
-// Valid Codex model names for validation (curated list)
-const VALID_CODEX_MODELS = [
-  // GPT-5
-  "gpt-5-reason-minimal",
-  "gpt-5-reason-low",
-  "gpt-5-reason-medium",
-  "gpt-5-reason-high",
+// Codex model validation: support only GPT-5 with optional reasoning effort embedded in the model string.
+const CODEX_REASONING_EFFORTS = ["minimal", "low", "medium", "high"] as const;
+type CodexEffort = typeof CODEX_REASONING_EFFORTS[number];
 
-  // GPT-5-mini
-  "gpt-5-mini-reason-minimal",
-  "gpt-5-mini-reason-low",
-  "gpt-5-mini-reason-medium",
-  "gpt-5-mini-reason-high",
-
-  // GPT-5-nano
-  "gpt-5-nano-reason-minimal",
-  "gpt-5-nano-reason-low",
-  "gpt-5-nano-reason-medium",
-  "gpt-5-nano-reason-high",
-
-  // Compatibility models
-  "gpt-4o",
-  "gpt-4-turbo",
-  "o4-mini",
-];
+function isCodexModelString(model: string): boolean {
+  if (model === 'gpt-5') return true;
+  if (/^gpt-5:(minimal|low|medium|high)$/i.test(model)) return true;
+  if (/^gpt-5-reason-(minimal|low|medium|high)$/i.test(model)) return true; // legacy accepted with warning
+  return false;
+}
 
 /**
  * A simple utility to parse YAML frontmatter from a markdown file.
@@ -349,7 +334,7 @@ function validateStep(
   } else if (config.model) {
     modelToUse = config.model;
     const isClaudeModel = VALID_CLAUDE_MODELS.includes(config.model);
-    const isCodexModel = VALID_CODEX_MODELS.includes(config.model);
+    const isCodexModel = isCodexModelString(config.model);
     if (stepProvider === 'codex' && isClaudeModel) {
       console.warn(`${stepId}: Top-level model "${config.model}" appears to be a Claude model and will be ignored for a Codex step.`);
       modelToUse = undefined;
@@ -362,11 +347,14 @@ function validateStep(
 
   if (modelToUse) {
     if (stepProvider === 'codex') {
-      if (!VALID_CODEX_MODELS.includes(modelToUse)) {
+      // Only allow 'gpt-5' and 'gpt-5:<effort>' (case-insensitive). Accept legacy 'gpt-5-reason-<effort>' with a warning.
+      if (/^gpt-5-reason-(minimal|low|medium|high)$/i.test(modelToUse)) {
+        console.warn(`${stepId}: The Codex model "${modelToUse}" is deprecated. Use "gpt-5:<effort>" instead (e.g., gpt-5:medium).`);
+      } else if (!(modelToUse === 'gpt-5' || /^gpt-5:(minimal|low|medium|high)$/i.test(modelToUse))) {
         if (allowUnknown) {
-          console.warn(`${stepId}: Unknown Codex model "${modelToUse}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CODEX_MODELS.join(', ')}`);
+          console.warn(`${stepId}: Unknown Codex model "${modelToUse}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Supported format: gpt-5[:minimal|low|medium|high]`);
         } else {
-          errors.push(`${stepId}: Invalid Codex model name "${modelToUse}". Available models are: ${VALID_CODEX_MODELS.join(", ")}`);
+          errors.push(`${stepId}: Invalid Codex model name "${modelToUse}". Use 'gpt-5' or 'gpt-5:<effort>' where effort is one of: ${CODEX_REASONING_EFFORTS.join(', ')}.`);
         }
       }
     } else {

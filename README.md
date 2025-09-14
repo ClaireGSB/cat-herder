@@ -646,7 +646,7 @@ Codex example and per-step provider override:
   name: "implement",
   command: "implement",
   aiProvider: 'codex',                 // Switch provider for this step only
-  model: "gpt-5-mini-reason-medium",  // Balanced reasoning/speed for implementation
+  model: "gpt-5:medium",              // Codex uses 'gpt-5' with embedded reasoning effort
   check: { type: "shell", command: "npm test", expect: "pass" },
 }
 ```
@@ -674,24 +674,16 @@ claude-3-5-haiku-20241022
 Codex provider:
 
 ```text
-gpt-5-reason-minimal
-gpt-5-reason-low
-gpt-5-reason-medium
-gpt-5-reason-high
-gpt-5-mini-reason-minimal
-gpt-5-mini-reason-low
-gpt-5-mini-reason-medium
-gpt-5-mini-reason-high
-gpt-5-nano-reason-minimal
-gpt-5-nano-reason-low
-gpt-5-nano-reason-medium
-gpt-5-nano-reason-high
-gpt-4o
-gpt-4-turbo
-o4-mini
+gpt-5            (defaults to medium effort)
+gpt-5:minimal
+gpt-5:low
+gpt-5:medium
+gpt-5:high
 ```
 
-Note: Model catalogs evolve. If you need to use an unlisted model, either set `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1` to bypass strict validation, or open a PR to add it to the curated list in `src/tools/validator.ts`.
+Notes:
+- Codex maps `gpt-5[:<effort>]` to `--model gpt-5 --config model_reasoning_effort=<effort>`.
+- Legacy forms like `gpt-5-reason-medium` are accepted with a warning and mapped to `gpt-5:medium`.
 
 #### Pipeline Selection
 

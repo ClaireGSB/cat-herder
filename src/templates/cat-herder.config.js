@@ -104,7 +104,7 @@ module.exports = {
       command: "implement",
       // Optional: Specify provider/model for this step (overrides top-level)
       // aiProvider: 'codex',
-      // model: "gpt-5-mini-reason-medium",
+      // model: "gpt-5:medium", // Codex: 'gpt-5' with embedded reasoning effort
       // Check that the tests now pass.
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
