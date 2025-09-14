@@ -10,6 +10,7 @@ export interface PipelineStep {
   name: string;
   command: string;
   model?: string;
+  aiProvider?: 'claude' | 'codex';
   check: CheckConfig | CheckConfig[];
   fileAccess?: {
     allowWrite?: string[];
@@ -40,6 +41,8 @@ export interface CatHerderConfig {
   logsPath: string;
   // Select which AI provider to use
   aiProvider?: 'claude' | 'codex';
+  // Optional default model applied when a step does not specify one.
+  model?: string;
   manageGitBranch?: boolean;
   autoCommit?: boolean;
   waitForRateLimitReset?: boolean;

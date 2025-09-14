@@ -88,9 +88,9 @@ export async function executeStep(
   const maxRetries = retry ?? 0;
   let feedbackForNextRun: string | null = null;
 
-  // Select provider (Phase 1: only Claude is implemented)
+  // Select provider per step (override > top-level > default)
   let provider: AIProvider;
-  const providerName = (config.aiProvider || 'claude');
+  const providerName = (stepConfig.aiProvider || config.aiProvider || 'claude');
   switch (providerName) {
     case 'claude':
       provider = new ClaudeProvider();
@@ -192,7 +192,9 @@ export async function executeStep(
         const isCodex = providerName === 'codex';
         const cliName = isCodex ? 'codex' : 'claude';
         const cliArgs = isCodex ? [] : [`/project:${command}`];
-        const runningPromise = provider.runStreaming(cliName, cliArgs, logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, model, { pipelineName, settings: config }, taskId);
+        // Effective model: step override > top-level default
+        const effectiveModel = model ?? config.model;
+        const runningPromise = provider.runStreaming(cliName, cliArgs, logFile, reasoningLogFile, projectRoot, promptToUse, rawJsonLogFile, effectiveModel, { pipelineName, settings: config }, taskId);
 
         let pollInterval: NodeJS.Timeout | null = null;
 
@@ -217,7 +219,7 @@ export async function executeStep(
           }
         }
         partialTokenUsage = result.tokenUsage;
-        modelName = result.modelUsed || model || 'default';
+        modelName = result.modelUsed || effectiveModel || 'default';
         needsResume = false; // If it finishes without error, exit loop
       } catch (error) {
         if (error instanceof HumanInterventionRequiredError) {

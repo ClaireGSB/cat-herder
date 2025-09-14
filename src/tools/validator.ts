@@ -156,6 +156,14 @@ function validatePipelineStructure(config: CatHerderConfig, errors: string[]): {
 }
 
 /**
+ * Determines the effective provider for a step (step override > top-level > default 'claude').
+ */
+function getEffectiveProvider(step: any, config: CatHerderConfig): 'claude' | 'codex' {
+  const v = step?.aiProvider ?? config.aiProvider ?? 'claude';
+  return v === 'codex' ? 'codex' : 'claude';
+}
+
+/**
  * Validates a single check object within a step.
  */
 function validateCheckObject(check: any, checkId: string, userScripts: Record<string, string>, errors: string[]): void {
@@ -275,6 +283,7 @@ function validateStep(
   missingPermissions: string[]
 ): void {
   const stepId = `Pipeline '${pipelineName}', Step ${stepIndex + 1} ('${step.name || 'unnamed'}')`;
+  const stepProvider = getEffectiveProvider(step, config);
 
   // Basic Step Structure Validation
   if (!step.name) {
@@ -300,8 +309,8 @@ function validateStep(
     validateCheckObject(singleCheck, checkId, userScripts, errors);
   }
 
-  // Command File and Permission Validation (Claude only)
-  if (config.aiProvider !== 'codex') {
+  // Command File and Permission Validation (Claude-only steps)
+  if (stepProvider !== 'codex') {
     // Prefer new neutral location
     let commandFilePath = path.join(projectRoot, ".cat-herder", "steps", `${step.command}.md`);
     if (!fs.existsSync(commandFilePath)) {
@@ -321,31 +330,50 @@ function validateStep(
 
   // FileAccess Validation
   validateFileAccess(step.fileAccess, stepId, errors);
-  if (config.aiProvider === 'codex' && step.fileAccess) {
-    console.warn("Warning: 'fileAccess' is not supported by the 'codex' provider and will be ignored.");
+  if (stepProvider === 'codex' && step.fileAccess) {
+    console.warn("Warning: 'fileAccess' is not supported by the 'codex' provider and will be ignored for this step.");
   }
 
   // (Removed old askHuman validation - now handled at pipeline level)
 
-  // Model Validation (Claude only)
+  // Model Validation against effective provider, with support for top-level default
   const allowUnknown = !!process.env.CAT_HERDER_ALLOW_UNKNOWN_MODELS;
+  let modelToUse: string | undefined = undefined;
   if (step.model !== undefined) {
     if (typeof step.model !== 'string' || !step.model) {
       errors.push(`${stepId}: The 'model' property must be a non-empty string.`);
-    } else if (config.aiProvider === 'codex') {
-      if (!VALID_CODEX_MODELS.includes(step.model)) {
+    } else {
+      modelToUse = step.model;
+    }
+  } else if (config.model) {
+    modelToUse = config.model;
+    const isClaudeModel = VALID_CLAUDE_MODELS.includes(config.model);
+    const isCodexModel = VALID_CODEX_MODELS.includes(config.model);
+    if (stepProvider === 'codex' && isClaudeModel) {
+      console.warn(`${stepId}: Top-level model "${config.model}" appears to be a Claude model and will be ignored for a Codex step.`);
+      modelToUse = undefined;
+    }
+    if (stepProvider === 'claude' && isCodexModel) {
+      console.warn(`${stepId}: Top-level model "${config.model}" appears to be a Codex model and will be ignored for a Claude step.`);
+      modelToUse = undefined;
+    }
+  }
+
+  if (modelToUse) {
+    if (stepProvider === 'codex') {
+      if (!VALID_CODEX_MODELS.includes(modelToUse)) {
         if (allowUnknown) {
-          console.warn(`${stepId}: Unknown Codex model "${step.model}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CODEX_MODELS.join(', ')}`);
+          console.warn(`${stepId}: Unknown Codex model "${modelToUse}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CODEX_MODELS.join(', ')}`);
         } else {
-          errors.push(`${stepId}: Invalid Codex model name "${step.model}". Available models are: ${VALID_CODEX_MODELS.join(", ")}`);
+          errors.push(`${stepId}: Invalid Codex model name "${modelToUse}". Available models are: ${VALID_CODEX_MODELS.join(", ")}`);
         }
       }
     } else {
-      if (!VALID_CLAUDE_MODELS.includes(step.model)) {
+      if (!VALID_CLAUDE_MODELS.includes(modelToUse)) {
         if (allowUnknown) {
-          console.warn(`${stepId}: Unknown Claude model "${step.model}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CLAUDE_MODELS.join(', ')}`);
+          console.warn(`${stepId}: Unknown Claude model "${modelToUse}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CLAUDE_MODELS.join(', ')}`);
         } else {
-          errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
+          errors.push(`${stepId}: Invalid Claude model name "${modelToUse}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
         }
       }
     }
@@ -363,31 +391,42 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
   // Top-Level Config Validation
   validateTopLevelConfig(config, errors);
 
-  const usingCodex = (config.aiProvider === 'codex');
+  // Validate pipelines structure
+  const pipelines = validatePipelineStructure(config, errors);
+  if (!pipelines) {
+    return { isValid: false, errors, missingPermissions: [] };
+  }
 
-  // Load project settings and scripts (Claude only)
+  // Determine provider usage across all steps
+  let anyClaudeUsed = false;
+  let anyCodexUsed = false;
+  for (const pipeline of Object.values(pipelines)) {
+    if (!Array.isArray(pipeline)) continue;
+    for (const step of pipeline) {
+      const p = getEffectiveProvider(step, config);
+      if (p === 'codex') anyCodexUsed = true; else anyClaudeUsed = true;
+    }
+  }
+
+  // Load project settings and scripts for Claude steps if needed
   let allowedPermissions: string[] = [];
   let userScripts: Record<string, string> = {};
-  if (!usingCodex) {
+  if (anyClaudeUsed) {
     const settings = loadProjectSettings(projectRoot, errors);
     if (!settings) {
       return { isValid: false, errors, missingPermissions: [] };
     }
     ({ allowedPermissions, userScripts } = settings);
-  } else {
-    // For Codex, verify the CLI exists
+  }
+
+  // Verify Codex CLI exists if any step uses Codex
+  if (anyCodexUsed) {
     try {
       execSync(process.platform === 'win32' ? 'where codex' : 'which codex', { stdio: 'ignore' });
     } catch {
       errors.push("Error: 'codex' command not found. Please install the OpenAI Codex CLI globally: npm install -g @openai/codex");
       return { isValid: false, errors, missingPermissions: [] };
     }
-  }
-
-  // Validate pipelines structure
-  const pipelines = validatePipelineStructure(config, errors);
-  if (!pipelines) {
-    return { isValid: false, errors, missingPermissions: [] };
   }
 
   // Loop through each pipeline and validate its steps
@@ -401,8 +440,8 @@ export function validatePipeline(config: CatHerderConfig, projectRoot: string): 
     }
   }
 
-  // Interactive Halting: Only relevant for Claude
-  if (!usingCodex) {
+  // Interactive Halting: Only relevant if any Claude step is present
+  if (anyClaudeUsed) {
     const requiredAskPermission = "Bash(cat-herder ask:*)";
     if (!allowedPermissions.includes(requiredAskPermission)) {
       errors.push(

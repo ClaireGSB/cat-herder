@@ -208,7 +208,9 @@ cat-herder supports multiple AI providers. By default it uses the Claude CLI, bu
 
   ```js
   module.exports = {
-    aiProvider: 'claude', // or 'codex'
+    aiProvider: 'claude', // or 'codex' (top-level default)
+    // Optional default model applied to steps that do not specify one
+    // model: 'claude-3-5-haiku-20241022',
     // ...rest of your config
   }
   ```
@@ -618,7 +620,7 @@ module.exports = {
 
 #### Per-Step Model Selection
 
-You can specify which model (Claude or Codex) to use for individual pipeline steps by adding a `model` property. This lets you use more powerful models for complex tasks and faster, more cost-effective models for simpler tasks:
+You can specify which model (Claude or Codex) to use for individual pipeline steps by adding a `model` property. You can also switch providers per step with `aiProvider`. A top-level `aiProvider` and optional `model` act as defaults and can be overridden per step.
 
 ```javascript
 {
@@ -637,18 +639,23 @@ You can specify which model (Claude or Codex) to use for individual pipeline ste
 }
 ```
 
-For Codex provider:
+Codex example and per-step provider override:
 
 ```javascript
 {
   name: "implement",
   command: "implement",
+  aiProvider: 'codex',                 // Switch provider for this step only
   model: "gpt-5-mini-reason-medium",  // Balanced reasoning/speed for implementation
   check: { type: "shell", command: "npm test", expect: "pass" },
 }
 ```
 
-If no `model` is specified, the step uses your provider's default CLI configuration. Valid model names are validated by `cat-herder validate`. To allow unknown/new model IDs without failing validation, set the environment variable `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1`.
+Precedence rules:
+- Provider: `step.aiProvider` → `config.aiProvider` → `claude` (default)
+- Model: `step.model` → `config.model` → provider CLI default
+
+If a top-level `model` clearly belongs to the other provider (based on curated lists), it is ignored for that step and a warning is shown. Valid model names are validated by `cat-herder validate`. To allow unknown/new model IDs without failing validation, set `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1`.
 
 #### Accepted Model Names
 

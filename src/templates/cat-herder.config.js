@@ -7,6 +7,8 @@ module.exports = {
   
   // Use 'claude' (default) or 'codex'
   // aiProvider: 'claude',
+  // Optional default model applied to steps that do not specify one
+  // model: 'claude-3-5-haiku-20241022',
 
   /**
    * If true (default), the orchestrator will automatically create and manage a
@@ -100,9 +102,9 @@ module.exports = {
     {
       name: "implement",
       command: "implement",
-      // Optional: Specify which Claude model to use for this step.
-      // Useful for using more powerful models for complex implementation tasks.
-      // model: "claude-opus-4-1-20250805",
+      // Optional: Specify provider/model for this step (overrides top-level)
+      // aiProvider: 'codex',
+      // model: "gpt-5-mini-reason-medium",
       // Check that the tests now pass.
       check: { type: "shell", command: "npm test", expect: "pass" },
       fileAccess: {
