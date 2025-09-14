@@ -219,6 +219,7 @@ cat-herder supports multiple AI providers. By default it uses the Claude CLI, bu
   - Feature support:
     - `autonomyLevel` (interactive halting) is supported via real-time monitoring of Codex session logs.
     - `fileAccess` guardrails are not supported and will be ignored (they rely on Claude's hooks which OpenAI doesn't support (?)).
+    - **Per-step model selection is supported** via the `model` property on steps (e.g., `gpt-5-mini-reason-medium`). Model names are validated against a curated list. To allow unknown/new models without failing validation, set `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1`.
     - **Token Usage tracking is not available** as the Codex CLI does not provide this data.
     - **Automatic Rate Limit handling is not supported for now** and tasks will fail immediately if you hit your API limit.
   - Logs are monitored and assembled from Codex JSONL session files in `~/.codex/sessions/` during each step.
@@ -617,7 +618,7 @@ module.exports = {
 
 #### Per-Step Model Selection
 
-You can specify which Claude model to use for individual pipeline steps by adding a `model` property. This allows you to optimize your workflow by using more powerful models for complex tasks and faster, more cost-effective models for simpler tasks:
+You can specify which model (Claude or Codex) to use for individual pipeline steps by adding a `model` property. This lets you use more powerful models for complex tasks and faster, more cost-effective models for simpler tasks:
 
 ```javascript
 {
@@ -636,7 +637,18 @@ You can specify which Claude model to use for individual pipeline steps by addin
 }
 ```
 
-If no `model` is specified, the step will use your Claude CLI's default model configuration. Valid model names are validated by the `cat-herder validate` command.
+For Codex provider:
+
+```javascript
+{
+  name: "implement",
+  command: "implement",
+  model: "gpt-5-mini-reason-medium",  // Balanced reasoning/speed for implementation
+  check: { type: "shell", command: "npm test", expect: "pass" },
+}
+```
+
+If no `model` is specified, the step uses your provider's default CLI configuration. Valid model names are validated by `cat-herder validate`. To allow unknown/new model IDs without failing validation, set the environment variable `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1`.
 
 #### Pipeline Selection
 

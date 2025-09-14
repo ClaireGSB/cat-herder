@@ -14,6 +14,32 @@ const VALID_CLAUDE_MODELS = [
   "claude-3-5-haiku-20241022",
 ];
 
+// Valid Codex model names for validation (curated list)
+const VALID_CODEX_MODELS = [
+  // GPT-5
+  "gpt-5-reason-minimal",
+  "gpt-5-reason-low",
+  "gpt-5-reason-medium",
+  "gpt-5-reason-high",
+
+  // GPT-5-mini
+  "gpt-5-mini-reason-minimal",
+  "gpt-5-mini-reason-low",
+  "gpt-5-mini-reason-medium",
+  "gpt-5-mini-reason-high",
+
+  // GPT-5-nano
+  "gpt-5-nano-reason-minimal",
+  "gpt-5-nano-reason-low",
+  "gpt-5-nano-reason-medium",
+  "gpt-5-nano-reason-high",
+
+  // Compatibility models
+  "gpt-4o",
+  "gpt-4-turbo",
+  "o4-mini",
+];
+
 /**
  * A simple utility to parse YAML frontmatter from a markdown file.
  * @param content The string content of the markdown file.
@@ -302,11 +328,26 @@ function validateStep(
   // (Removed old askHuman validation - now handled at pipeline level)
 
   // Model Validation (Claude only)
-  if (config.aiProvider !== 'codex' && step.model !== undefined) {
-    if (typeof step.model !== 'string') {
-      errors.push(`${stepId}: The 'model' property must be a string.`);
-    } else if (!VALID_CLAUDE_MODELS.includes(step.model)) {
-      errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
+  const allowUnknown = !!process.env.CAT_HERDER_ALLOW_UNKNOWN_MODELS;
+  if (step.model !== undefined) {
+    if (typeof step.model !== 'string' || !step.model) {
+      errors.push(`${stepId}: The 'model' property must be a non-empty string.`);
+    } else if (config.aiProvider === 'codex') {
+      if (!VALID_CODEX_MODELS.includes(step.model)) {
+        if (allowUnknown) {
+          console.warn(`${stepId}: Unknown Codex model "${step.model}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CODEX_MODELS.join(', ')}`);
+        } else {
+          errors.push(`${stepId}: Invalid Codex model name "${step.model}". Available models are: ${VALID_CODEX_MODELS.join(", ")}`);
+        }
+      }
+    } else {
+      if (!VALID_CLAUDE_MODELS.includes(step.model)) {
+        if (allowUnknown) {
+          console.warn(`${stepId}: Unknown Claude model "${step.model}" (allowing due to CAT_HERDER_ALLOW_UNKNOWN_MODELS). Known models: ${VALID_CLAUDE_MODELS.join(', ')}`);
+        } else {
+          errors.push(`${stepId}: Invalid model name "${step.model}". Available models are: ${VALID_CLAUDE_MODELS.join(", ")}`);
+        }
+      }
     }
   }
 }
