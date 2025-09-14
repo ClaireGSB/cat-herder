@@ -310,7 +310,8 @@ function validateStep(
   }
 
   // Command File and Permission Validation (Claude-only steps)
-  if (stepProvider !== 'codex') {
+  // Special-case: 'self' command does not require a command file; it uses the task content.
+  if (stepProvider !== 'codex' && step.command !== 'self') {
     // Prefer new neutral location
     let commandFilePath = path.join(projectRoot, ".cat-herder", "steps", `${step.command}.md`);
     if (!fs.existsSync(commandFilePath)) {

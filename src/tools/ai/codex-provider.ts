@@ -166,6 +166,7 @@ export class CodexProvider implements AIProvider {
     let buffer = '';
     let finalOutput = '';
     let detectedModel: string | undefined = model;
+    let sawProcessOutput = false; // stdout or stderr from codex process
 
     const writeReasoning = (line: string) => {
       if (!line || !line.trim()) return;
@@ -299,6 +300,7 @@ export class CodexProvider implements AIProvider {
     };
 
     const code: number = await new Promise<number>((resolve, reject) => {
+      let sawModelUnsupportedError = false;
       const spawnTime = Date.now();
       child = spawn('codex', args, { cwd, stdio: 'pipe', shell: false });
       if (stdinData && child.stdin) {
@@ -309,6 +311,10 @@ export class CodexProvider implements AIProvider {
       const pathHintRegex = /(\S*\.codex\S*sessions\S*\.jsonl)/i;
       const onData = (chunk: Buffer) => {
         const s = chunk.toString();
+        if (s && s.trim()) sawProcessOutput = true;
+        if (/Unsupported model/i.test(s) || /status\s+400\b/i.test(s)) {
+          sawModelUnsupportedError = true;
+        }
         fs.appendFileSync(logPath, s);
         const m = pathHintRegex.exec(s);
         if (!activeLogPath && m) {
@@ -320,6 +326,11 @@ export class CodexProvider implements AIProvider {
       child.stderr?.on('data', (chunk) => {
         const ts = new Date().toISOString();
         fs.appendFileSync(reasoningLogPath, `[${ts}] [STDERR] ${chunk.toString()}\n`);
+        const errStr = chunk.toString();
+        if (errStr.trim()) sawProcessOutput = true;
+        if (/Unsupported model/i.test(errStr) || /status\s+400\b/i.test(errStr)) {
+          sawModelUnsupportedError = true;
+        }
         onData(chunk);
       });
 
@@ -383,8 +394,27 @@ export class CodexProvider implements AIProvider {
         cleanup();
         // If we had a log file, consume any remaining tail
         if (activeLogPath) await tailNewData(activeLogPath);
-        finish(code ?? 1);
-        resolve(code ?? 1);
+        let exitCode = code ?? 1;
+        // Detect a "silent" run: no session, no mapped output, no process output
+        const noSession = !activeLogPath;
+        const noResult = !finalOutput || finalOutput.trim() === '';
+        if (exitCode === 0 && noSession && noResult && !sawProcessOutput) {
+          const ts = new Date().toISOString();
+          const msg = `Codex exited without producing any output or session logs. Possible causes: invalid model, missing API key, or network restrictions. Learn more: ensure 'OPENAI_API_KEY' is set or configure a Codex profile, and verify the model id.\n`;
+          fs.appendFileSync(logPath, `\n[WARN] ${msg}`);
+          fs.appendFileSync(reasoningLogPath, `[${ts}] [WARN] ${msg}`);
+          exitCode = 1; // Treat as failure so the orchestrator surfaces it
+        }
+        // If the process printed an explicit unsupported model error but returned 0, surface as failure.
+        if (exitCode === 0 && sawModelUnsupportedError) {
+          const ts = new Date().toISOString();
+          const msg = `Codex reported 'Unsupported model' in output but exited successfully. Marking as failure so you can fix the model id.\n`;
+          fs.appendFileSync(logPath, `\n[ERROR] ${msg}`);
+          fs.appendFileSync(reasoningLogPath, `[${ts}] [ERROR] ${msg}`);
+          exitCode = 1;
+        }
+        finish(exitCode);
+        resolve(exitCode);
       });
 
       child.on('error', (err) => {

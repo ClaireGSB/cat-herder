@@ -123,13 +123,20 @@ export async function executePipelineForTask(
       context.interactionHistory = interactionHistory;
     }
 
-    // Read the specific command instructions for the current step
-    // Resolve command prompt: prefer new neutral location, fallback to legacy path
-    let commandFilePath = path.resolve(projectRoot, '.cat-herder', 'steps', `${command}.md`);
-    if (!existsSync(commandFilePath)) {
-      commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
+    // Determine command instructions based on command type
+    let commandInstructions: string;
+    if (stepConfig.command === 'self') {
+      // If the command is 'self', the instructions ARE the task content
+      commandInstructions = taskContent;
+    } else {
+      // Otherwise, load from the command file and assemble the full context
+      // Resolve command prompt: prefer new neutral location, fallback to legacy path
+      let commandFilePath = path.resolve(projectRoot, '.cat-herder', 'steps', `${command}.md`);
+      if (!existsSync(commandFilePath)) {
+        commandFilePath = path.resolve(projectRoot, '.claude', 'commands', `${command}.md`);
+      }
+      commandInstructions = readFileSync(commandFilePath, 'utf-8');
     }
-    const commandInstructions = readFileSync(commandFilePath, 'utf-8');
 
     // Assemble the full prompt using the assemblePrompt function
     const fullPrompt = assemblePrompt(
