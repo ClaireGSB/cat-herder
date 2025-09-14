@@ -650,6 +650,42 @@ For Codex provider:
 
 If no `model` is specified, the step uses your provider's default CLI configuration. Valid model names are validated by `cat-herder validate`. To allow unknown/new model IDs without failing validation, set the environment variable `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1`.
 
+#### Accepted Model Names
+
+Copy/paste-friendly lists of model identifiers validated by `cat-herder`:
+
+Claude provider:
+
+```text
+claude-opus-4-1-20250805
+claude-opus-4-20250514
+claude-sonnet-4-20250514
+claude-3-7-sonnet-20250219
+claude-3-5-haiku-20241022
+```
+
+Codex provider:
+
+```text
+gpt-5-reason-minimal
+gpt-5-reason-low
+gpt-5-reason-medium
+gpt-5-reason-high
+gpt-5-mini-reason-minimal
+gpt-5-mini-reason-low
+gpt-5-mini-reason-medium
+gpt-5-mini-reason-high
+gpt-5-nano-reason-minimal
+gpt-5-nano-reason-low
+gpt-5-nano-reason-medium
+gpt-5-nano-reason-high
+gpt-4o
+gpt-4-turbo
+o4-mini
+```
+
+Note: Model catalogs evolve. If you need to use an unlisted model, either set `CAT_HERDER_ALLOW_UNKNOWN_MODELS=1` to bypass strict validation, or open a PR to add it to the curated list in `src/tools/validator.ts`.
+
 #### Pipeline Selection
 
 The orchestrator selects a pipeline to run based on the following priority order:
