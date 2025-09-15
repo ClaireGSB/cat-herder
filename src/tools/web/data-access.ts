@@ -245,25 +245,67 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
       tasks: [] // Initialize tasks as an empty array, specific to SequenceDetails
     };
 
-    // Extract folder name from sequenceId (e.g., "sequence-my-feature" -> "my-feature")
-    const folderName = sequenceId.replace('sequence-', '');
-    const taskFolderPath = path.join(config.taskFolder || 'cat-herder-tasks', folderName);
+    // Resolve the folder that actually contains the task files.
+    // 1) Prefer deriving from state paths (precise, supports underscores and any custom naming)
+    // 2) Fallback to reconstructing from sequenceId (and try underscore/hyphen variants)
+    const folderNameFromId = sequenceId.replace('sequence-', '');
+    const configuredTasksRoot = config.taskFolder || 'cat-herder-tasks';
 
-    // Check if the task folder exists on the filesystem
-    if (!fs.existsSync(taskFolderPath)) {
-      console.warn(`Task folder not found for sequence ${sequenceId}: ${taskFolderPath}`);
-      return sequenceDetails; // Return empty tasks array
+    let resolvedTaskFolderPath: string | null = null;
+
+    // Attempt A: derive from state.currentTaskPath or first completed task
+    const candidatePathFromState: string | undefined =
+      (state.currentTaskPath && typeof state.currentTaskPath === 'string' ? state.currentTaskPath : undefined)
+      || (Array.isArray(state.completedTasks) && state.completedTasks.length > 0 ? state.completedTasks[0] : undefined);
+
+    if (candidatePathFromState) {
+      const derivedFolder = path.dirname(candidatePathFromState);
+      if (fs.existsSync(derivedFolder)) {
+        resolvedTaskFolderPath = derivedFolder;
+      }
     }
+
+    // Attempt B: use folderName reconstructed from sequenceId
+    if (!resolvedTaskFolderPath) {
+      const directPath = path.join(configuredTasksRoot, folderNameFromId);
+      if (fs.existsSync(directPath)) {
+        resolvedTaskFolderPath = directPath;
+      }
+    }
+
+    // Attempt C: try underscore/hyphen variant swaps to support both styles
+    if (!resolvedTaskFolderPath) {
+      const underscoreVariant = path.join(configuredTasksRoot, folderNameFromId.replace(/-/g, '_'));
+      if (fs.existsSync(underscoreVariant)) {
+        resolvedTaskFolderPath = underscoreVariant;
+      }
+    }
+
+    if (!resolvedTaskFolderPath) {
+      const hyphenVariant = path.join(configuredTasksRoot, folderNameFromId.replace(/_/g, '-'));
+      if (fs.existsSync(hyphenVariant)) {
+        resolvedTaskFolderPath = hyphenVariant;
+      }
+    }
+
+    // If still not found, return details with empty task list
+    if (!resolvedTaskFolderPath) {
+      console.warn(`Task folder not found for sequence ${sequenceId}: tried '${path.join(configuredTasksRoot, folderNameFromId)}' and underscore/hyphen variants.`);
+      return sequenceDetails;
+    }
+
+    // Provide the resolved folderPath to the UI for transparency
+    (sequenceDetails as any).folderPath = resolvedTaskFolderPath;
 
     try {
       // Get all .md files from the task folder, filter out files starting with underscore
-      const allTaskFiles = fs.readdirSync(taskFolderPath)
+      const allTaskFiles = fs.readdirSync(resolvedTaskFolderPath)
         .filter(f => f.endsWith('.md') && !f.startsWith('_'))
         .sort(); // Sort alphabetically to maintain execution order
 
       // Build complete task list from filesystem
       for (const filename of allTaskFiles) {
-        const taskPath = path.join(taskFolderPath, filename);
+        const taskPath = path.join(resolvedTaskFolderPath, filename);
         const taskId = taskPathToTaskId(taskPath, process.cwd());
 
         // Check if a state file exists for this task
@@ -297,7 +339,7 @@ export function getSequenceDetails(stateDir: string, config: any, sequenceId: st
         });
       }
     } catch (error) {
-      console.error(`Error reading task folder ${taskFolderPath}:`, error);
+      console.error(`Error reading task folder ${resolvedTaskFolderPath}:`, error);
     }
 
     return sequenceDetails;
